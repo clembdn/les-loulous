@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CurrencyProvider } from './context/CurrencyContext.jsx'
 import Header from './components/layout/Header.jsx'
 import Sidebar from './components/layout/Sidebar.jsx'
+import LoginView from './views/LoginView.jsx'
 import GlobalView from './views/GlobalView.jsx'
 import AustraliaView from './views/AustraliaView.jsx'
 import PEAView from './views/PEAView.jsx'
@@ -26,8 +27,19 @@ function ViewContainer({ active }) {
 }
 
 export default function App() {
+  const [authenticated, setAuthenticated] = useState(false)
+  const [user, setUser] = useState(null)
   const [active, setActive] = useState('global')
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const handleLogin = (userData) => {
+    setUser(userData)
+    setAuthenticated(true)
+  }
+
+  if (!authenticated) {
+    return <LoginView onLogin={handleLogin} />
+  }
 
   const handleSelect = (id) => {
     setActive(id)
