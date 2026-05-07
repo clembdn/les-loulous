@@ -42,6 +42,13 @@ export function useAustraliaData() {
 
   // ─── Real-time listeners ───
   useEffect(() => {
+    if (!uid) {
+      setTransactions([])
+      setIsLoadingTx(false)
+      return undefined
+    }
+
+    setIsLoadingTx(true)
     const unsub = subscribeToTransactions(
       (txs) => {
         setTransactions(txs)
@@ -52,20 +59,40 @@ export function useAustraliaData() {
       }
     )
     return unsub
-  }, [])
+  }, [uid])
 
   useEffect(() => {
-    const unsub = subscribeToSettings((s) => {
-      setSettings(s)
+    if (!uid) {
+      setSettings({
+        initialCapitalEUR: DEFAULT_INITIAL_CAPITAL,
+        safetyBufferEUR: DEFAULT_SAFETY_BUFFER,
+      })
       setIsLoadingSettings(false)
-    })
+      return undefined
+    }
+
+    setIsLoadingSettings(true)
+    const unsub = subscribeToSettings(
+      (s) => {
+        setSettings(s)
+        setIsLoadingSettings(false)
+      },
+      () => {
+        setIsLoadingSettings(false)
+      }
+    )
     return unsub
-  }, [])
+  }, [uid])
 
   const isLoading = isLoadingTx || isLoadingSettings
 
   // ─── Transaction CRUD (Firestore) ───
   const handleSave = useCallback(async (tx) => {
+    if (!uid) {
+      console.error('[FinAuzi] Cannot save transaction without an authenticated user.')
+      return false
+    }
+
     try {
       if (tx.id && transactions.some(t => t.id === tx.id)) {
         // Update existing
@@ -75,21 +102,25 @@ export function useAustraliaData() {
         // Create new
         await createTransaction(tx, uid)
       }
+      setModalOpen(false)
+      setEditingTx(null)
+      return true
     } catch (err) {
       console.error('[FinAuzi] Failed to save transaction:', err)
+      return false
     }
-    setModalOpen(false)
-    setEditingTx(null)
   }, [uid, transactions])
 
   const handleDelete = useCallback(async (id) => {
     try {
       await deleteTransaction(id)
+      setModalOpen(false)
+      setEditingTx(null)
+      return true
     } catch (err) {
       console.error('[FinAuzi] Failed to delete transaction:', err)
+      return false
     }
-    setModalOpen(false)
-    setEditingTx(null)
   }, [])
 
   const handleTogglePause = useCallback(async (id) => {

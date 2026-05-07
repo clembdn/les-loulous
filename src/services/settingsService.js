@@ -14,9 +14,10 @@ export const DEFAULT_SETTINGS = {
 /**
  * Subscribe to settings in real time.
  * @param {(settings: Object) => void} callback
+ * @param {(error: Error) => void} [onError]
  * @returns {() => void} unsubscribe
  */
-export function subscribeToSettings(callback) {
+export function subscribeToSettings(callback, onError) {
   return onSnapshot(SETTINGS_DOC, (snap) => {
     if (snap.exists()) {
       callback({ ...DEFAULT_SETTINGS, ...snap.data() })
@@ -25,6 +26,7 @@ export function subscribeToSettings(callback) {
     }
   }, (error) => {
     console.error('[FinAuzi] Firestore settings error:', error)
+    if (onError) onError(error)
     callback({ ...DEFAULT_SETTINGS })
   })
 }
