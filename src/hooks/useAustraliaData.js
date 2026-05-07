@@ -42,10 +42,15 @@ export function useAustraliaData() {
 
   // ─── Real-time listeners ───
   useEffect(() => {
-    const unsub = subscribeToTransactions((txs) => {
-      setTransactions(txs)
-      setIsLoadingTx(false)
-    })
+    const unsub = subscribeToTransactions(
+      (txs) => {
+        setTransactions(txs)
+        setIsLoadingTx(false)
+      },
+      () => {
+        setIsLoadingTx(false)
+      }
+    )
     return unsub
   }, [])
 

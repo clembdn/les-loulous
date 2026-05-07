@@ -19,15 +19,17 @@ function txDoc(id) {
 /**
  * Subscribe to all transactions in real time.
  * @param {(txs: Array) => void} callback
+ * @param {(error: Error) => void} [onError]
  * @returns {() => void} unsubscribe function
  */
-export function subscribeToTransactions(callback) {
+export function subscribeToTransactions(callback, onError) {
   const q = query(txCollection(), orderBy('createdAt', 'desc'))
   return onSnapshot(q, (snapshot) => {
     const txs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
     callback(txs)
   }, (error) => {
     console.error('[FinAuzi] Firestore transactions error:', error)
+    if (onError) onError(error)
   })
 }
 

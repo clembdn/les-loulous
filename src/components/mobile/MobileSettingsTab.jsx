@@ -122,11 +122,6 @@ export default function MobileSettingsTab({ data }) {
           </button>
         </div>
       </div>
-
-      {/* Footer */}
-      <p className="text-[10px] text-text-muted text-center mt-8">
-        FinAuzi · Notre trésorerie pour l'Australie
-      </p>
     </div>
   )
 }

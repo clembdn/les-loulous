@@ -72,10 +72,6 @@ export default function SettingsView() {
         <LogOut className="h-4 w-4" />
         Se déconnecter
       </button>
-
-      <p className="text-xs text-text-muted">
-        FinAuzi · Notre trésorerie pour l'Australie · Synchronisation Firebase.
-      </p>
     </div>
   )
 }
