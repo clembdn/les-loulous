@@ -1,17 +1,8 @@
 import { useState, useEffect } from 'react'
-import { X, Save, Trash2, AlertCircle, RotateCcw, ArrowLeftRight } from 'lucide-react'
+import { X, Save, Trash2, AlertCircle, ArrowLeftRight, CheckCircle2 } from 'lucide-react'
 import { getCategoryConfig } from './CategoryBadge.jsx'
-import { CLEMENT_UID, FINAUZI_PEOPLE } from '../../config/people.js'
+import { CLEMENT_UID, LISE_UID, FINAUZI_PEOPLE, getPersonByUid, isAuthorizedUid } from '../../config/people.js'
 import { CURRENCY_RATES } from '../../context/CurrencyContext.jsx'
-import {
-  ALLOCATION_TYPES,
-  clampPercentage,
-  createSharedAllocation,
-  createSingleAllocation,
-  getSplitPercentageForPerson,
-  getTransactionAllocationValidationError,
-  normalizeTransactionAllocation,
-} from '../../utils/transactionAllocation.js'
 
 const CATEGORIES = [
   'housing', 'food', 'transport', 'admin', 'travel',
@@ -27,8 +18,9 @@ const EMPTY_FORM = {
   date: new Date().toISOString().slice(0, 10),
   endDate: '',
   notes: '',
-  allocationType: ALLOCATION_TYPES.SINGLE,
-  splits: [],
+  paidByUid: CLEMENT_UID,
+  reimbursementOn: false,
+  reimbursementPct: 50,
 }
 
 const TRANSACTION_CURRENCIES = ['EUR', 'AUD']
@@ -54,27 +46,51 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   useEffect(() => {
-    const fallbackPersonUid = currentUserUid || FINAUZI_PEOPLE[0]?.uid || ''
-    const initialAmount = transaction?.amountEUR != null ? String(transaction.amountEUR) : ''
+    const fallbackUid = isAuthorizedUid(currentUserUid) ? currentUserUid : CLEMENT_UID
+    let initialPaidByUid = fallbackUid
+    let initialReimbOn = false
+    let initialReimbPct = 50
+
     if (transaction) {
-      const allocation = normalizeTransactionAllocation(transaction, fallbackPersonUid)
+      if (isAuthorizedUid(transaction.paidByUid)) {
+        initialPaidByUid = transaction.paidByUid
+      } else if (isAuthorizedUid(transaction.createdBy)) {
+        initialPaidByUid = transaction.createdBy
+      } else if (isAuthorizedUid(transaction.personUid)) {
+        initialPaidByUid = transaction.personUid
+      }
+
+      if (transaction.type === 'expense' && Array.isArray(transaction.splits) && transaction.splits.length > 0) {
+        const clementSplit = transaction.splits.find(s => s.personUid === CLEMENT_UID)
+        const liseSplit = transaction.splits.find(s => s.personUid === LISE_UID)
+
+        if (clementSplit && liseSplit && clementSplit.percentage > 0 && liseSplit.percentage > 0) {
+          initialReimbOn = true
+          if (initialPaidByUid === CLEMENT_UID) {
+            initialReimbPct = liseSplit.percentage
+          } else {
+            initialReimbPct = clementSplit.percentage
+          }
+        }
+      }
+
       setForm({
         title: transaction.title,
-        amountEUR: initialAmount,
+        amountEUR: transaction.amountEUR != null ? String(transaction.amountEUR) : '',
         type: transaction.type,
         recurrence: transaction.recurrence,
         category: transaction.category,
         date: transaction.date,
         endDate: transaction.endDate || '',
         notes: transaction.notes || '',
-        allocationType: allocation.allocationType,
-        splits: allocation.splits,
+        paidByUid: initialPaidByUid,
+        reimbursementOn: initialReimbOn,
+        reimbursementPct: initialReimbPct,
       })
     } else {
       setForm({
         ...EMPTY_FORM,
-        ...createSingleAllocation(fallbackPersonUid, fallbackPersonUid),
-        amountEUR: '',
+        paidByUid: fallbackUid,
       })
     }
     setAmountCurrency('EUR')
@@ -89,10 +105,13 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
     if (!form.title.trim()) errs.title = 'Le titre est requis'
     if (!form.amountEUR || Number(form.amountEUR) <= 0) errs.amountEUR = 'Le montant doit être supérieur à 0'
     if (!form.date) errs.date = 'La date est requise'
-    const allocationError = getTransactionAllocationValidationError(form.allocationType, form.splits)
-    if (allocationError) errs.allocation = allocationError
     if (form.recurrence === 'monthly' && form.endDate && form.endDate < form.date) {
       errs.endDate = 'La date de fin doit être après la date de début'
+    }
+    if (form.type === 'expense' && form.reimbursementOn) {
+      if (form.reimbursementPct < 0 || form.reimbursementPct > 100) {
+        errs.reimbursementPct = 'Pourcentage invalide'
+      }
     }
     setErrors(errs)
     return Object.keys(errs).length === 0
@@ -103,7 +122,19 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
     const parsedAmount = Number(form.amountEUR)
     const amountInEUR = amountCurrency === 'EUR' ? parsedAmount : parsedAmount / AUD_RATE
     const now = new Date().toISOString()
-    const allocation = normalizeTransactionAllocation(form, currentUserUid)
+
+    let allocationType = 'single'
+    let splits = [{ personUid: form.paidByUid, percentage: 100 }]
+
+    if (form.type === 'expense' && form.reimbursementOn) {
+      allocationType = 'shared'
+      const otherUid = form.paidByUid === CLEMENT_UID ? LISE_UID : CLEMENT_UID
+      splits = [
+        { personUid: form.paidByUid, percentage: 100 - form.reimbursementPct },
+        { personUid: otherUid, percentage: form.reimbursementPct }
+      ]
+    }
+
     const txData = {
       ...(transaction || {}),
       id: transaction?.id || undefined,
@@ -116,11 +147,10 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
       endDate: form.recurrence === 'monthly' && form.endDate ? form.endDate : null,
       notes: form.notes.trim() || null,
       isActive: transaction?.isActive ?? true,
-      allocationType: allocation.allocationType,
-      splits: allocation.splits,
-      personUid: allocation.allocationType === ALLOCATION_TYPES.SINGLE
-        ? allocation.splits[0].personUid
-        : null,
+      paidByUid: form.paidByUid,
+      allocationType,
+      splits,
+      personUid: allocationType === 'single' ? form.paidByUid : null,
       createdAt: transaction?.createdAt || now,
       updatedAt: now,
     }
@@ -146,44 +176,21 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
   const setAmountCurrencyWithConversion = (nextCurrency) => {
     setAmountCurrency((prevCurrency) => {
       if (prevCurrency === nextCurrency) return prevCurrency
-
       setForm((prevForm) => {
         const raw = Number(prevForm.amountEUR)
         if (!prevForm.amountEUR || Number.isNaN(raw)) return prevForm
         const converted = prevCurrency === 'EUR' ? raw * AUD_RATE : raw / AUD_RATE
         return { ...prevForm, amountEUR: String(Number(converted.toFixed(2))) }
       })
-
       return nextCurrency
     })
   }
 
-  const allocation = normalizeTransactionAllocation(form, currentUserUid)
-  const clementSplit = getSplitPercentageForPerson(allocation, CLEMENT_UID)
-  const liseSplit = 100 - clementSplit
-
-  const selectSingleAllocation = (personUid) => {
-    setForm(prev => ({ ...prev, ...createSingleAllocation(personUid, currentUserUid) }))
-    if (errors.allocation) setErrors(prev => ({ ...prev, allocation: undefined }))
-  }
-
-  const selectSharedAllocation = () => {
-    setForm((prev) => {
-      const normalized = normalizeTransactionAllocation(prev, currentUserUid)
-      const currentClementSplit = normalized.allocationType === ALLOCATION_TYPES.SHARED
-        ? getSplitPercentageForPerson(normalized, CLEMENT_UID)
-        : 50
-
-      return { ...prev, ...createSharedAllocation(currentClementSplit) }
-    })
-    if (errors.allocation) setErrors(prev => ({ ...prev, allocation: undefined }))
-  }
-
-  const setClementSharedPercentage = (value) => {
-    const nextClementSplit = clampPercentage(value)
-    setForm(prev => ({ ...prev, ...createSharedAllocation(nextClementSplit) }))
-    if (errors.allocation) setErrors(prev => ({ ...prev, allocation: undefined }))
-  }
+  const amountNumber = Number(form.amountEUR) || 0
+  const reimbAmount = (amountNumber * (form.reimbursementPct / 100)).toFixed(2)
+  const payer = getPersonByUid(form.paidByUid)
+  const otherUid = form.paidByUid === CLEMENT_UID ? LISE_UID : CLEMENT_UID
+  const reimbPerson = getPersonByUid(otherUid)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -209,7 +216,7 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-4 max-h-[65vh] overflow-y-auto">
+        <div className="px-6 py-5 space-y-5 max-h-[65vh] overflow-y-auto">
           {/* Title */}
           <div>
             <label className="text-xs text-text-muted mb-1.5 block font-medium uppercase tracking-wider">
@@ -277,87 +284,51 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
             )}
           </div>
 
-          {/* Allocation selector */}
-          <div>
-            <label className="text-xs text-text-muted mb-1.5 block font-medium uppercase tracking-wider">
-              Répartition *
-            </label>
-            <div className="flex p-0.5 rounded-xl bg-bg-elevated border border-border-subtle">
-              {FINAUZI_PEOPLE.map((person) => (
-                <button
-                  key={person.uid}
-                  onClick={() => selectSingleAllocation(person.uid)}
-                  className={`flex-1 h-9 rounded-lg text-sm font-medium transition-all ${
-                    allocation.allocationType === ALLOCATION_TYPES.SINGLE && allocation.splits[0]?.personUid === person.uid
-                      ? `${person.bg} ${person.text} shadow-sm`
-                      : 'text-text-secondary hover:text-text-primary'
-                  }`}
-                >
-                  {person.label}
-                </button>
-              ))}
-              <button
-                onClick={selectSharedAllocation}
-                className={`flex-1 h-9 rounded-lg text-sm font-medium transition-all ${
-                  allocation.allocationType === ALLOCATION_TYPES.SHARED
-                    ? 'bg-purple-500/20 text-purple-300 shadow-sm'
-                    : 'text-text-secondary hover:text-text-primary'
-                }`}
-              >
-                Partagé
-              </button>
+          {/* Date */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-text-muted mb-1.5 block font-medium uppercase tracking-wider">
+                {form.recurrence === 'monthly' ? 'Départ *' : 'Date *'}
+              </label>
+              <input
+                type="date"
+                lang="fr-FR"
+                value={form.date}
+                onChange={(e) => set('date', e.target.value)}
+                className={`h-10 w-full rounded-xl bg-bg-elevated border px-3 text-sm outline-none text-text-primary transition-colors
+                  ${errors.date ? 'border-danger focus:border-danger' : 'border-border-subtle focus:border-brand'}`}
+              />
+              {!errors.date && form.date && (
+                <p className="text-xs text-text-muted mt-1 capitalize">{formatDateFr(form.date)}</p>
+              )}
+              {errors.date && (
+                <p className="text-xs text-danger mt-1 flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" /> {errors.date}
+                </p>
+              )}
             </div>
-            {errors.allocation && (
-              <p className="text-xs text-danger mt-1 flex items-center gap-1">
-                <AlertCircle className="h-3 w-3" /> {errors.allocation}
-              </p>
-            )}
 
-            {allocation.allocationType === ALLOCATION_TYPES.SHARED && (
-              <div className="mt-3 p-3 rounded-xl bg-bg-elevated border border-border-subtle space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-text-secondary">Répartition du montant</p>
-                  <button
-                    type="button"
-                    onClick={() => setClementSharedPercentage(50)}
-                    className="inline-flex items-center gap-1 text-[11px] text-purple-300 hover:text-purple-200 transition-colors"
-                  >
-                    <RotateCcw className="h-3 w-3" />
-                    Réinitialiser à 50/50
-                  </button>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-text-muted">Part de Clément</span>
-                    <span className="text-xs font-semibold text-text-primary">{clementSplit}%</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="1"
-                      value={clementSplit}
-                      onChange={(e) => setClementSharedPercentage(e.target.value)}
-                      className="flex-1 accent-purple-400"
-                    />
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="1"
-                      value={clementSplit}
-                      onChange={(e) => setClementSharedPercentage(e.target.value)}
-                      className="w-16 h-8 rounded-lg bg-bg-card border border-border-subtle px-2 text-xs tabular-nums text-right"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-text-muted">Part de Lise</span>
-                  <span className="text-xs font-semibold text-text-primary">{liseSplit}%</span>
-                </div>
+            {form.recurrence === 'monthly' && (
+              <div>
+                <label className="text-xs text-text-muted mb-1.5 block font-medium uppercase tracking-wider">
+                  Retour
+                </label>
+                <input
+                  type="date"
+                  lang="fr-FR"
+                  value={form.endDate}
+                  onChange={(e) => set('endDate', e.target.value)}
+                  className={`h-10 w-full rounded-xl bg-bg-elevated border px-3 text-sm outline-none text-text-primary transition-colors
+                    ${errors.endDate ? 'border-danger focus:border-danger' : 'border-border-subtle focus:border-brand'}`}
+                />
+                {!errors.endDate && form.endDate && (
+                  <p className="text-xs text-text-muted mt-1 capitalize">{formatDateFr(form.endDate)}</p>
+                )}
+                {errors.endDate && (
+                  <p className="text-xs text-danger mt-1 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" /> {errors.endDate}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -369,7 +340,7 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
             </label>
             <div className="flex p-0.5 rounded-xl bg-bg-elevated border border-border-subtle">
               <button
-                onClick={() => set('type', 'expense')}
+                onClick={() => { set('type', 'expense'); set('reimbursementOn', false); }}
                 className={`flex-1 h-9 rounded-lg text-sm font-medium transition-all ${
                   form.type === 'expense'
                     ? 'bg-danger/20 text-danger shadow-sm'
@@ -379,7 +350,7 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
                 Dépense
               </button>
               <button
-                onClick={() => set('type', 'income')}
+                onClick={() => { set('type', 'income'); set('reimbursementOn', false); }}
                 className={`flex-1 h-9 rounded-lg text-sm font-medium transition-all ${
                   form.type === 'income'
                     ? 'bg-success/20 text-success shadow-sm'
@@ -449,54 +420,112 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
             </div>
           </div>
 
-          {/* Date */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-text-muted mb-1.5 block font-medium uppercase tracking-wider">
-                {form.recurrence === 'monthly' ? 'Départ *' : 'Date *'}
+          {/* Paid By */}
+          <div>
+            <label className="text-xs text-text-muted mb-1.5 block font-medium uppercase tracking-wider">
+              {form.type === 'expense' ? 'Payé par' : 'Reçu par'}
+            </label>
+            <div className="flex p-0.5 rounded-xl bg-bg-elevated border border-border-subtle">
+              {FINAUZI_PEOPLE.map((person) => (
+                <button
+                  key={person.uid}
+                  onClick={() => set('paidByUid', person.uid)}
+                  className={`flex-1 h-9 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${
+                    form.paidByUid === person.uid
+                      ? `${person.bg} ${person.text} shadow-sm`
+                      : 'text-text-secondary hover:text-text-primary'
+                  }`}
+                >
+                  {person.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Reimbursement Toggle (Expenses only) */}
+          {form.type === 'expense' && (
+            <div className="bg-bg-elevated border border-border-subtle rounded-xl overflow-hidden transition-all duration-300">
+              <label className="flex items-center justify-between p-4 cursor-pointer">
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold text-text-primary">Demander un remboursement</span>
+                  <span className="text-xs text-text-muted mt-0.5">
+                    {form.reimbursementOn ? 'FinAuzi calculera automatiquement qui doit quoi.' : 'Aucun remboursement ne sera calculé.'}
+                  </span>
+                </div>
+                <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.reimbursementOn ? 'bg-brand' : 'bg-border-strong'}`}>
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.reimbursementOn ? 'translate-x-6' : 'translate-x-1'}`} />
+                </div>
+                {/* Hidden actual checkbox to enable clicking the entire row */}
+                <input 
+                  type="checkbox" 
+                  className="hidden" 
+                  checked={form.reimbursementOn}
+                  onChange={(e) => set('reimbursementOn', e.target.checked)}
+                />
               </label>
-              <input
-                type="date"
-                lang="fr-FR"
-                value={form.date}
-                onChange={(e) => set('date', e.target.value)}
-                className={`h-10 w-full rounded-xl bg-bg-elevated border px-3 text-sm outline-none text-text-primary transition-colors
-                  ${errors.date ? 'border-danger focus:border-danger' : 'border-border-subtle focus:border-brand'}`}
-              />
-              {!errors.date && form.date && (
-                <p className="text-xs text-text-muted mt-1 capitalize">{formatDateFr(form.date)}</p>
-              )}
-              {errors.date && (
-                <p className="text-xs text-danger mt-1 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" /> {errors.date}
-                </p>
+
+              {/* Reimbursement Details */}
+              {form.reimbursementOn && (
+                <div className="px-4 pb-4 border-t border-border-subtle/50 pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium">{reimbPerson?.label} rembourse</span>
+                    {form.reimbursementPct === 50 && (
+                      <span className="px-2 py-0.5 bg-brand/10 text-brand-glow text-[10px] rounded-full font-bold">50/50</span>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-3 mb-4">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={form.reimbursementPct}
+                      onChange={(e) => set('reimbursementPct', Number(e.target.value))}
+                      className="flex-1 accent-brand h-1.5 bg-border-strong rounded-full appearance-none"
+                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={form.reimbursementPct}
+                        onChange={(e) => set('reimbursementPct', Number(e.target.value))}
+                        className="w-16 h-10 rounded-xl bg-bg-card border border-border-subtle px-2 text-sm tabular-nums text-center focus:border-brand outline-none"
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted text-sm">%</span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 mb-4">
+                    {[25, 50, 75, 100].map(pct => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => set('reimbursementPct', pct)}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors border ${form.reimbursementPct === pct ? 'bg-brand/10 border-brand/30 text-brand-glow' : 'bg-bg-card border-border-subtle text-text-muted hover:border-text-muted'}`}
+                      >
+                        {pct}%
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className={`p-3 rounded-xl border flex items-start gap-2 ${form.reimbursementPct > 0 ? 'bg-brand/5 border-brand/20' : 'bg-bg-card border-border-subtle'}`}>
+                    {form.reimbursementPct > 0 ? (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 text-brand shrink-0 mt-0.5" />
+                        <p className="text-sm text-text-primary">
+                          <span className="font-semibold">{reimbPerson?.label}</span> devra rembourser <span className="font-bold tabular-nums">{amountNumber > 0 ? `${reimbAmount} ${amountCurrency}` : 'le montant'}</span> à <span className="font-semibold">{payer?.label}</span>.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-text-muted">Le montant du remboursement apparaîtra ici.</p>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
-
-            {form.recurrence === 'monthly' && (
-              <div>
-                <label className="text-xs text-text-muted mb-1.5 block font-medium uppercase tracking-wider">
-                  Retour
-                </label>
-                <input
-                  type="date"
-                  lang="fr-FR"
-                  value={form.endDate}
-                  onChange={(e) => set('endDate', e.target.value)}
-                  className={`h-10 w-full rounded-xl bg-bg-elevated border px-3 text-sm outline-none text-text-primary transition-colors
-                    ${errors.endDate ? 'border-danger focus:border-danger' : 'border-border-subtle focus:border-brand'}`}
-                />
-                {!errors.endDate && form.endDate && (
-                  <p className="text-xs text-text-muted mt-1 capitalize">{formatDateFr(form.endDate)}</p>
-                )}
-                {errors.endDate && (
-                  <p className="text-xs text-danger mt-1 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" /> {errors.endDate}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Notes */}
           <div>

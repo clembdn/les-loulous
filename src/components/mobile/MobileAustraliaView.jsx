@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plane, LayoutDashboard, Receipt, Settings } from 'lucide-react'
+import { Plane, LayoutDashboard, Receipt, Settings, Scale } from 'lucide-react'
 import { useCurrency } from '../../context/CurrencyContext.jsx'
 
 import MobileOverviewTab from './MobileOverviewTab.jsx'
@@ -7,10 +7,12 @@ import MobileTransactionsTab from './MobileTransactionsTab.jsx'
 import MobileSettingsTab from './MobileSettingsTab.jsx'
 import MobileBottomSheet from './MobileBottomSheet.jsx'
 import MobileTransactionForm from './MobileTransactionForm.jsx'
+import MobileEquilibreTab from './MobileEquilibreTab.jsx'
 
 const TABS = [
   { id: 'overview', label: 'Vue', icon: LayoutDashboard },
   { id: 'transactions', label: 'Transactions', icon: Receipt },
+  { id: 'equilibre', label: 'Équilibre', icon: Scale },
   { id: 'settings', label: 'Paramètres', icon: Settings },
 ]
 
@@ -59,8 +61,9 @@ export default function MobileAustraliaView({ data }) {
 
       {/* ─── Tab Content ─── */}
       <main className="flex-1 overflow-y-auto pt-3 pb-[calc(92px+env(safe-area-inset-bottom))]">
-        {activeTab === 'overview' && <MobileOverviewTab data={data} />}
+        {activeTab === 'overview' && <MobileOverviewTab data={{...data, setActiveTab}} />}
         {activeTab === 'transactions' && <MobileTransactionsTab data={data} />}
+        {activeTab === 'equilibre' && <MobileEquilibreTab data={data} />}
         {activeTab === 'settings' && <MobileSettingsTab data={data} />}
       </main>
 

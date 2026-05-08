@@ -1,18 +1,40 @@
 import { Pencil, Trash2, Pause, Play, Calendar } from 'lucide-react'
 import CategoryBadge from './CategoryBadge.jsx'
-import { getPersonByUid } from '../../config/people.js'
-import { ALLOCATION_TYPES, getAllocationDisplay } from '../../utils/transactionAllocation.js'
+import { CLEMENT_UID, LISE_UID, getPersonByUid } from '../../config/people.js'
 
 export default function TransactionRow({ transaction, onEdit, onDelete, onTogglePause, format }) {
   const { title, amountEUR, type, recurrence, category, date, endDate, isActive, notes } = transaction
   const isIncome = type === 'income'
   const isRecurring = recurrence === 'monthly'
   const isPaused = !isActive
-  const allocation = getAllocationDisplay(transaction)
-  const person = allocation.singlePersonUid ? getPersonByUid(allocation.singlePersonUid) : null
-  const allocationBadgeClasses = allocation.allocationType === ALLOCATION_TYPES.SHARED
-    ? 'bg-purple-500/15 text-purple-300 border border-purple-500/25'
-    : `${person?.bg || 'bg-bg-elevated'} ${person?.text || 'text-text-primary'} border ${person?.border || 'border-border-subtle'}`
+
+  const txPayer = getPersonByUid(transaction.paidByUid || transaction.personUid)
+  let reimbText = ''
+
+  if (isIncome) {
+    reimbText = `Reçu par ${txPayer?.shortLabel || 'Inconnu'}`
+  } else {
+    let clementShare = 0
+    let liseShare = 0
+    if (Array.isArray(transaction.splits) && transaction.splits.length > 0) {
+      clementShare = transaction.splits.find(s => s.personUid === CLEMENT_UID)?.percentage || 0
+      liseShare = transaction.splits.find(s => s.personUid === LISE_UID)?.percentage || 0
+    } else {
+      // fallback
+      if (txPayer?.uid === CLEMENT_UID) clementShare = 100
+      else liseShare = 100
+    }
+
+    if (clementShare > 0 && liseShare > 0) {
+      if (txPayer?.uid === CLEMENT_UID) {
+        reimbText = `${txPayer?.shortLabel} a payé · Lise rembourse ${Math.round(liseShare)}%`
+      } else if (txPayer?.uid === LISE_UID) {
+        reimbText = `${txPayer?.shortLabel} a payé · Clément rembourse ${Math.round(clementShare)}%`
+      }
+    } else {
+      reimbText = `${txPayer?.shortLabel || 'Inconnu'} a payé · Pas de remboursement`
+    }
+  }
 
   const formattedDate = new Date(date).toLocaleDateString('fr-FR', {
     day: 'numeric',
@@ -48,12 +70,10 @@ export default function TransactionRow({ transaction, onEdit, onDelete, onToggle
           )}
         </div>
         <div className="flex items-center gap-2 mt-0.5">
-          {/* Allocation badge */}
-          {(allocation.allocationType === ALLOCATION_TYPES.SHARED || person) && (
-            <span className={`inline-flex items-center px-1.5 py-0 rounded-full text-[10px] font-semibold ${allocationBadgeClasses}`}>
-              {allocation.label}
-            </span>
-          )}
+          <span className="text-xs text-text-muted truncate max-w-[200px]">
+            {reimbText}
+          </span>
+          <span className="text-xs text-text-muted">·</span>
           <span className="text-xs text-text-muted flex items-center gap-1">
             <Calendar className="h-3 w-3" />
             {formattedDate}

@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Calendar, Pause, Play, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import CategoryBadge from '../australia/CategoryBadge.jsx'
-import { getPersonByUid } from '../../config/people.js'
-import { ALLOCATION_TYPES, getAllocationDisplay } from '../../utils/transactionAllocation.js'
+import { CLEMENT_UID, LISE_UID, getPersonByUid } from '../../config/people.js'
 
 export default function MobileTransactionsTab({ data }) {
   const [tab, setTab] = useState('monthly')
@@ -83,11 +82,34 @@ function MobileTransactionRow({ transaction, onEdit, onDelete, onTogglePause, fo
   const isIncome = type === 'income'
   const isRecurring = recurrence === 'monthly'
   const isPaused = !isActive
-  const allocation = getAllocationDisplay(transaction)
-  const person = allocation.singlePersonUid ? getPersonByUid(allocation.singlePersonUid) : null
-  const allocationBadgeClasses = allocation.allocationType === ALLOCATION_TYPES.SHARED
-    ? 'bg-purple-500/15 text-purple-300 border-purple-500/25'
-    : `${person?.bg || 'bg-bg-elevated'} ${person?.text || 'text-text-primary'} ${person?.border || 'border-border-subtle'}`
+
+  const txPayer = getPersonByUid(transaction.paidByUid || transaction.personUid)
+  let reimbText = ''
+
+  if (isIncome) {
+    reimbText = `Reçu par ${txPayer?.shortLabel || 'Inconnu'}`
+  } else {
+    let clementShare = 0
+    let liseShare = 0
+    if (Array.isArray(transaction.splits) && transaction.splits.length > 0) {
+      clementShare = transaction.splits.find(s => s.personUid === CLEMENT_UID)?.percentage || 0
+      liseShare = transaction.splits.find(s => s.personUid === LISE_UID)?.percentage || 0
+    } else {
+      // fallback
+      if (txPayer?.uid === CLEMENT_UID) clementShare = 100
+      else liseShare = 100
+    }
+
+    if (clementShare > 0 && liseShare > 0) {
+      if (txPayer?.uid === CLEMENT_UID) {
+        reimbText = `${txPayer?.shortLabel} a payé · Lise rembourse ${Math.round(liseShare)}%`
+      } else if (txPayer?.uid === LISE_UID) {
+        reimbText = `${txPayer?.shortLabel} a payé · Clément rembourse ${Math.round(clementShare)}%`
+      }
+    } else {
+      reimbText = `${txPayer?.shortLabel || 'Inconnu'} a payé · Pas de remboursement`
+    }
+  }
 
   const formattedDate = new Date(date).toLocaleDateString('fr-FR', {
     day: 'numeric',
@@ -119,12 +141,7 @@ function MobileTransactionRow({ transaction, onEdit, onDelete, onTogglePause, fo
             )}
           </div>
           <p className="text-[11px] text-text-muted mt-0.5 flex items-center gap-1.5">
-            {/* Allocation badge */}
-            {(allocation.allocationType === ALLOCATION_TYPES.SHARED || person) && (
-              <span className={`inline-flex items-center px-1.5 py-0 rounded-full text-[9px] font-semibold border ${allocationBadgeClasses}`}>
-                {allocation.label}
-              </span>
-            )}
+            <span className="truncate">{reimbText}</span>
             <span>{isRecurring ? 'Mensuel' : formattedDate}</span>
             {notes ? <span>· {notes}</span> : null}
           </p>

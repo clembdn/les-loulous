@@ -1,9 +1,10 @@
-import { Plane, Settings, LogOut } from 'lucide-react'
+import { Plane, Settings, LogOut, Scale } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { getPersonByUid, getPersonUidForAuthUser } from '../../config/people.js'
 
 const NAV = [
   { id: 'australia', label: 'Trésorerie', icon: Plane },
+  { id: 'equilibre', label: 'Équilibre', icon: Scale },
   { id: 'settings', label: 'Paramètres', icon: Settings },
 ]
 

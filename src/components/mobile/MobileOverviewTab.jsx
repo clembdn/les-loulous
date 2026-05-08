@@ -4,8 +4,9 @@ import {
   AreaChart, Area, XAxis, YAxis,
   ResponsiveContainer, Tooltip, ReferenceLine,
 } from 'recharts'
-import { MobilePersonBreakdown } from '../australia/PersonBreakdown.jsx'
-
+import { getPersonByUid } from '../../config/people.js'
+import { calculateCurrentMonthSettlement } from '../../utils/settlement.js'
+import { ChevronRight } from 'lucide-react'
 // ─── Status pill config ───
 const STATUS_PILL = {
   green: { label: 'Sain', bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/25' },
@@ -62,7 +63,13 @@ export default function MobileOverviewTab({ data }) {
     getRunwayLabel,
     getRunwayStatus,
     getLowestStatus,
+    setActiveTab,
+    transactions,
   } = data
+
+  const settlement = useMemo(() => calculateCurrentMonthSettlement(transactions || []), [transactions])
+  const payer = getPersonByUid(settlement.payerUid)
+  const receiver = getPersonByUid(settlement.receiverUid)
 
   const pill = STATUS_PILL[getFinalCapitalStatus()] || STATUS_PILL.green
 
@@ -134,16 +141,26 @@ export default function MobileOverviewTab({ data }) {
         />
       </div>
 
-      {/* ─── Person Breakdown ─── */}
-      {personBreakdown && (
+      {/* ─── Équilibre Summary ─── */}
+      <button 
+        onClick={() => setActiveTab?.('equilibre')}
+        className="w-full text-left bg-bg-card border border-border-subtle rounded-2xl p-4 flex items-center justify-between active:scale-[0.98] transition-all"
+      >
         <div>
-          <div className="flex items-center gap-1.5 mb-3">
-            <Users className="h-3.5 w-3.5 text-text-muted" />
-            <p className="text-[10px] text-text-muted font-medium uppercase tracking-wider">Répartition par personne</p>
-          </div>
-          <MobilePersonBreakdown personBreakdown={personBreakdown} format={format} />
+          <p className="text-[10px] text-text-muted font-medium uppercase tracking-wider mb-1">Équilibre du mois</p>
+          {settlement.isBalanced ? (
+            <p className="font-semibold text-emerald-400">Tout est équilibré</p>
+          ) : (
+            <p className="font-semibold">
+              <span className={payer?.text}>{payer?.shortLabel}</span> doit <span className="tabular-nums">{format(settlement.amountEUR)}</span> à <span className={receiver?.text}>{receiver?.shortLabel}</span>
+            </p>
+          )}
         </div>
-      )}
+        <div className="flex items-center gap-1 text-xs font-medium text-brand">
+          Voir
+          <ChevronRight className="h-4 w-4" />
+        </div>
+      </button>
 
       {/* ─── Forecast Mini Chart ─── */}
       <div className="rounded-2xl border border-border-subtle bg-bg-card overflow-hidden">

@@ -8,6 +8,7 @@ import LoadingScreen from './components/auth/LoadingScreen.jsx'
 import AccessDeniedScreen from './components/auth/AccessDeniedScreen.jsx'
 
 const AustraliaView = lazy(() => import('./views/AustraliaView.jsx'))
+const EquilibreView = lazy(() => import('./views/EquilibreView.jsx'))
 const SettingsView = lazy(() => import('./views/SettingsView.jsx'))
 
 function ViewFallback() {
@@ -22,6 +23,8 @@ function ViewContainer({ active }) {
   switch (active) {
     case 'settings':
       return <SettingsView />
+    case 'equilibre':
+      return <EquilibreView />
     case 'australia':
     default:
       return <AustraliaView />
