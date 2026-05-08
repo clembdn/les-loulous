@@ -34,17 +34,6 @@ export const accounts = [
     change24h: 0,
     icon: 'lock',
   },
-  {
-    id: 'pea',
-    name: 'PEA — DCA',
-    category: 'Investissement',
-    institution: 'Bourse Direct',
-    balance: 9000,
-    risk: 5,
-    apy: 8.7,
-    change24h: -12.4,
-    icon: 'chart',
-  },
 ]
 
 export const totalCapitalSeries = [
@@ -66,93 +55,6 @@ export const allocation = [
   { name: 'Sécurité', value: 40000, color: '#2D7FF9' },
   { name: 'Investissement', value: 18600, color: '#22C55E' },
   { name: 'Bloqué', value: 11400, color: '#F59E0B' },
-]
-
-export const peaEntries = [
-  {
-    date: '2025-05-01',
-    invested: 50,
-    cumulative: 50,
-    value: 51.2,
-    spark: [49.8, 50.1, 50.4, 51.0, 51.2],
-  },
-  {
-    date: '2025-06-01',
-    invested: 50,
-    cumulative: 100,
-    value: 104.8,
-    spark: [100.6, 102.3, 101.7, 103.4, 104.8],
-  },
-  {
-    date: '2025-07-01',
-    invested: 50,
-    cumulative: 150,
-    value: 158.1,
-    spark: [155.0, 156.8, 154.9, 157.2, 158.1],
-  },
-  {
-    date: '2025-08-01',
-    invested: 50,
-    cumulative: 200,
-    value: 209.4,
-    spark: [205.0, 207.2, 206.4, 208.1, 209.4],
-  },
-  {
-    date: '2025-09-01',
-    invested: 50,
-    cumulative: 250,
-    value: 264.7,
-    spark: [259.5, 261.7, 263.2, 262.8, 264.7],
-  },
-  {
-    date: '2025-10-01',
-    invested: 50,
-    cumulative: 300,
-    value: 318.6,
-    spark: [314.0, 312.8, 316.5, 317.2, 318.6],
-  },
-  {
-    date: '2025-11-01',
-    invested: 50,
-    cumulative: 350,
-    value: 376.2,
-    spark: [369.4, 372.1, 374.6, 375.5, 376.2],
-  },
-  {
-    date: '2025-12-01',
-    invested: 50,
-    cumulative: 400,
-    value: 432.9,
-    spark: [428.0, 426.5, 430.2, 431.8, 432.9],
-  },
-  {
-    date: '2026-01-01',
-    invested: 50,
-    cumulative: 450,
-    value: 491.7,
-    spark: [486.4, 488.2, 487.5, 490.1, 491.7],
-  },
-  {
-    date: '2026-02-01',
-    invested: 50,
-    cumulative: 500,
-    value: 549.8,
-    spark: [543.0, 545.7, 547.2, 548.9, 549.8],
-  },
-  {
-    date: '2026-03-01',
-    invested: 50,
-    cumulative: 550,
-    value: 612.4,
-    spark: [605.1, 607.8, 609.6, 611.2, 612.4],
-  },
-  {
-    date: '2026-04-01',
-    invested: 50,
-    cumulative: 600,
-    value: 668.9,
-    spark: [661.0, 663.5, 666.2, 665.8, 668.9],
-  },
 ]
 
 export const australia = {

@@ -3,40 +3,61 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+
   build: {
-    chunkSizeWarningLimit: 900,
+    chunkSizeWarningLimit: 1000,
+
     rollupOptions: {
       output: {
         manualChunks(id) {
-          const normalizedId = id.split('\\').join('/')
-          if (!normalizedId.includes('/node_modules/')) return undefined
+          const normalizedId = id.replace(/\\/g, '/')
 
-          if (normalizedId.includes('/react/') || normalizedId.includes('/react-dom/')) {
+          if (!normalizedId.includes('node_modules')) {
+            return
+          }
+
+          // React ecosystem
+          if (
+            normalizedId.includes('/node_modules/react/') ||
+            normalizedId.includes('/node_modules/react-dom/') ||
+            normalizedId.includes('/node_modules/react-router-dom/') ||
+            normalizedId.includes('/node_modules/scheduler/')
+          ) {
             return 'react-vendor'
           }
-          if (normalizedId.includes('/firebase/')) {
+
+          // Firebase
+          if (
+            normalizedId.includes('/node_modules/firebase/') ||
+            normalizedId.includes('/node_modules/@firebase/')
+          ) {
             return 'firebase'
           }
-          if (normalizedId.includes('/recharts/') || normalizedId.includes('/d3-')) {
+
+          // Charts / D3 / Recharts
+          if (
+            normalizedId.includes('/node_modules/recharts/') ||
+            normalizedId.includes('/node_modules/d3-') ||
+            normalizedId.includes('/node_modules/victory-vendor/')
+          ) {
             return 'charts'
           }
-          if (normalizedId.includes('/lucide-react/')) {
+
+          // Icons
+          if (normalizedId.includes('/node_modules/lucide-react/')) {
             return 'icons'
           }
-          return 'vendor'
+
+          // Important :
+          // on ne retourne PAS "vendor" ici.
+          // Rollup gère automatiquement le reste.
         },
       },
     },
   },
+
   server: {
     host: true,
     port: 5173,
-    proxy: {
-      '/api/yahoo': {
-        target: 'https://query1.finance.yahoo.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/yahoo/, ''),
-      },
-    },
   },
 })
