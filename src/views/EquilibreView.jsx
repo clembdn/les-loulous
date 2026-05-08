@@ -1,28 +1,25 @@
-import { useMemo } from 'react'
-import { Scale, ArrowLeftRight, CheckCircle2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Scale, ArrowLeftRight, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAustraliaData } from '../hooks/useAustraliaData.js'
 import { calculateCurrentMonthSettlement } from '../utils/settlement.js'
-import { getPersonByUid, CLEMENT_UID, LISE_UID } from '../config/people.js'
+import { getPersonWithColor, CLEMENT_UID, LISE_UID } from '../config/people.js'
 import { isTransactionActiveForMonth, isOneOffInMonth, getAllocatedAmountForPerson } from '../utils/cashflow.js'
 import CategoryBadge from '../components/australia/CategoryBadge.jsx'
+import PersonBreakdown from '../components/australia/PersonBreakdown.jsx'
+import PersonEvolutionChart from '../components/australia/PersonEvolutionChart.jsx'
 
 export default function EquilibreView() {
-  const { transactions, format, isLoading } = useAustraliaData()
+  const { transactions, format, isLoading, settings, personBreakdown } = useAustraliaData()
 
-  const settlement = useMemo(() => calculateCurrentMonthSettlement(transactions || []), [transactions])
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const year = selectedDate.getFullYear()
+  const month = selectedDate.getMonth()
 
-  const now = new Date()
-  const monthLabel = now.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+  const monthLabel = selectedDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
   const formattedMonth = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)
-
-  const isBalanced = settlement.isBalanced
-  const payer = getPersonByUid(settlement.payerUid)
-  const receiver = getPersonByUid(settlement.receiverUid)
 
   const contributingTx = useMemo(() => {
     if (!transactions) return []
-    const year = now.getFullYear()
-    const month = now.getMonth()
 
     return transactions.filter(tx => {
       if (tx.type !== 'expense') return false
@@ -30,7 +27,18 @@ export default function EquilibreView() {
       if (tx.recurrence === 'one-off' && !isOneOffInMonth(tx, year, month)) return false
       return true
     }).sort((a, b) => new Date(b.date) - new Date(a.date))
-  }, [transactions, now])
+  }, [transactions, year, month])
+
+  const settlement = useMemo(() => calculateCurrentMonthSettlement(contributingTx), [contributingTx])
+
+  const isBalanced = settlement.isBalanced
+  const payer = getPersonWithColor(settlement.payerUid, settings?.personColors)
+  const receiver = getPersonWithColor(settlement.receiverUid, settings?.personColors)
+  
+  const clementColor = getPersonWithColor(CLEMENT_UID, settings?.personColors)
+  const liseColor = getPersonWithColor(LISE_UID, settings?.personColors)
+
+
 
   if (isLoading) {
     return (
@@ -43,13 +51,29 @@ export default function EquilibreView() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
-          <Scale className="h-6 w-6 text-brand" /> Équilibre
-        </h1>
-        <p className="text-sm text-text-secondary">
-          Qui doit quoi ce mois-ci ? ({formattedMonth})
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+            <Scale className="h-6 w-6 text-brand" /> Équilibre
+          </h1>
+          <p className="text-sm text-text-secondary">
+            Qui doit quoi ce mois-ci ? ({formattedMonth})
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSelectedDate(new Date(year, month - 1, 1))}
+            className="h-10 w-10 rounded-full bg-bg-card border border-border-subtle flex items-center justify-center hover:border-border-strong transition-all text-text-secondary hover:text-text-primary"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => setSelectedDate(new Date(year, month + 1, 1))}
+            className="h-10 w-10 rounded-full bg-bg-card border border-border-subtle flex items-center justify-center hover:border-border-strong transition-all text-text-secondary hover:text-text-primary"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       {/* Main State Card */}
@@ -114,10 +138,10 @@ export default function EquilibreView() {
 
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold tabular-nums text-emerald-400">{format(settlement.fairShareByPerson[CLEMENT_UID] || 0)}</p>
+                <p className={`text-2xl font-bold tabular-nums ${clementColor.text}`}>{format(settlement.fairShareByPerson[CLEMENT_UID] || 0)}</p>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold tabular-nums text-blue-400">{format(settlement.fairShareByPerson[LISE_UID] || 0)}</p>
+                <p className={`text-2xl font-bold tabular-nums ${liseColor.text}`}>{format(settlement.fairShareByPerson[LISE_UID] || 0)}</p>
               </div>
             </div>
           </div>
@@ -132,7 +156,7 @@ export default function EquilibreView() {
           </div>
           <div className="p-4 space-y-2 max-h-[400px] overflow-y-auto">
             {contributingTx.length > 0 ? contributingTx.map(tx => {
-              const txPayer = getPersonByUid(tx.paidByUid)
+              const txPayer = getPersonWithColor(tx.paidByUid, settings?.personColors)
               const clementShare = getAllocatedAmountForPerson(tx, CLEMENT_UID)
               const liseShare = getAllocatedAmountForPerson(tx, LISE_UID)
               const total = tx.amountEUR
@@ -177,6 +201,19 @@ export default function EquilibreView() {
           </div>
         </div>
       </div>
+
+      {/* Person Evolution Chart */}
+      <PersonEvolutionChart transactions={transactions} format={format} settings={settings} />
+
+      {/* Person Breakdown */}
+      {personBreakdown && (
+        <section className="mt-8">
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-lg font-semibold tracking-tight">Répartition globale par personne</h2>
+          </div>
+          <PersonBreakdown personBreakdown={personBreakdown} format={format} settings={settings} />
+        </section>
+      )}
     </div>
   )
 }

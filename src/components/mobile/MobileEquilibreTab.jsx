@@ -1,42 +1,65 @@
-import { useMemo } from 'react'
-import { Scale, ArrowRight, ArrowLeftRight, CheckCircle2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Scale, ArrowRight, ArrowLeftRight, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { calculateCurrentMonthSettlement } from '../../utils/settlement.js'
-import { getPersonByUid, CLEMENT_UID, LISE_UID } from '../../config/people.js'
+import { getPersonWithColor, CLEMENT_UID, LISE_UID } from '../../config/people.js'
 import { isTransactionActiveForMonth, isOneOffInMonth, getAllocatedAmountForPerson } from '../../utils/cashflow.js'
 import CategoryBadge from '../australia/CategoryBadge.jsx'
+import PersonEvolutionChart from '../australia/PersonEvolutionChart.jsx'
+import { MobilePersonBreakdown } from '../australia/PersonBreakdown.jsx'
 
 export default function MobileEquilibreTab({ data }) {
-  const { transactions, format } = data
+  const { transactions, format, settings, personBreakdown } = data
+  const [selectedDate, setSelectedDate] = useState(new Date())
 
-  const settlement = useMemo(() => calculateCurrentMonthSettlement(transactions), [transactions])
+  const year = selectedDate.getFullYear()
+  const month = selectedDate.getMonth()
 
-  const now = new Date()
-  const monthLabel = now.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+  const monthLabel = selectedDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
   const formattedMonth = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)
-
-  const isBalanced = settlement.isBalanced
-  const payer = getPersonByUid(settlement.payerUid)
-  const receiver = getPersonByUid(settlement.receiverUid)
 
   // Get contributing transactions
   const contributingTx = useMemo(() => {
-    const year = now.getFullYear()
-    const month = now.getMonth()
-
     return transactions.filter(tx => {
       if (tx.type !== 'expense') return false
       if (tx.recurrence === 'monthly' && !isTransactionActiveForMonth(tx, year, month)) return false
       if (tx.recurrence === 'one-off' && !isOneOffInMonth(tx, year, month)) return false
       return true
     }).sort((a, b) => new Date(b.date) - new Date(a.date))
-  }, [transactions, now])
+  }, [transactions, year, month])
+
+  const settlement = useMemo(() => calculateCurrentMonthSettlement(contributingTx), [contributingTx])
+
+  const isBalanced = settlement.isBalanced
+  const payer = getPersonWithColor(settlement.payerUid, settings?.personColors)
+  const receiver = getPersonWithColor(settlement.receiverUid, settings?.personColors)
+
+  const clementColor = getPersonWithColor(CLEMENT_UID, settings?.personColors)
+  const liseColor = getPersonWithColor(LISE_UID, settings?.personColors)
+
+
 
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="px-1 mb-2">
-        <h2 className="text-xl font-semibold tracking-tight">Équilibre</h2>
-        <p className="text-sm text-text-muted">Qui doit quoi pour {formattedMonth} ?</p>
+      <div className="px-1 mb-2 flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Équilibre</h2>
+          <p className="text-sm text-text-muted">Qui doit quoi pour {formattedMonth} ?</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSelectedDate(new Date(year, month - 1, 1))}
+            className="h-8 w-8 rounded-full bg-bg-elevated border border-border-subtle flex items-center justify-center active:scale-95 transition-all text-text-secondary hover:text-text-primary"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setSelectedDate(new Date(year, month + 1, 1))}
+            className="h-8 w-8 rounded-full bg-bg-elevated border border-border-subtle flex items-center justify-center active:scale-95 transition-all text-text-secondary hover:text-text-primary"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Main State Card */}
@@ -100,10 +123,10 @@ export default function MobileEquilibreTab({ data }) {
 
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-lg font-bold tabular-nums text-emerald-400">{format(settlement.fairShareByPerson[CLEMENT_UID] || 0)}</p>
+              <p className={`text-lg font-bold tabular-nums ${clementColor.text}`}>{format(settlement.fairShareByPerson[CLEMENT_UID] || 0)}</p>
             </div>
             <div className="text-right">
-              <p className="text-lg font-bold tabular-nums text-blue-400">{format(settlement.fairShareByPerson[LISE_UID] || 0)}</p>
+              <p className={`text-lg font-bold tabular-nums ${liseColor.text}`}>{format(settlement.fairShareByPerson[LISE_UID] || 0)}</p>
             </div>
           </div>
         </div>
@@ -115,7 +138,7 @@ export default function MobileEquilibreTab({ data }) {
           <h4 className="text-xs font-medium uppercase tracking-wider text-text-muted mb-3 px-1">Dépenses prises en compte</h4>
           <div className="space-y-2">
             {contributingTx.map(tx => {
-              const txPayer = getPersonByUid(tx.paidByUid)
+              const txPayer = getPersonWithColor(tx.paidByUid, settings?.personColors)
               const clementShare = getAllocatedAmountForPerson(tx, CLEMENT_UID)
               const liseShare = getAllocatedAmountForPerson(tx, LISE_UID)
               const total = tx.amountEUR
@@ -156,6 +179,17 @@ export default function MobileEquilibreTab({ data }) {
               )
             })}
           </div>
+        </div>
+      )}
+
+      {/* Person Evolution Chart */}
+      <PersonEvolutionChart transactions={transactions} format={format} settings={settings} />
+
+      {/* Mobile Person Breakdown */}
+      {personBreakdown && (
+        <div className="pt-2">
+          <h4 className="text-xs font-medium uppercase tracking-wider text-text-muted mb-3 px-1">Répartition globale</h4>
+          <MobilePersonBreakdown personBreakdown={personBreakdown} format={format} settings={settings} />
         </div>
       )}
     </div>

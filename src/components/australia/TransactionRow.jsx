@@ -1,14 +1,14 @@
 import { Pencil, Trash2, Pause, Play, Calendar } from 'lucide-react'
 import CategoryBadge from './CategoryBadge.jsx'
-import { CLEMENT_UID, LISE_UID, getPersonByUid } from '../../config/people.js'
+import { CLEMENT_UID, LISE_UID, getPersonWithColor } from '../../config/people.js'
 
-export default function TransactionRow({ transaction, onEdit, onDelete, onTogglePause, format }) {
+export default function TransactionRow({ transaction, onEdit, onDelete, onTogglePause, format, settings }) {
   const { title, amountEUR, type, recurrence, category, date, endDate, isActive, notes } = transaction
   const isIncome = type === 'income'
   const isRecurring = recurrence === 'monthly'
   const isPaused = !isActive
 
-  const txPayer = getPersonByUid(transaction.paidByUid || transaction.personUid)
+  const txPayer = getPersonWithColor(transaction.paidByUid || transaction.personUid, settings?.personColors)
   let reimbText = ''
 
   if (isIncome) {

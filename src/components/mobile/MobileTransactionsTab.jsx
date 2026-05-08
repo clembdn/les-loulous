@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { Calendar, Pause, Play, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import CategoryBadge from '../australia/CategoryBadge.jsx'
-import { CLEMENT_UID, LISE_UID, getPersonByUid } from '../../config/people.js'
+import { CLEMENT_UID, LISE_UID, FINAUZI_PEOPLE, getPersonWithColor } from '../../config/people.js'
+import { getCategoryConfig } from '../australia/CategoryBadge.jsx'
+
+const CATEGORIES = [
+  'housing', 'food', 'transport', 'admin', 'travel',
+  'health', 'income', 'leisure', 'emergency', 'other',
+]
 
 export default function MobileTransactionsTab({ data }) {
   const [tab, setTab] = useState('monthly')
@@ -12,9 +18,36 @@ export default function MobileTransactionsTab({ data }) {
     openEditModal,
     handleDelete,
     handleTogglePause,
+    settings,
   } = data
 
-  const list = tab === 'monthly' ? recurringTxs : oneOffTxs
+  const [filterUser, setFilterUser] = useState('all')
+  const [filterCategory, setFilterCategory] = useState('all')
+  const [sortMode, setSortMode] = useState('date-desc')
+
+  let list = tab === 'monthly' ? recurringTxs : oneOffTxs
+
+  // Apply filters
+  if (filterUser !== 'all') {
+    list = list.filter(tx => {
+      const payer = tx.paidByUid || tx.personUid
+      if (payer === filterUser) return true
+      if (Array.isArray(tx.splits) && tx.splits.some(s => s.personUid === filterUser && s.percentage > 0)) return true
+      return false
+    })
+  }
+
+  if (filterCategory !== 'all') {
+    list = list.filter(tx => tx.category === filterCategory)
+  }
+
+  // Apply sorting
+  list = [...list].sort((a, b) => {
+    if (sortMode === 'price-desc') return b.amountEUR - a.amountEUR
+    if (sortMode === 'price-asc') return a.amountEUR - b.amountEUR
+    // Default 'date-desc' is already the default for oneOffTxs, for recurring it's alphabetical but we can enforce date if needed, or just let it be.
+    return 0 
+  })
 
   return (
     <div className="">
@@ -54,6 +87,37 @@ export default function MobileTransactionsTab({ data }) {
         </button>
       </div>
 
+      {/* Filters */}
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
+        <select 
+          value={filterUser} 
+          onChange={e => setFilterUser(e.target.value)}
+          className="bg-bg-elevated border border-border-subtle rounded-xl px-3 py-1.5 text-xs text-text-secondary outline-none min-w-fit"
+        >
+          <option value="all">Tous les utilisateurs</option>
+          {FINAUZI_PEOPLE.map(p => <option key={p.uid} value={p.uid}>{p.label}</option>)}
+        </select>
+        
+        <select 
+          value={filterCategory} 
+          onChange={e => setFilterCategory(e.target.value)}
+          className="bg-bg-elevated border border-border-subtle rounded-xl px-3 py-1.5 text-xs text-text-secondary outline-none min-w-fit"
+        >
+          <option value="all">Toutes les catégories</option>
+          {CATEGORIES.map(c => <option key={c} value={c}>{getCategoryConfig(c).label}</option>)}
+        </select>
+        
+        <select 
+          value={sortMode} 
+          onChange={e => setSortMode(e.target.value)}
+          className="bg-bg-elevated border border-border-subtle rounded-xl px-3 py-1.5 text-xs text-text-secondary outline-none min-w-fit"
+        >
+          <option value="date-desc">Tri par défaut</option>
+          <option value="price-desc">Prix décroissant</option>
+          <option value="price-asc">Prix croissant</option>
+        </select>
+      </div>
+
       {/* Transaction list */}
       {list.length > 0 ? (
         <div className="space-y-2">
@@ -65,6 +129,7 @@ export default function MobileTransactionsTab({ data }) {
               onDelete={handleDelete}
               onTogglePause={handleTogglePause}
               format={format}
+              settings={settings}
             />
           ))}
         </div>
@@ -76,14 +141,14 @@ export default function MobileTransactionsTab({ data }) {
 }
 
 // ─── Mobile Transaction Row ───
-function MobileTransactionRow({ transaction, onEdit, onDelete, onTogglePause, format }) {
+function MobileTransactionRow({ transaction, onEdit, onDelete, onTogglePause, format, settings }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const { title, amountEUR, type, recurrence, category, date, isActive, notes } = transaction
   const isIncome = type === 'income'
   const isRecurring = recurrence === 'monthly'
   const isPaused = !isActive
 
-  const txPayer = getPersonByUid(transaction.paidByUid || transaction.personUid)
+  const txPayer = getPersonWithColor(transaction.paidByUid || transaction.personUid, settings?.personColors)
   let reimbText = ''
 
   if (isIncome) {

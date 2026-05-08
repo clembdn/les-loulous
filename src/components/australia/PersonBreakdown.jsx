@@ -1,10 +1,11 @@
 // PersonBreakdown — shows per-person income/expense/net cards.
-import { FINAUZI_PEOPLE } from '../../config/people.js'
+import { FINAUZI_PEOPLE, getPersonWithColor } from '../../config/people.js'
 
-export default function PersonBreakdown({ personBreakdown, format }) {
+export default function PersonBreakdown({ personBreakdown, format, settings }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {FINAUZI_PEOPLE.map(person => {
+      {FINAUZI_PEOPLE.map(p => {
+        const person = getPersonWithColor(p.uid, settings?.personColors)
         const data = personBreakdown[person.uid]
         if (!data) return null
         const net = data.monthly.netCashflow
@@ -64,10 +65,11 @@ export default function PersonBreakdown({ personBreakdown, format }) {
 /**
  * Compact mobile version of person breakdown.
  */
-export function MobilePersonBreakdown({ personBreakdown, format }) {
+export function MobilePersonBreakdown({ personBreakdown, format, settings }) {
   return (
     <div className="grid grid-cols-2 gap-3">
-      {FINAUZI_PEOPLE.map(person => {
+      {FINAUZI_PEOPLE.map(p => {
+        const person = getPersonWithColor(p.uid, settings?.personColors)
         const data = personBreakdown[person.uid]
         if (!data) return null
         const net = data.monthly.netCashflow

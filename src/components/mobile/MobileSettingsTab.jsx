@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Shield, Database, RotateCcw, ChevronRight, Pencil, Save, X, LogOut, Cloud, User } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
-import { getPersonByUid } from '../../config/people.js'
+import { getPersonByUid, FINAUZI_PEOPLE, THEME_COLORS, getPersonWithColor } from '../../config/people.js'
 
 export default function MobileSettingsTab({ data }) {
   const { format, settings, setSafetyBuffer } = data
   const { currentUser, logout } = useAuth()
-  const person = currentUser ? getPersonByUid(currentUser.uid) : null
+  const person = currentUser ? getPersonWithColor(currentUser.uid, settings?.personColors) : null
   const [editingBuffer, setEditingBuffer] = useState(false)
   const [bufferDraft, setBufferDraft] = useState(settings.safetyBuffer)
 
@@ -89,6 +89,35 @@ export default function MobileSettingsTab({ data }) {
                 <Pencil className="h-3 w-3 text-text-muted" />
               </button>
             )}
+          </div>
+        </div>
+
+        {/* Person Colors */}
+        <div className="rounded-2xl border border-border-subtle bg-bg-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-border-subtle/50 bg-bg-elevated/50">
+            <p className="text-sm font-medium">Couleurs</p>
+            <p className="text-[11px] text-text-muted mt-0.5">Personnaliser les badges</p>
+          </div>
+          <div className="p-4 space-y-4">
+            {FINAUZI_PEOPLE.map((p) => {
+              const pColor = getPersonWithColor(p.uid, settings?.personColors)
+              return (
+                <div key={p.uid} className="flex items-center justify-between">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${pColor.bg} ${pColor.text} border ${pColor.border}`}>
+                    {p.label}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {Object.values(THEME_COLORS).map(theme => (
+                      <button
+                        key={theme.color}
+                        onClick={() => data.setPersonColors({ ...(settings?.personColors || {}), [p.uid]: theme.color })}
+                        className={`h-6 w-6 rounded-full border-2 transition-all ${theme.bg} ${pColor.color === theme.color ? `border-current ${theme.text}` : 'border-transparent opacity-50 hover:opacity-100'}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
 

@@ -1,8 +1,8 @@
 // FinAuzi — Person Configuration & Helpers
 // Maps Firebase UIDs to display labels and colors.
 
-export const CLEMENT_UID = 'J8xOqDWZv5gEss5CBbQ7kQOsTwV2'
-export const LISE_UID = 'o8wLosYoh7b989P9gQyZCk8tt3l1'
+export const CLEMENT_UID = 'o8wLosYoh7b989P9gQyZCk8tt3l1'
+export const LISE_UID = 'J8xOqDWZv5gEss5CBbQ7kQOsTwV2'
 
 export const AUTHORIZED_UIDS = [
   CLEMENT_UID,
@@ -14,23 +14,40 @@ export const PEOPLE = [
     uid: CLEMENT_UID,
     label: 'Clément',
     shortLabel: 'Clément',
-    color: 'emerald',
-    bg: 'bg-emerald-500/15',
-    text: 'text-emerald-400',
-    border: 'border-emerald-500/25',
+    color: 'yellow',
+    bg: 'bg-yellow-500/15',
+    text: 'text-yellow-400',
+    border: 'border-yellow-500/25',
   },
   {
     uid: LISE_UID,
     label: 'Lise',
     shortLabel: 'Lise',
-    color: 'blue',
-    bg: 'bg-blue-500/15',
-    text: 'text-blue-400',
-    border: 'border-blue-500/25',
+    color: 'purple',
+    bg: 'bg-purple-500/15',
+    text: 'text-purple-400',
+    border: 'border-purple-500/25',
   },
 ]
 
 export const FINAUZI_PEOPLE = PEOPLE
+
+export const THEME_COLORS = {
+  emerald: { color: 'emerald', bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/25', label: 'Vert' },
+  blue: { color: 'blue', bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-blue-500/25', label: 'Bleu' },
+  purple: { color: 'purple', bg: 'bg-purple-500/15', text: 'text-purple-400', border: 'border-purple-500/25', label: 'Violet' },
+  yellow: { color: 'yellow', bg: 'bg-yellow-500/15', text: 'text-yellow-400', border: 'border-yellow-500/25', label: 'Jaune' },
+  rose: { color: 'rose', bg: 'bg-rose-500/15', text: 'text-rose-400', border: 'border-rose-500/25', label: 'Rose' },
+  orange: { color: 'orange', bg: 'bg-orange-500/15', text: 'text-orange-400', border: 'border-orange-500/25', label: 'Orange' },
+}
+
+export function getPersonWithColor(uid, personColors) {
+  const person = getPersonByUid(uid)
+  if (!person) return null
+  const customColorName = personColors?.[uid] || person.color
+  const colorObj = THEME_COLORS[customColorName] || THEME_COLORS.emerald
+  return { ...person, ...colorObj }
+}
 
 const EMAIL_TO_PERSON_UID = {
   'clemboudon06@gmail.com': CLEMENT_UID,

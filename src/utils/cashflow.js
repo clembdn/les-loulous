@@ -313,3 +313,80 @@ export function getPersonBreakdown(transactions, personUids) {
 
   return breakdown
 }
+
+/**
+ * Generate historical evolution of net position for given UIDs.
+ * Expands all transactions up to `now`.
+ */
+export function getHistoricalEvolution(transactions, authorizedUids) {
+  const now = new Date()
+  const events = []
+
+  // Add one-offs up to now
+  transactions.filter(t => t.isActive && t.recurrence === 'one-off').forEach(tx => {
+    const txDate = new Date(tx.date)
+    if (txDate <= now) {
+      events.push({ date: txDate, tx })
+    }
+  })
+
+  // Expand recurring up to now
+  transactions.filter(t => t.isActive && t.recurrence === 'monthly').forEach(tx => {
+    const startDate = new Date(tx.date)
+    const endDate = tx.endDate ? new Date(tx.endDate) : now
+    const limitDate = endDate < now ? endDate : now
+
+    let current = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate())
+    while (current <= limitDate) {
+      events.push({ date: new Date(current), tx })
+      current.setMonth(current.getMonth() + 1)
+    }
+  })
+
+  // Sort events chronologically
+  events.sort((a, b) => a.date - b.date)
+
+  // Calculate cumulative per person
+  const evolution = []
+  const currentBalances = {}
+  authorizedUids.forEach(uid => currentBalances[uid] = 0)
+  
+  // Start point
+  if (events.length > 0 && events[0].date > new Date(now.getFullYear(), now.getMonth() - 12, 1)) {
+    // Add an initial point with 0 balances before the first event
+    evolution.push({
+      timestamp: new Date(events[0].date.getTime() - 86400000).getTime(),
+      dateStr: new Date(events[0].date.getTime() - 86400000).toISOString(),
+      ...currentBalances
+    })
+  }
+
+  events.forEach(event => {
+    const { tx, date } = event
+    const isIncome = tx.type === 'income'
+
+    authorizedUids.forEach(uid => {
+      const share = getAllocatedAmountForPerson(tx, uid)
+      if (isIncome) {
+        currentBalances[uid] += share
+      } else {
+        currentBalances[uid] -= share
+      }
+    })
+
+    evolution.push({
+      timestamp: date.getTime(),
+      dateStr: date.toISOString(),
+      ...currentBalances
+    })
+  })
+
+  // End point
+  evolution.push({
+    timestamp: now.getTime(),
+    dateStr: now.toISOString(),
+    ...currentBalances
+  })
+
+  return evolution
+}

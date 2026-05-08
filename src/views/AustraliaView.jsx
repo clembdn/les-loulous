@@ -1,7 +1,15 @@
 import {
   Plane, Calendar, Plus, RefreshCw, ArrowUpDown,
-  TrendingUp, Wallet, Timer, ArrowDownCircle, Users,
+  TrendingUp, Wallet, Timer, ArrowDownCircle, Users, Filter
 } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { FINAUZI_PEOPLE } from '../config/people.js'
+import { getCategoryConfig } from '../components/australia/CategoryBadge.jsx'
+
+const CATEGORIES = [
+  'housing', 'food', 'transport', 'admin', 'travel',
+  'health', 'income', 'leisure', 'emergency', 'other',
+]
 
 import { useAustraliaData } from '../hooks/useAustraliaData.js'
 
@@ -11,9 +19,7 @@ import ForecastChart from '../components/australia/ForecastChart.jsx'
 import TransactionFormModal from '../components/australia/TransactionFormModal.jsx'
 import TransactionRow from '../components/australia/TransactionRow.jsx'
 import SafetyBufferControl from '../components/australia/SafetyBufferControl.jsx'
-import PersonBreakdown from '../components/australia/PersonBreakdown.jsx'
 import MobileAustraliaView from '../components/mobile/MobileAustraliaView.jsx'
-import ImportBanner from '../components/migration/ImportBanner.jsx'
 
 export default function AustraliaView() {
   const data = useAustraliaData()
@@ -72,10 +78,36 @@ function DesktopAustraliaView({ data }) {
     getLowestStatus,
   } = data
 
+  const [filterUser, setFilterUser] = useState('all')
+  const [filterCategory, setFilterCategory] = useState('all')
+  const [sortMode, setSortMode] = useState('date-desc')
+
+  // Apply filters and sorting to both lists
+  const filterAndSort = (list) => {
+    let filtered = list
+    if (filterUser !== 'all') {
+      filtered = filtered.filter(tx => {
+        const payer = tx.paidByUid || tx.personUid
+        if (payer === filterUser) return true
+        if (Array.isArray(tx.splits) && tx.splits.some(s => s.personUid === filterUser && s.percentage > 0)) return true
+        return false
+      })
+    }
+    if (filterCategory !== 'all') {
+      filtered = filtered.filter(tx => tx.category === filterCategory)
+    }
+    return [...filtered].sort((a, b) => {
+      if (sortMode === 'price-desc') return b.amountEUR - a.amountEUR
+      if (sortMode === 'price-asc') return a.amountEUR - b.amountEUR
+      return 0
+    })
+  }
+
+  const filteredRecurring = useMemo(() => filterAndSort(recurringTxs), [recurringTxs, filterUser, filterCategory, sortMode])
+  const filteredOneOff = useMemo(() => filterAndSort(oneOffTxs), [oneOffTxs, filterUser, filterCategory, sortMode])
+
   return (
     <div className="space-y-6">
-      {/* Import banner for legacy data */}
-      <ImportBanner />
 
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -142,16 +174,7 @@ function DesktopAustraliaView({ data }) {
       {/* Warning Banner */}
       <WarningBanner status={healthStatus} />
 
-      {/* Person Breakdown */}
-      {personBreakdown && (
-        <section>
-          <div className="flex items-center gap-2 mb-3">
-            <Users className="h-4 w-4 text-text-muted" />
-            <p className="stat-label">Répartition par personne</p>
-          </div>
-          <PersonBreakdown personBreakdown={personBreakdown} format={format} />
-        </section>
-      )}
+
 
       {/* Forecast Chart */}
       <section className="card">
@@ -173,20 +196,54 @@ function DesktopAustraliaView({ data }) {
       </section>
 
       {/* Transaction Manager */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold">Gestion des transactions</h2>
           <p className="text-sm text-text-secondary">
             {transactions.length} transaction{transactions.length !== 1 ? 's' : ''} au total
           </p>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="inline-flex items-center gap-2 px-4 h-10 rounded-xl bg-brand text-white text-sm font-medium hover:bg-brand/90 shadow-glow transition-all hover:scale-[1.02] active:scale-[0.98]"
-        >
-          <Plus className="h-4 w-4" />
-          Ajouter une transaction
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Filters */}
+          <div className="flex items-center gap-2 p-1 bg-bg-elevated border border-border-subtle rounded-xl">
+            <Filter className="h-4 w-4 text-text-muted ml-2 shrink-0" />
+            <select 
+              value={filterUser} 
+              onChange={e => setFilterUser(e.target.value)}
+              className="bg-transparent text-sm text-text-secondary outline-none px-1 cursor-pointer"
+            >
+              <option value="all">Tous utilisateurs</option>
+              {FINAUZI_PEOPLE.map(p => <option key={p.uid} value={p.uid}>{p.label}</option>)}
+            </select>
+            <span className="w-px h-4 bg-border-subtle" />
+            <select 
+              value={filterCategory} 
+              onChange={e => setFilterCategory(e.target.value)}
+              className="bg-transparent text-sm text-text-secondary outline-none px-1 cursor-pointer"
+            >
+              <option value="all">Toutes catégories</option>
+              {CATEGORIES.map(c => <option key={c} value={c}>{getCategoryConfig(c).label}</option>)}
+            </select>
+            <span className="w-px h-4 bg-border-subtle" />
+            <select 
+              value={sortMode} 
+              onChange={e => setSortMode(e.target.value)}
+              className="bg-transparent text-sm text-text-secondary outline-none px-1 cursor-pointer"
+            >
+              <option value="date-desc">Tri par défaut</option>
+              <option value="price-desc">Prix ↘</option>
+              <option value="price-asc">Prix ↗</option>
+            </select>
+          </div>
+
+          <button
+            onClick={openCreateModal}
+            className="inline-flex items-center gap-2 px-4 h-10 rounded-xl bg-brand text-white text-sm font-medium hover:bg-brand/90 shadow-glow transition-all hover:scale-[1.02] active:scale-[0.98] shrink-0"
+          >
+            <Plus className="h-4 w-4" />
+            Ajouter une transaction
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -198,14 +255,14 @@ function DesktopAustraliaView({ data }) {
                 <RefreshCw className="h-3.5 w-3.5" /> Mensualités Actives
               </p>
               <p className="text-xs text-text-muted mt-0.5">
-                {recurringTxs.length} transaction{recurringTxs.length !== 1 ? 's' : ''} récurrente{recurringTxs.length !== 1 ? 's' : ''}
+                {filteredRecurring.length} transaction{filteredRecurring.length !== 1 ? 's' : ''} récurrente{filteredRecurring.length !== 1 ? 's' : ''}
               </p>
             </div>
           </header>
 
-          {recurringTxs.length > 0 ? (
+          {filteredRecurring.length > 0 ? (
             <div className="space-y-2">
-              {recurringTxs.map(tx => (
+              {filteredRecurring.map(tx => (
                 <TransactionRow
                   key={tx.id}
                   transaction={tx}
@@ -213,6 +270,7 @@ function DesktopAustraliaView({ data }) {
                   onDelete={handleDelete}
                   onTogglePause={handleTogglePause}
                   format={format}
+                  settings={settings}
                 />
               ))}
             </div>
@@ -232,20 +290,21 @@ function DesktopAustraliaView({ data }) {
                 <Calendar className="h-3.5 w-3.5" /> Dépenses / Gains Occasionnels
               </p>
               <p className="text-xs text-text-muted mt-0.5">
-                {oneOffTxs.length} transaction{oneOffTxs.length !== 1 ? 's' : ''} ponctuelle{oneOffTxs.length !== 1 ? 's' : ''}
+                {filteredOneOff.length} transaction{filteredOneOff.length !== 1 ? 's' : ''} ponctuelle{filteredOneOff.length !== 1 ? 's' : ''}
               </p>
             </div>
           </header>
 
-          {oneOffTxs.length > 0 ? (
+          {filteredOneOff.length > 0 ? (
             <div className="space-y-2">
-              {oneOffTxs.map(tx => (
+              {filteredOneOff.map(tx => (
                 <TransactionRow
                   key={tx.id}
                   transaction={tx}
                   onEdit={openEditModal}
                   onDelete={handleDelete}
                   format={format}
+                  settings={settings}
                 />
               ))}
             </div>

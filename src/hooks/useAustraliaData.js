@@ -180,10 +180,19 @@ export function useAustraliaData() {
     }
   }, [uid])
 
+  const setPersonColors = useCallback(async (personColors) => {
+    try {
+      await updateSettings({ personColors }, uid)
+    } catch (err) {
+      console.error('[FinAuzi] Failed to update person colors:', err)
+    }
+  }, [uid])
+
   // ─── Normalized settings for backward compat ───
   const normalizedSettings = useMemo(() => ({
     safetyBuffer: settings.safetyBufferEUR ?? DEFAULT_SAFETY_BUFFER,
     initialCapital: settings.initialCapitalEUR ?? DEFAULT_INITIAL_CAPITAL,
+    personColors: settings.personColors || {},
   }), [settings])
 
   // ─── Derived Data ───
@@ -285,6 +294,7 @@ export function useAustraliaData() {
     closeModal,
     setSafetyBuffer,
     setInitialCapital,
+    setPersonColors,
 
     // Derived
     recurringTxs,
