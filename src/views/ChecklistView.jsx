@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Plus, Filter } from 'lucide-react'
 import { useChecklistData } from '../hooks/useChecklistData.js'
+import { useAustraliaData } from '../hooks/useAustraliaData.js'
 import ChecklistSection from '../components/checklist/ChecklistSection.jsx'
 import ChecklistFormModal from '../components/checklist/ChecklistFormModal.jsx'
 import ProgressSummary from '../components/checklist/ProgressSummary.jsx'
@@ -16,6 +17,7 @@ const SECTIONS = [
 
 export default function ChecklistView() {
   const { items, isLoading, handleSaveItem, handleDeleteItem, handleChangeStatus } = useChecklistData()
+  const australiaData = useAustraliaData()
   const [modalOpen, setModalOpen] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
   
@@ -158,6 +160,7 @@ export default function ChecklistView() {
         onDelete={handleDeleteItem}
         item={editingItem}
         sections={SECTIONS}
+        transactions={australiaData.transactions || []}
       />
     </div>
   )

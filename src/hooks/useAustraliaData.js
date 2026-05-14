@@ -16,6 +16,9 @@ import {
   getFinalProjectedCapital,
   getHealthStatus,
   getPersonBreakdown,
+  getCompteCommunBalance,
+  getCapitalProjet,
+  getForecastDataWithScenarios,
 } from '../utils/cashflow.js'
 
 const DEFAULT_INITIAL_CAPITAL = 10000
@@ -197,7 +200,7 @@ export function useAustraliaData() {
 
   // ─── Derived Data ───
   const recurringTxs = useMemo(
-    () => transactions.filter(t => t.recurrence === 'monthly').sort((a, b) => {
+    () => transactions.filter(t => t.recurrence === 'monthly' || t.recurrence === 'weekly').sort((a, b) => {
       if (a.type !== b.type) return a.type === 'income' ? -1 : 1
       return (a.title || '').localeCompare(b.title || '')
     }),
@@ -227,6 +230,23 @@ export function useAustraliaData() {
   const healthStatus = useMemo(
     () => getHealthStatus(forecastData, normalizedSettings.safetyBuffer),
     [forecastData, normalizedSettings.safetyBuffer]
+  )
+
+  // Compte Commun & Capital Projet
+  const compteCommunBalance = useMemo(
+    () => getCompteCommunBalance(transactions, normalizedSettings.initialCapital),
+    [transactions, normalizedSettings.initialCapital]
+  )
+
+  const capitalProjet = useMemo(
+    () => getCapitalProjet(transactions, normalizedSettings.initialCapital),
+    [transactions, normalizedSettings.initialCapital]
+  )
+
+  // Scenarios
+  const scenarioData = useMemo(
+    () => getForecastDataWithScenarios(transactions, normalizedSettings.initialCapital),
+    [transactions, normalizedSettings.initialCapital]
   )
 
   // Person-based breakdown
@@ -306,6 +326,9 @@ export function useAustraliaData() {
     finalCapital,
     healthStatus,
     personBreakdown,
+    compteCommunBalance,
+    capitalProjet,
+    scenarioData,
 
     // Status helpers
     getCashflowStatus,

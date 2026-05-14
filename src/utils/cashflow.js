@@ -4,6 +4,9 @@
 
 import { normalizeTransactionAllocation } from './transactionAllocation.js'
 
+// Conversion factor: weekly → monthly (52 weeks / 12 months)
+const WEEKLY_TO_MONTHLY = 52 / 12
+
 /**
  * Generate an array of the next N months starting from a base date.
  * Each entry: { year, month, label, key }
@@ -23,11 +26,11 @@ export function generateNextMonths(count = 12, baseDate = new Date()) {
 }
 
 /**
- * Check if a recurring transaction is active for a given month.
+ * Check if a recurring transaction (monthly or weekly) is active for a given month.
  */
 export function isTransactionActiveForMonth(tx, year, month) {
   if (!tx.isActive) return false
-  if (tx.recurrence !== 'monthly') return false
+  if (tx.recurrence !== 'monthly' && tx.recurrence !== 'weekly') return false
 
   const startDate = new Date(tx.date)
   const startYear = startDate.getFullYear()
@@ -57,6 +60,25 @@ export function isOneOffInMonth(tx, year, month) {
 }
 
 /**
+ * Convert a weekly amount to a monthly equivalent.
+ */
+export function weeklyToMonthly(weeklyAmount) {
+  return weeklyAmount * WEEKLY_TO_MONTHLY
+}
+
+/**
+ * Get the effective monthly amount for a transaction.
+ * Weekly transactions are converted to monthly equivalents.
+ * Transfers are excluded (return 0).
+ */
+export function getEffectiveMonthlyAmount(tx) {
+  if (tx.transactionKind === 'transfer') return 0
+  const amount = tx.amountEUR || 0
+  if (tx.recurrence === 'weekly') return amount * WEEKLY_TO_MONTHLY
+  return amount
+}
+
+/**
  * Calculate the net monthly cashflow from all active recurring transactions.
  * Returns { totalIncome, totalExpenses, netCashflow }
  */
@@ -69,13 +91,16 @@ export function getMonthlyNetCashflow(transactions) {
   let totalExpenses = 0
 
   for (const tx of transactions) {
-    if (tx.recurrence !== 'monthly') continue
+    if (tx.recurrence !== 'monthly' && tx.recurrence !== 'weekly') continue
     if (!isTransactionActiveForMonth(tx, year, month)) continue
+    if (tx.transactionKind === 'transfer') continue
+
+    const effectiveAmount = getEffectiveMonthlyAmount(tx)
 
     if (tx.type === 'income') {
-      totalIncome += tx.amountEUR
+      totalIncome += effectiveAmount
     } else {
-      totalExpenses += tx.amountEUR
+      totalExpenses += effectiveAmount
     }
   }
 
@@ -90,7 +115,8 @@ export function getMonthlyNetCashflow(transactions) {
  * Build a 12-month forecast projection.
  * Returns an array of monthly data points.
  */
-export function getForecastData(transactions, initialCapital, monthCount = 12) {
+export function getForecastData(transactions, initialCapital, monthCount = 12, options = {}) {
+  const { includeRevenusFrance = true, excludeTransfers = true } = options
   const months = generateNextMonths(monthCount)
   const data = []
   let balance = initialCapital
@@ -102,10 +128,17 @@ export function getForecastData(transactions, initialCapital, monthCount = 12) {
     let oneOffExpenses = 0
 
     for (const tx of transactions) {
-      if (tx.recurrence === 'monthly') {
+      // Skip transfers if configured
+      if (excludeTransfers && tx.transactionKind === 'transfer') continue
+
+      // Skip French revenues if disabled in options
+      if (!includeRevenusFrance && tx.fundSource && tx.fundSource !== 'common' && tx.type === 'income') continue
+
+      if (tx.recurrence === 'monthly' || tx.recurrence === 'weekly') {
         if (isTransactionActiveForMonth(tx, m.year, m.month)) {
-          if (tx.type === 'income') monthlyIncome += tx.amountEUR
-          else monthlyExpenses += tx.amountEUR
+          const effectiveAmount = getEffectiveMonthlyAmount(tx)
+          if (tx.type === 'income') monthlyIncome += effectiveAmount
+          else monthlyExpenses += effectiveAmount
         }
       } else if (tx.recurrence === 'one-off') {
         if (isOneOffInMonth(tx, m.year, m.month)) {
@@ -204,6 +237,155 @@ export function getHealthStatus(forecastData, safetyBuffer) {
   return 'green'
 }
 
+// ─── Compte Commun & Capital Projet ───
+
+/**
+ * Calculate the current balance of the compte commun.
+ * Only includes transactions where impactCompteCommun is true (or defaults to true for legacy).
+ * Returns the balance in EUR.
+ */
+export function getCompteCommunBalance(transactions, initialCapital) {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  let balance = initialCapital
+
+  for (const tx of transactions) {
+    if (!tx.isActive) continue
+    // Default: legacy transactions impact the compte commun
+    const impacts = tx.impactCompteCommun !== false
+    if (!impacts) continue
+    if (tx.transactionKind === 'transfer') continue
+
+    if (tx.recurrence === 'monthly' || tx.recurrence === 'weekly') {
+      if (isTransactionActiveForMonth(tx, year, month)) {
+        // Count months elapsed since start
+        const startDate = new Date(tx.date)
+        const startYear = startDate.getFullYear()
+        const startMonth = startDate.getMonth()
+        let monthsElapsed = (year - startYear) * 12 + (month - startMonth)
+        if (monthsElapsed < 0) monthsElapsed = 0
+
+        const effectiveAmount = getEffectiveMonthlyAmount(tx)
+        const totalImpact = effectiveAmount * (monthsElapsed + 1)
+
+        if (tx.type === 'income') balance += totalImpact
+        else balance -= totalImpact
+      }
+    } else if (tx.recurrence === 'one-off') {
+      const txDate = new Date(tx.date)
+      if (txDate <= now) {
+        if (tx.type === 'income') balance += tx.amountEUR
+        else balance -= tx.amountEUR
+      }
+    }
+  }
+
+  return Math.round(balance)
+}
+
+/**
+ * Calculate the total capital invested in the project.
+ * Sum of all one-off expenses marked as pre-departure + current compte commun balance.
+ */
+export function getCapitalProjet(transactions, initialCapital) {
+  let preDepartTotal = 0
+  const now = new Date()
+
+  for (const tx of transactions) {
+    if (!tx.isActive) continue
+    if (tx.type !== 'expense') continue
+    if (tx.recurrence !== 'one-off') continue
+
+    const txDate = new Date(tx.date)
+    if (txDate <= now) {
+      preDepartTotal += tx.amountEUR || 0
+    }
+  }
+
+  // Monthly recurring expenses accumulated so far
+  let recurringTotal = 0
+  for (const tx of transactions) {
+    if (!tx.isActive) continue
+    if (tx.type !== 'expense') continue
+    if (tx.recurrence !== 'monthly' && tx.recurrence !== 'weekly') continue
+    if (tx.transactionKind === 'transfer') continue
+
+    const startDate = new Date(tx.date)
+    if (startDate > now) continue
+
+    const startYear = startDate.getFullYear()
+    const startMonth = startDate.getMonth()
+    const nowYear = now.getFullYear()
+    const nowMonth = now.getMonth()
+    let monthsElapsed = (nowYear - startYear) * 12 + (nowMonth - startMonth)
+    if (monthsElapsed < 0) monthsElapsed = 0
+
+    // Check endDate
+    if (tx.endDate) {
+      const endDate = new Date(tx.endDate)
+      const endYear = endDate.getFullYear()
+      const endMonth = endDate.getMonth()
+      const maxMonths = (endYear - startYear) * 12 + (endMonth - startMonth)
+      if (monthsElapsed > maxMonths) monthsElapsed = maxMonths
+    }
+
+    const effectiveAmount = getEffectiveMonthlyAmount(tx)
+    recurringTotal += effectiveAmount * (monthsElapsed + 1)
+  }
+
+  return Math.round(initialCapital + preDepartTotal + recurringTotal)
+}
+
+/**
+ * Generate forecast data for multiple scenarios.
+ * Returns { prudent, realiste, optimiste } each with full forecast data.
+ */
+export function getForecastDataWithScenarios(transactions, initialCapital, scenarioConfig = {}) {
+  const {
+    jobStartMonth = 3,
+    jobIncome = 1500,
+    cheaperRent = 200,
+  } = scenarioConfig
+
+  // Prudent: no job, no French revenues
+  const prudent = getForecastData(transactions, initialCapital, 12, {
+    includeRevenusFrance: false,
+  })
+
+  // Réaliste: with French revenues, job starts at configured month
+  const realiste = getForecastData(transactions, initialCapital, 12, {
+    includeRevenusFrance: true,
+  })
+  // Inject job income starting from jobStartMonth
+  let realisteBalance = initialCapital
+  for (let i = 0; i < realiste.length; i++) {
+    if (i >= jobStartMonth - 1) {
+      realiste[i].monthlyIncome += jobIncome
+      realiste[i].netRecurring += jobIncome
+      realiste[i].netMovement += jobIncome
+    }
+    realisteBalance += realiste[i].netMovement
+    realiste[i].projectedBalance = Math.round(realisteBalance)
+  }
+
+  // Optimiste: job from month 1, cheaper rent, with French revenues
+  const optimiste = getForecastData(transactions, initialCapital, 12, {
+    includeRevenusFrance: true,
+  })
+  let optimisteBalance = initialCapital
+  for (let i = 0; i < optimiste.length; i++) {
+    optimiste[i].monthlyIncome += jobIncome
+    optimiste[i].monthlyExpenses -= cheaperRent
+    optimiste[i].netRecurring += jobIncome + cheaperRent
+    optimiste[i].netMovement += jobIncome + cheaperRent
+    optimisteBalance += optimiste[i].netMovement
+    optimiste[i].projectedBalance = Math.round(optimisteBalance)
+  }
+
+  return { prudent, realiste, optimiste }
+}
+
 // ─── Person-based calculation helpers ───
 
 /**
@@ -226,10 +408,15 @@ export function getMonthlyIncomeByPerson(transactions, personUid) {
   let totalIncome = 0
 
   for (const tx of transactions) {
-    if (tx.recurrence !== 'monthly') continue
+    if (tx.recurrence !== 'monthly' && tx.recurrence !== 'weekly') continue
     if (tx.type !== 'income') continue
+    if (tx.transactionKind === 'transfer') continue
     if (!isTransactionActiveForMonth(tx, year, month)) continue
-    totalIncome += getAllocatedAmountForPerson(tx, personUid)
+    const amount = getEffectiveMonthlyAmount(tx)
+    const allocation = normalizeTransactionAllocation(tx, personUid)
+    const split = allocation.splits.find(item => item.personUid === personUid)
+    if (!split) continue
+    totalIncome += amount * (split.percentage / 100)
   }
 
   return totalIncome
@@ -245,10 +432,15 @@ export function getMonthlyExpensesByPerson(transactions, personUid) {
   let totalExpenses = 0
 
   for (const tx of transactions) {
-    if (tx.recurrence !== 'monthly') continue
+    if (tx.recurrence !== 'monthly' && tx.recurrence !== 'weekly') continue
     if (tx.type !== 'expense') continue
+    if (tx.transactionKind === 'transfer') continue
     if (!isTransactionActiveForMonth(tx, year, month)) continue
-    totalExpenses += getAllocatedAmountForPerson(tx, personUid)
+    const amount = getEffectiveMonthlyAmount(tx)
+    const allocation = normalizeTransactionAllocation(tx, personUid)
+    const split = allocation.splits.find(item => item.personUid === personUid)
+    if (!split) continue
+    totalExpenses += amount * (split.percentage / 100)
   }
 
   return totalExpenses

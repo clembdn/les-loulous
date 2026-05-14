@@ -58,6 +58,8 @@ export default function MobileOverviewTab({ data }) {
     settings,
     healthStatus,
     personBreakdown,
+    compteCommunBalance,
+    capitalProjet,
     getCashflowStatus,
     getFinalCapitalStatus,
     getRunwayLabel,
@@ -113,7 +115,7 @@ export default function MobileOverviewTab({ data }) {
       </div>
 
       {/* ─── Compact Metrics Grid ─── */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-2">
         <MetricMini
           label="Cashflow"
           value={monthlyCashflow.netCashflow >= 0
@@ -138,6 +140,16 @@ export default function MobileOverviewTab({ data }) {
           value={format(lowestBalance.amount)}
           sub={lowestBalance.label}
           status={lowestStatus}
+        />
+        <MetricMini
+          label="Compte Commun"
+          value={format(compteCommunBalance)}
+          status={compteCommunBalance > settings.safetyBuffer ? 'green' : compteCommunBalance > 0 ? 'orange' : 'red'}
+        />
+        <MetricMini
+          label="Capital Projet"
+          value={format(capitalProjet)}
+          status="neutral"
         />
       </div>
 

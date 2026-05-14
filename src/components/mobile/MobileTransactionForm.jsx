@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Save, Trash2, AlertCircle, ArrowLeftRight, CheckCircle2 } from 'lucide-react'
+import { Save, Trash2, AlertCircle, ArrowLeftRight, CheckCircle2, ArrowRightLeft, ShieldAlert, Banknote } from 'lucide-react'
 import { getCategoryConfig } from '../australia/CategoryBadge.jsx'
 import { CLEMENT_UID, LISE_UID, FINAUZI_PEOPLE, getPersonByUid, isAuthorizedUid } from '../../config/people.js'
 import { CURRENCY_RATES } from '../../context/CurrencyContext.jsx'
+import { TRANSACTION_KINDS, FUND_SOURCES } from '../../utils/transactionAllocation.js'
 
 const CATEGORIES = [
   'housing', 'food', 'transport', 'admin', 'travel',
@@ -21,7 +22,16 @@ const EMPTY_FORM = {
   paidByUid: CLEMENT_UID,
   reimbursementOn: false,
   reimbursementPct: 50,
+  impactCompteCommun: true,
+  fundSource: FUND_SOURCES.COMMON,
+  transactionKind: TRANSACTION_KINDS.STANDARD,
 }
+
+const FUND_SOURCE_OPTIONS = [
+  { id: FUND_SOURCES.COMMON, label: 'Commun' },
+  { id: FUND_SOURCES.PERSO_CLEMENT, label: 'Clément' },
+  { id: FUND_SOURCES.PERSO_LISE, label: 'Lise' },
+]
 
 const TRANSACTION_CURRENCIES = ['EUR', 'AUD']
 const AUD_RATE = CURRENCY_RATES.AUD.rate
@@ -89,6 +99,9 @@ export default function MobileTransactionForm({ transaction, onSave, onDelete, o
         paidByUid: initialPaidByUid,
         reimbursementOn: initialReimbOn,
         reimbursementPct: initialReimbPct,
+        impactCompteCommun: transaction.impactCompteCommun !== false,
+        fundSource: transaction.fundSource || FUND_SOURCES.COMMON,
+        transactionKind: transaction.transactionKind || TRANSACTION_KINDS.STANDARD,
       })
     } else {
       setForm({
@@ -106,7 +119,7 @@ export default function MobileTransactionForm({ transaction, onSave, onDelete, o
     if (!form.title.trim()) errs.title = 'Titre requis'
     if (!form.amountEUR || Number(form.amountEUR) <= 0) errs.amountEUR = 'Montant invalide'
     if (!form.date) errs.date = 'Date requise'
-    if (form.recurrence === 'monthly' && form.endDate && form.endDate < form.date) {
+    if ((form.recurrence === 'monthly' || form.recurrence === 'weekly') && form.endDate && form.endDate < form.date) {
       errs.endDate = 'Date de fin invalide'
     }
     if (form.type === 'expense' && form.reimbursementOn) {
@@ -142,17 +155,20 @@ export default function MobileTransactionForm({ transaction, onSave, onDelete, o
       id: transaction?.id || undefined,
       title: form.title.trim(),
       amountEUR: Number(amountInEUR.toFixed(2)),
-      type: form.type,
+      type: form.transactionKind === TRANSACTION_KINDS.TRANSFER ? 'expense' : form.type,
       recurrence: form.recurrence,
       category: form.category,
       date: form.date,
-      endDate: form.recurrence === 'monthly' && form.endDate ? form.endDate : null,
+      endDate: (form.recurrence === 'monthly' || form.recurrence === 'weekly') && form.endDate ? form.endDate : null,
       notes: form.notes.trim() || null,
       isActive: transaction?.isActive ?? true,
       paidByUid: form.paidByUid,
       allocationType,
       splits,
       personUid: allocationType === 'single' ? form.paidByUid : null,
+      impactCompteCommun: form.impactCompteCommun,
+      fundSource: form.fundSource,
+      transactionKind: form.transactionKind,
       createdAt: transaction?.createdAt || now,
       updatedAt: now,
     })
@@ -251,10 +267,10 @@ export default function MobileTransactionForm({ transaction, onSave, onDelete, o
       </div>
 
       {/* Date fields */}
-      <div className={`grid gap-3 ${form.recurrence === 'monthly' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      <div className={`grid gap-3 ${form.recurrence === 'monthly' || form.recurrence === 'weekly' ? 'grid-cols-2' : 'grid-cols-1'}`}>
         <div>
           <label className="text-[11px] text-text-muted font-medium uppercase tracking-wider block mb-2">
-            {form.recurrence === 'monthly' ? 'Départ' : 'Date'}
+            {form.recurrence === 'monthly' || form.recurrence === 'weekly' ? 'Départ' : 'Date'}
           </label>
           <input
             type="date"
@@ -270,7 +286,7 @@ export default function MobileTransactionForm({ transaction, onSave, onDelete, o
           )}
           {errors.date && <ErrorMsg>{errors.date}</ErrorMsg>}
         </div>
-        {form.recurrence === 'monthly' && (
+        {(form.recurrence === 'monthly' || form.recurrence === 'weekly') && (
           <div>
             <label className="text-[11px] text-text-muted font-medium uppercase tracking-wider block mb-2">Retour</label>
             <input
@@ -319,22 +335,102 @@ export default function MobileTransactionForm({ transaction, onSave, onDelete, o
         <div className="flex p-1 rounded-2xl bg-bg-elevated border border-border-subtle">
           <button
             onClick={() => set('recurrence', 'one-off')}
-            className={`flex-1 h-11 rounded-xl text-sm font-medium transition-all ${
+            className={`flex-1 h-11 rounded-xl text-[11px] font-medium transition-all ${
               form.recurrence === 'one-off' ? 'bg-brand/20 text-brand-glow shadow-sm' : 'text-text-muted'
             }`}
           >
             Occasionnel
           </button>
           <button
+            onClick={() => set('recurrence', 'weekly')}
+            className={`flex-1 h-11 rounded-xl text-[11px] font-medium transition-all ${
+              form.recurrence === 'weekly' ? 'bg-brand/20 text-brand-glow shadow-sm' : 'text-text-muted'
+            }`}
+          >
+            Hebdo
+          </button>
+          <button
             onClick={() => set('recurrence', 'monthly')}
-            className={`flex-1 h-11 rounded-xl text-sm font-medium transition-all ${
+            className={`flex-1 h-11 rounded-xl text-[11px] font-medium transition-all ${
               form.recurrence === 'monthly' ? 'bg-brand/20 text-brand-glow shadow-sm' : 'text-text-muted'
             }`}
           >
             Mensuel
           </button>
         </div>
+        {form.recurrence === 'weekly' && (
+          <p className="text-[10px] text-text-muted mt-1.5">~{amountNumber > 0 ? (amountNumber * 4.33).toFixed(0) : '…'}/mois sur le dashboard</p>
+        )}
       </div>
+
+      {/* Transaction Kind */}
+      <div>
+        <label className="text-[11px] text-text-muted font-medium uppercase tracking-wider block mb-2">Nature</label>
+        <div className="flex p-1 rounded-2xl bg-bg-elevated border border-border-subtle">
+          <button
+            onClick={() => { set('transactionKind', TRANSACTION_KINDS.STANDARD); set('impactCompteCommun', true); }}
+            className={`flex-1 h-11 rounded-xl text-[11px] font-medium transition-all ${
+              form.transactionKind === TRANSACTION_KINDS.STANDARD ? 'bg-brand/20 text-brand-glow shadow-sm' : 'text-text-muted'
+            }`}
+          >
+            Standard
+          </button>
+          <button
+            onClick={() => { set('transactionKind', TRANSACTION_KINDS.TRANSFER); set('impactCompteCommun', false); }}
+            className={`flex-1 h-11 rounded-xl text-[11px] font-medium transition-all flex items-center justify-center gap-1 ${
+              form.transactionKind === TRANSACTION_KINDS.TRANSFER ? 'bg-amber-500/20 text-amber-400 shadow-sm' : 'text-text-muted'
+            }`}
+          >
+            <ArrowRightLeft className="h-3 w-3" /> Transfert
+          </button>
+          <button
+            onClick={() => { set('transactionKind', TRANSACTION_KINDS.PERSONAL_BAILOUT); set('impactCompteCommun', false); }}
+            className={`flex-1 h-11 rounded-xl text-[11px] font-medium transition-all flex items-center justify-center gap-1 ${
+              form.transactionKind === TRANSACTION_KINDS.PERSONAL_BAILOUT ? 'bg-purple-500/20 text-purple-400 shadow-sm' : 'text-text-muted'
+            }`}
+          >
+            <ShieldAlert className="h-3 w-3" /> Dépannage
+          </button>
+        </div>
+      </div>
+
+      {/* Source des fonds */}
+      <div>
+        <label className="text-[11px] text-text-muted font-medium uppercase tracking-wider block mb-2">Source</label>
+        <div className="flex p-1 rounded-2xl bg-bg-elevated border border-border-subtle">
+          {FUND_SOURCE_OPTIONS.map(opt => (
+            <button
+              key={opt.id}
+              onClick={() => set('fundSource', opt.id)}
+              className={`flex-1 h-11 rounded-xl text-[11px] font-medium transition-all ${
+                form.fundSource === opt.id ? 'bg-brand/20 text-brand-glow shadow-sm' : 'text-text-muted'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Impact Compte Commun */}
+      {form.transactionKind === TRANSACTION_KINDS.STANDARD && (
+        <div className="bg-bg-elevated border border-border-subtle rounded-2xl overflow-hidden">
+          <label className="flex items-center justify-between p-4 cursor-pointer">
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
+                <Banknote className="h-4 w-4 text-brand" /> Compte commun
+              </span>
+              <span className="text-xs text-text-muted mt-0.5">
+                {form.impactCompteCommun ? 'Impacte le solde commun' : 'N\'impacte pas le solde commun'}
+              </span>
+            </div>
+            <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.impactCompteCommun ? 'bg-brand' : 'bg-border-strong'}`}>
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.impactCompteCommun ? 'translate-x-6' : 'translate-x-1'}`} />
+            </div>
+            <input type="checkbox" className="hidden" checked={form.impactCompteCommun} onChange={(e) => set('impactCompteCommun', e.target.checked)} />
+          </label>
+        </div>
+      )}
 
       {/* Category chips */}
       <div>

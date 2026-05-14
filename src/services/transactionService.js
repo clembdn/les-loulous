@@ -7,6 +7,8 @@ import {
 import { db } from '../lib/firebase.js'
 import {
   ALLOCATION_TYPES,
+  TRANSACTION_KINDS,
+  FUND_SOURCES,
   isValidTransactionAllocation,
   normalizeTransactionAllocation,
 } from '../utils/transactionAllocation.js'
@@ -30,6 +32,10 @@ function normalizeTransactionRecord(txData, fallbackPersonUid) {
     personUid: allocation.allocationType === ALLOCATION_TYPES.SINGLE
       ? allocation.splits[0].personUid
       : null,
+    // Ensure new fields have defaults for backward compat
+    transactionKind: txData.transactionKind || TRANSACTION_KINDS.STANDARD,
+    impactCompteCommun: txData.impactCompteCommun !== false,
+    fundSource: txData.fundSource || FUND_SOURCES.COMMON,
   }
 }
 
@@ -82,6 +88,11 @@ export async function createTransaction(txInput, currentUid, fallbackPersonUid) 
     allocationType: allocation.allocationType,
     splits: allocation.splits,
     personUid: allocation.allocationType === ALLOCATION_TYPES.SINGLE ? allocation.splits[0].personUid : null,
+    // New fields
+    transactionKind: txInput.transactionKind || TRANSACTION_KINDS.STANDARD,
+    impactCompteCommun: txInput.impactCompteCommun !== false,
+    fundSource: txInput.fundSource || FUND_SOURCES.COMMON,
+    paidByUid: txInput.paidByUid || null,
     createdAt: txInput.createdAt || now,
     createdBy: currentUid,
     updatedAt: now,

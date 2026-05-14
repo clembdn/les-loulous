@@ -11,6 +11,7 @@ const AustraliaView = lazy(() => import('./views/AustraliaView.jsx'))
 const EquilibreView = lazy(() => import('./views/EquilibreView.jsx'))
 const SettingsView = lazy(() => import('./views/SettingsView.jsx'))
 const ChecklistView = lazy(() => import('./views/ChecklistView.jsx'))
+const PreDepartView = lazy(() => import('./views/PreDepartView.jsx'))
 
 function ViewFallback() {
   return (
@@ -28,6 +29,8 @@ function ViewContainer({ active }) {
       return <ChecklistView />
     case 'equilibre':
       return <EquilibreView />
+    case 'predepart':
+      return <PreDepartView />
     case 'australia':
     default:
       return <AustraliaView />

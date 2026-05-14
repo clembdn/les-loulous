@@ -1,6 +1,7 @@
 import {
   Plane, Calendar, Plus, RefreshCw, ArrowUpDown,
-  TrendingUp, Wallet, Timer, ArrowDownCircle, Users, Filter
+  TrendingUp, Wallet, Timer, ArrowDownCircle, Users, Filter,
+  Banknote, Briefcase, BarChart3
 } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { FINAUZI_PEOPLE } from '../config/people.js'
@@ -19,6 +20,7 @@ import ForecastChart from '../components/australia/ForecastChart.jsx'
 import TransactionFormModal from '../components/australia/TransactionFormModal.jsx'
 import TransactionRow from '../components/australia/TransactionRow.jsx'
 import SafetyBufferControl from '../components/australia/SafetyBufferControl.jsx'
+import ScenariosModal from '../components/australia/ScenariosModal.jsx'
 import MobileAustraliaView from '../components/mobile/MobileAustraliaView.jsx'
 
 export default function AustraliaView() {
@@ -64,6 +66,9 @@ function DesktopAustraliaView({ data }) {
     finalCapital,
     healthStatus,
     personBreakdown,
+    compteCommunBalance,
+    capitalProjet,
+    scenarioData,
     handleSave,
     handleDelete,
     handleTogglePause,
@@ -77,6 +82,8 @@ function DesktopAustraliaView({ data }) {
     getRunwayStatus,
     getLowestStatus,
   } = data
+
+  const [showScenarios, setShowScenarios] = useState(false)
 
   const [filterUser, setFilterUser] = useState('all')
   const [filterCategory, setFilterCategory] = useState('all')
@@ -129,7 +136,7 @@ function DesktopAustraliaView({ data }) {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <SummaryCard
           icon={ArrowUpDown}
           label="Cashflow Mensuel Net"
@@ -169,6 +176,30 @@ function DesktopAustraliaView({ data }) {
           subtitle={lowestBalance.label}
           status={getLowestStatus()}
         />
+        <SummaryCard
+          icon={Banknote}
+          label="Solde Compte Commun"
+          value={format(compteCommunBalance)}
+          subtitle={compteCommunBalance >= 0 ? 'Capital disponible' : 'Solde négatif'}
+          status={compteCommunBalance > settings.safetyBuffer ? 'green' : compteCommunBalance > 0 ? 'orange' : 'red'}
+        />
+        <SummaryCard
+          icon={Briefcase}
+          label="Capital Projet"
+          value={format(capitalProjet)}
+          subtitle="Total engagé dans le projet"
+          status="neutral"
+        />
+      </div>
+
+      {/* Scénarios Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowScenarios(true)}
+          className="inline-flex items-center gap-2 px-4 h-9 rounded-xl bg-bg-elevated border border-border-subtle text-sm font-medium text-text-secondary hover:text-brand-glow hover:border-brand/30 transition-all"
+        >
+          <BarChart3 className="h-4 w-4" /> Scénarios
+        </button>
       </div>
 
       {/* Warning Banner */}
@@ -325,6 +356,15 @@ function DesktopAustraliaView({ data }) {
         onDelete={handleDelete}
         transaction={editingTx}
         currentUserUid={defaultPersonUid}
+      />
+
+      {/* Scénarios Modal */}
+      <ScenariosModal
+        isOpen={showScenarios}
+        onClose={() => setShowScenarios(false)}
+        scenarioData={scenarioData}
+        format={format}
+        safetyBuffer={settings.safetyBuffer}
       />
     </div>
   )

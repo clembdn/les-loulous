@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { X, Save, Trash2, AlertCircle, ArrowLeftRight, CheckCircle2 } from 'lucide-react'
+import { X, Save, Trash2, AlertCircle, ArrowLeftRight, CheckCircle2, ArrowRightLeft, ShieldAlert, Banknote } from 'lucide-react'
 import { getCategoryConfig } from './CategoryBadge.jsx'
 import { CLEMENT_UID, LISE_UID, FINAUZI_PEOPLE, getPersonByUid, isAuthorizedUid } from '../../config/people.js'
 import { CURRENCY_RATES } from '../../context/CurrencyContext.jsx'
+import { TRANSACTION_KINDS, FUND_SOURCES } from '../../utils/transactionAllocation.js'
 
 const CATEGORIES = [
   'housing', 'food', 'transport', 'admin', 'travel',
@@ -21,7 +22,16 @@ const EMPTY_FORM = {
   paidByUid: CLEMENT_UID,
   reimbursementOn: false,
   reimbursementPct: 50,
+  impactCompteCommun: true,
+  fundSource: FUND_SOURCES.COMMON,
+  transactionKind: TRANSACTION_KINDS.STANDARD,
 }
+
+const FUND_SOURCE_OPTIONS = [
+  { id: FUND_SOURCES.COMMON, label: 'Compte Commun' },
+  { id: FUND_SOURCES.PERSO_CLEMENT, label: 'Compte Clément' },
+  { id: FUND_SOURCES.PERSO_LISE, label: 'Compte Lise' },
+]
 
 const TRANSACTION_CURRENCIES = ['EUR', 'AUD']
 const AUD_RATE = CURRENCY_RATES.AUD.rate
@@ -86,6 +96,9 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
         paidByUid: initialPaidByUid,
         reimbursementOn: initialReimbOn,
         reimbursementPct: initialReimbPct,
+        impactCompteCommun: transaction.impactCompteCommun !== false,
+        fundSource: transaction.fundSource || FUND_SOURCES.COMMON,
+        transactionKind: transaction.transactionKind || TRANSACTION_KINDS.STANDARD,
       })
     } else {
       setForm({
@@ -140,17 +153,20 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
       id: transaction?.id || undefined,
       title: form.title.trim(),
       amountEUR: Number(amountInEUR.toFixed(2)),
-      type: form.type,
+      type: form.transactionKind === TRANSACTION_KINDS.TRANSFER ? 'expense' : form.type,
       recurrence: form.recurrence,
       category: form.category,
       date: form.date,
-      endDate: form.recurrence === 'monthly' && form.endDate ? form.endDate : null,
+      endDate: (form.recurrence === 'monthly' || form.recurrence === 'weekly') && form.endDate ? form.endDate : null,
       notes: form.notes.trim() || null,
       isActive: transaction?.isActive ?? true,
       paidByUid: form.paidByUid,
       allocationType,
       splits,
       personUid: allocationType === 'single' ? form.paidByUid : null,
+      impactCompteCommun: form.impactCompteCommun,
+      fundSource: form.fundSource,
+      transactionKind: form.transactionKind,
       createdAt: transaction?.createdAt || now,
       updatedAt: now,
     }
@@ -288,7 +304,7 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-text-muted mb-1.5 block font-medium uppercase tracking-wider">
-                {form.recurrence === 'monthly' ? 'Départ *' : 'Date *'}
+                {form.recurrence === 'monthly' || form.recurrence === 'weekly' ? 'Départ *' : 'Date *'}
               </label>
               <input
                 type="date"
@@ -308,7 +324,7 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
               )}
             </div>
 
-            {form.recurrence === 'monthly' && (
+            {(form.recurrence === 'monthly' || form.recurrence === 'weekly') && (
               <div>
                 <label className="text-xs text-text-muted mb-1.5 block font-medium uppercase tracking-wider">
                   Retour
@@ -379,6 +395,16 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
                 Occasionnel
               </button>
               <button
+                onClick={() => set('recurrence', 'weekly')}
+                className={`flex-1 h-9 rounded-lg text-sm font-medium transition-all ${
+                  form.recurrence === 'weekly'
+                    ? 'bg-brand/20 text-brand-glow shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                Hebdo
+              </button>
+              <button
                 onClick={() => set('recurrence', 'monthly')}
                 className={`flex-1 h-9 rounded-lg text-sm font-medium transition-all ${
                   form.recurrence === 'monthly'
@@ -389,7 +415,105 @@ export default function TransactionFormModal({ isOpen, onClose, onSave, onDelete
                 Mensuel
               </button>
             </div>
+            {form.recurrence === 'weekly' && (
+              <p className="text-[10px] text-text-muted mt-1.5 flex items-center gap-1">
+                <ArrowRightLeft className="h-3 w-3" />
+                Sera converti en ~{amountNumber > 0 ? `${(amountNumber * 4.33).toFixed(0)} ${amountCurrency}` : '…'}/mois pour le dashboard
+              </p>
+            )}
           </div>
+
+          {/* Transaction Kind */}
+          <div>
+            <label className="text-xs text-text-muted mb-1.5 block font-medium uppercase tracking-wider">
+              Nature
+            </label>
+            <div className="flex p-0.5 rounded-xl bg-bg-elevated border border-border-subtle">
+              <button
+                onClick={() => { set('transactionKind', TRANSACTION_KINDS.STANDARD); set('impactCompteCommun', true); }}
+                className={`flex-1 h-9 rounded-lg text-[11px] font-medium transition-all ${
+                  form.transactionKind === TRANSACTION_KINDS.STANDARD
+                    ? 'bg-brand/20 text-brand-glow shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                Standard
+              </button>
+              <button
+                onClick={() => { set('transactionKind', TRANSACTION_KINDS.TRANSFER); set('type', 'expense'); set('reimbursementOn', false); set('impactCompteCommun', false); }}
+                className={`flex-1 h-9 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1 ${
+                  form.transactionKind === TRANSACTION_KINDS.TRANSFER
+                    ? 'bg-amber-500/20 text-amber-400 shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <ArrowRightLeft className="h-3 w-3" /> Transfert
+              </button>
+              <button
+                onClick={() => { set('transactionKind', TRANSACTION_KINDS.PERSONAL_BAILOUT); set('impactCompteCommun', false); }}
+                className={`flex-1 h-9 rounded-lg text-[11px] font-medium transition-all flex items-center justify-center gap-1 ${
+                  form.transactionKind === TRANSACTION_KINDS.PERSONAL_BAILOUT
+                    ? 'bg-purple-500/20 text-purple-400 shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <ShieldAlert className="h-3 w-3" /> Dépannage
+              </button>
+            </div>
+            {form.transactionKind === TRANSACTION_KINDS.TRANSFER && (
+              <p className="text-[10px] text-amber-400/80 mt-1.5">Transfert entre comptes — non comptabilisé comme revenu/dépense</p>
+            )}
+            {form.transactionKind === TRANSACTION_KINDS.PERSONAL_BAILOUT && (
+              <p className="text-[10px] text-purple-400/80 mt-1.5">Payé avec carte perso — n'impacte pas le compte commun</p>
+            )}
+          </div>
+
+          {/* Source des fonds */}
+          <div>
+            <label className="text-xs text-text-muted mb-1.5 block font-medium uppercase tracking-wider">
+              Source des fonds
+            </label>
+            <div className="flex p-0.5 rounded-xl bg-bg-elevated border border-border-subtle">
+              {FUND_SOURCE_OPTIONS.map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => set('fundSource', opt.id)}
+                  className={`flex-1 h-9 rounded-lg text-[11px] font-medium transition-all ${
+                    form.fundSource === opt.id
+                      ? 'bg-brand/20 text-brand-glow shadow-sm'
+                      : 'text-text-secondary hover:text-text-primary'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Impact Compte Commun toggle */}
+          {form.transactionKind === TRANSACTION_KINDS.STANDARD && (
+            <div className="bg-bg-elevated border border-border-subtle rounded-xl overflow-hidden">
+              <label className="flex items-center justify-between p-4 cursor-pointer">
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
+                    <Banknote className="h-4 w-4 text-brand" /> Impact compte commun
+                  </span>
+                  <span className="text-xs text-text-muted mt-0.5">
+                    {form.impactCompteCommun ? 'Comptée dans le solde du compte commun.' : 'Non comptée dans le solde commun.'}
+                  </span>
+                </div>
+                <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.impactCompteCommun ? 'bg-brand' : 'bg-border-strong'}`}>
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.impactCompteCommun ? 'translate-x-6' : 'translate-x-1'}`} />
+                </div>
+                <input
+                  type="checkbox"
+                  className="hidden"
+                  checked={form.impactCompteCommun}
+                  onChange={(e) => set('impactCompteCommun', e.target.checked)}
+                />
+              </label>
+            </div>
+          )}
 
           {/* Category */}
           <div>

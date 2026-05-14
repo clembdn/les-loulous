@@ -11,6 +11,39 @@ export const ALLOCATION_TYPES = {
   SHARED: 'shared',
 }
 
+export const TRANSACTION_KINDS = {
+  STANDARD: 'standard',
+  TRANSFER: 'transfer',
+  PERSONAL_BAILOUT: 'personal_bailout',
+}
+
+export const FUND_SOURCES = {
+  COMMON: 'common',
+  PERSO_CLEMENT: 'perso_clement',
+  PERSO_LISE: 'perso_lise',
+}
+
+/**
+ * Check if a transaction is a transfer between accounts.
+ */
+export function isTransfer(tx) {
+  return tx?.transactionKind === TRANSACTION_KINDS.TRANSFER
+}
+
+/**
+ * Check if a transaction is a personal bailout (perso card paying couple expense).
+ */
+export function isPersonalBailout(tx) {
+  return tx?.transactionKind === TRANSACTION_KINDS.PERSONAL_BAILOUT
+}
+
+/**
+ * Get the default transaction kind.
+ */
+export function getDefaultTransactionKind() {
+  return TRANSACTION_KINDS.STANDARD
+}
+
 function getSafeFallbackUid(fallbackPersonUid) {
   return isAuthorizedUid(fallbackPersonUid) ? fallbackPersonUid : getDefaultPersonUid()
 }

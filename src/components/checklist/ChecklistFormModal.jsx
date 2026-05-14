@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Save, Trash2, AlertCircle } from 'lucide-react'
+import { X, Save, Trash2, AlertCircle, Link2 } from 'lucide-react'
 import { FINAUZI_PEOPLE } from '../../config/people.js'
 
 const STATUS_OPTIONS = [
@@ -25,10 +25,11 @@ const EMPTY_FORM = {
   concerns: 'common',
   plannedCost: '',
   actualCost: '',
-  currency: 'EUR'
+  currency: 'EUR',
+  linkedTransactionId: '',
 }
 
-export default function ChecklistFormModal({ isOpen, onClose, onSave, onDelete, item, sections }) {
+export default function ChecklistFormModal({ isOpen, onClose, onSave, onDelete, item, sections, transactions = [] }) {
   const isEditing = !!item
   const [form, setForm] = useState(EMPTY_FORM)
   const [errors, setErrors] = useState({})
@@ -41,7 +42,8 @@ export default function ChecklistFormModal({ isOpen, onClose, onSave, onDelete, 
         ...item,
         dueDate: item.dueDate || '',
         plannedCost: item.plannedCost ? String(item.plannedCost) : '',
-        actualCost: item.actualCost ? String(item.actualCost) : ''
+        actualCost: item.actualCost ? String(item.actualCost) : '',
+        linkedTransactionId: item.linkedTransactionId || '',
       })
     } else {
       setForm(EMPTY_FORM)
@@ -70,6 +72,7 @@ export default function ChecklistFormModal({ isOpen, onClose, onSave, onDelete, 
       plannedCost: form.plannedCost ? Number(form.plannedCost) : null,
       actualCost: form.actualCost ? Number(form.actualCost) : null,
       dueDate: form.dueDate || null,
+      linkedTransactionId: form.linkedTransactionId || null,
     }
 
     if (isEditing) {
@@ -271,8 +274,47 @@ export default function ChecklistFormModal({ isOpen, onClose, onSave, onDelete, 
                 </div>
               </div>
             </div>
+
+            {/* Budget comparison indicator */}
+            {form.plannedCost && form.actualCost && (
+              <div className={`flex items-center gap-2 p-2.5 rounded-lg border text-xs font-medium ${
+                Number(form.actualCost) <= Number(form.plannedCost)
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                  : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+              }`}>
+                {Number(form.actualCost) <= Number(form.plannedCost) ? '✓' : '⚠'}{' '}
+                {Number(form.actualCost) <= Number(form.plannedCost)
+                  ? `${(Number(form.plannedCost) - Number(form.actualCost)).toFixed(2)} ${form.currency} sous le budget`
+                  : `${(Number(form.actualCost) - Number(form.plannedCost)).toFixed(2)} ${form.currency} au-dessus du budget`
+                }
+              </div>
+            )}
           </div>
 
+          {/* Linked Transaction */}
+          {transactions.length > 0 && (
+            <div>
+              <label className="text-xs text-text-muted mb-1.5 block font-medium uppercase tracking-wider">
+                <Link2 className="h-3 w-3 inline mr-1" />
+                Transaction liée (optionnel)
+              </label>
+              <select
+                value={form.linkedTransactionId}
+                onChange={(e) => set('linkedTransactionId', e.target.value)}
+                className="h-10 w-full rounded-xl bg-bg-elevated border border-border-subtle px-3 text-sm outline-none focus:border-brand transition-colors appearance-none"
+              >
+                <option value="">Aucune</option>
+                {transactions
+                  .filter(tx => tx.recurrence === 'one-off')
+                  .sort((a, b) => (a.title || '').localeCompare(b.title || ''))
+                  .map(tx => (
+                    <option key={tx.id} value={tx.id}>
+                      {tx.title} — {tx.amountEUR?.toFixed(2)} EUR
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
           {/* Description */}
           <div>
             <label className="text-xs text-text-muted mb-1.5 block font-medium uppercase tracking-wider">
