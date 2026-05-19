@@ -66,8 +66,8 @@ export default function BudgetsView() {
   const remaining = totals.totalBudget - totals.totalSpent
 
   return (
-    <div className="fade-in pb-32">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-8">
+    <div className="fade-in pb-32 lg:pb-12">
+      <div className="max-w-3xl lg:max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 pt-8 lg:pt-10">
         <h1 className="text-2xl font-semibold tracking-tight text-white mb-1">Budgets</h1>
         <p className="text-xs text-white/40 capitalize mb-8">{monthLabel}</p>
 
@@ -107,7 +107,7 @@ export default function BudgetsView() {
         {/* Active budgets */}
         {withBudget.length > 0 && (
           <Section title="Mes budgets">
-            <div className="space-y-2">
+            <div className="space-y-2 lg:space-y-0 lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-3">
               {withBudget.map((cat) => (
                 <BudgetCard
                   key={cat.id}
@@ -134,7 +134,7 @@ export default function BudgetsView() {
         {/* Categories without budget */}
         {withoutBudget.length > 0 && (
           <Section title={withBudget.length > 0 ? 'Ajouter un budget' : 'Catégories'}>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-2">
               {withoutBudget.map((cat) => {
                 const Icon = cat.icon
                 const spent = spendingByCat[cat.id] || 0

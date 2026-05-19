@@ -20,8 +20,8 @@ const COMING_SOON = [
 
 export default function VoyageView() {
   return (
-    <div className="fade-in pb-32">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-8">
+    <div className="fade-in pb-32 lg:pb-12">
+      <div className="max-w-3xl lg:max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 pt-8 lg:pt-10">
         <div className="flex items-center gap-3 mb-1">
           <div className="h-9 w-9 rounded-full flex items-center justify-center bg-cyan-500/15 text-cyan-400">
             <Plane size={16} strokeWidth={2.2} />
@@ -30,11 +30,11 @@ export default function VoyageView() {
         </div>
         <p className="text-xs text-white/40 mb-10 pl-12">Notre année en Australie</p>
 
-        <div className="space-y-2">
+        <div className="space-y-2 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-4">
           {COMING_SOON.map(({ icon: Icon, title, description }) => (
             <div
               key={title}
-              className="flex items-start gap-3 px-4 py-3.5 bg-white/[0.02] border border-dashed border-white/10 rounded-2xl"
+              className="flex items-start gap-3 px-4 py-3.5 lg:flex-col lg:p-6 bg-white/[0.02] border border-dashed border-white/10 rounded-2xl"
             >
               <div className="h-9 w-9 flex-shrink-0 rounded-full flex items-center justify-center bg-white/[0.04] text-white/40">
                 <Icon size={15} strokeWidth={2.2} />

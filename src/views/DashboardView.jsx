@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Plus, Users, User, Wallet } from 'lucide-react'
 import { useFinAuziData } from '../hooks/useFinAuziData.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useUI } from '../context/UIContext.jsx'
 import { getPerson } from '../config/people.js'
 import {
   getCurrentBalance,
@@ -13,8 +14,6 @@ import CapitalHero from '../components/dashboard/CapitalHero.jsx'
 import RangeSelector, { getRangeById } from '../components/dashboard/RangeSelector.jsx'
 import QuickStats from '../components/dashboard/QuickStats.jsx'
 import MonthBreakdown from '../components/dashboard/MonthBreakdown.jsx'
-import TransactionFormModal from '../components/transactions/TransactionFormModal.jsx'
-import SettingsDrawer from '../components/layout/SettingsDrawer.jsx'
 
 const ACCOUNT_VIEWS = [
   { id: 'all',      label: 'Total',     icon: Wallet },
@@ -31,12 +30,11 @@ const HERO_LABELS = {
 export default function DashboardView() {
   const { transactions, settings, isLoading } = useFinAuziData()
   const { currentUser } = useAuth()
+  const { openForm, openSettings } = useUI()
   const me = getPerson(currentUser?.uid)
   const [accountView, setAccountView] = useState('all')
   const [rangeId, setRangeId] = useState('6M')
   const [hovered, setHovered] = useState(null)
-  const [showForm, setShowForm] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
 
   const { filteredTxs, effectiveInitial } = useMemo(() => {
     const totalInitial = settings.initialCapitalEUR || 0
@@ -83,8 +81,8 @@ export default function DashboardView() {
   }
 
   return (
-    <div className="fade-in pb-32">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-8">
+    <div className="fade-in pb-32 lg:pb-12">
+      <div className="max-w-3xl lg:max-w-6xl mx-auto px-4 sm:px-6 lg:px-10 pt-8 lg:pt-10">
         <CapitalHero
           label={HERO_LABELS[accountView]}
           currentBalance={currentBalance}
@@ -93,8 +91,8 @@ export default function DashboardView() {
           rightSlot={
             me && (
               <button
-                onClick={() => setShowSettings(true)}
-                className={`h-11 w-11 rounded-full flex items-center justify-center text-sm font-semibold border transition hover:scale-105 active:scale-95 ${me.bgClass} ${me.textClass} ${me.borderClass}`}
+                onClick={openSettings}
+                className={`h-11 w-11 lg:hidden rounded-full flex items-center justify-center text-sm font-semibold border transition hover:scale-105 active:scale-95 ${me.bgClass} ${me.textClass} ${me.borderClass}`}
                 aria-label="Ouvrir les réglages"
                 title="Réglages"
               >
@@ -143,37 +141,27 @@ export default function DashboardView() {
           <RangeSelector value={rangeId} onChange={setRangeId} />
         </div>
 
-        <div className="mt-8">
-          <p className="text-xs uppercase tracking-[0.18em] text-white/30 mb-3">
-            Ce mois-ci {accountView !== 'all' && <span className="text-white/50">· {HERO_LABELS[accountView].toLowerCase()}</span>}
-          </p>
-          <QuickStats summary={monthSummary} />
-        </div>
+        <div className="mt-8 lg:mt-10 lg:grid lg:grid-cols-2 lg:gap-8">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-white/30 mb-3">
+              Ce mois-ci {accountView !== 'all' && <span className="text-white/50">· {HERO_LABELS[accountView].toLowerCase()}</span>}
+            </p>
+            <QuickStats summary={monthSummary} />
+          </div>
 
-        <div className="mt-8">
-          <MonthBreakdown transactions={filteredTxs} />
+          <div className="mt-8 lg:mt-0">
+            <MonthBreakdown transactions={filteredTxs} />
+          </div>
         </div>
       </div>
 
       <button
-        onClick={() => setShowForm(true)}
-        className="fixed bottom-24 right-5 sm:bottom-8 sm:right-8 z-30 h-14 w-14 rounded-full bg-white text-black shadow-lg shadow-black/40 flex items-center justify-center hover:scale-105 active:scale-95 transition"
+        onClick={() => openForm(null)}
+        className="fixed bottom-24 right-5 sm:bottom-8 sm:right-8 lg:hidden z-30 h-14 w-14 rounded-full bg-white text-black shadow-lg shadow-black/40 flex items-center justify-center hover:scale-105 active:scale-95 transition"
         aria-label="Ajouter une transaction"
       >
         <Plus size={22} strokeWidth={2.5} />
       </button>
-
-      {showForm && (
-        <TransactionFormModal
-          onClose={() => setShowForm(false)}
-          currentUid={currentUser?.uid}
-        />
-      )}
-
-      <SettingsDrawer
-        open={showSettings}
-        onClose={() => setShowSettings(false)}
-      />
     </div>
   )
 }

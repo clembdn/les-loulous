@@ -1,5 +1,6 @@
 import { useState, lazy, Suspense } from 'react'
 import { useAuth } from './context/AuthContext.jsx'
+import { UIProvider } from './context/UIContext.jsx'
 import LoginView from './views/LoginView.jsx'
 import Shell from './components/layout/Shell.jsx'
 
@@ -53,10 +54,12 @@ export default function App() {
   if (!isAuthorized) return <Forbidden />
 
   return (
-    <Shell active={active} onChange={setActive}>
-      <Suspense fallback={<Splash />}>
-        <ActiveView active={active} />
-      </Suspense>
-    </Shell>
+    <UIProvider>
+      <Shell active={active} onChange={setActive}>
+        <Suspense fallback={<Splash />}>
+          <ActiveView active={active} />
+        </Suspense>
+      </Shell>
+    </UIProvider>
   )
 }
