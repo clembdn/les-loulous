@@ -84,26 +84,24 @@ export default function DashboardView() {
 
   return (
     <div className="fade-in pb-32">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6">
-        {/* Avatar top-right — opens settings drawer */}
-        <div className="flex justify-end mb-4">
-          {me && (
-            <button
-              onClick={() => setShowSettings(true)}
-              className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold border transition hover:scale-105 active:scale-95 ${me.bgClass} ${me.textClass} ${me.borderClass}`}
-              aria-label="Ouvrir les réglages"
-              title="Réglages"
-            >
-              {me.initial}
-            </button>
-          )}
-        </div>
-
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-8">
         <CapitalHero
           label={HERO_LABELS[accountView]}
           currentBalance={currentBalance}
           hoveredPoint={hovered}
           baselineBalance={baselineBalance}
+          rightSlot={
+            me && (
+              <button
+                onClick={() => setShowSettings(true)}
+                className={`h-11 w-11 rounded-full flex items-center justify-center text-sm font-semibold border transition hover:scale-105 active:scale-95 ${me.bgClass} ${me.textClass} ${me.borderClass}`}
+                aria-label="Ouvrir les réglages"
+                title="Réglages"
+              >
+                {me.initial}
+              </button>
+            )
+          }
         />
 
         {/* Account toggle */}

@@ -1,9 +1,10 @@
-import { Home, List, PieChart } from 'lucide-react'
+import { Home, List, PieChart, Plane } from 'lucide-react'
 
 export const TABS = [
   { id: 'dashboard',    label: 'Accueil',       icon: Home },
   { id: 'transactions', label: 'Transactions',  icon: List },
   { id: 'budgets',      label: 'Budgets',       icon: PieChart },
+  { id: 'voyage',       label: 'Voyage',        icon: Plane },
 ]
 
 // Mobile-only bottom tab bar.

@@ -6,6 +6,7 @@ import Shell from './components/layout/Shell.jsx'
 const DashboardView = lazy(() => import('./views/DashboardView.jsx'))
 const TransactionsView = lazy(() => import('./views/TransactionsView.jsx'))
 const BudgetsView = lazy(() => import('./views/BudgetsView.jsx'))
+const VoyageView = lazy(() => import('./views/VoyageView.jsx'))
 
 function Splash() {
   return (
@@ -37,6 +38,7 @@ function ActiveView({ active }) {
   switch (active) {
     case 'transactions': return <TransactionsView />
     case 'budgets':      return <BudgetsView />
+    case 'voyage':       return <VoyageView />
     case 'dashboard':
     default:             return <DashboardView />
   }

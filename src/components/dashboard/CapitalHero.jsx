@@ -10,7 +10,7 @@ function formatEUR(n) {
   }).format(n || 0)
 }
 
-export default function CapitalHero({ label = 'Capital total', currentBalance, hoveredPoint, baselineBalance }) {
+export default function CapitalHero({ label = 'Capital total', currentBalance, hoveredPoint, baselineBalance, rightSlot }) {
   const displayBalance = hoveredPoint?.balance ?? currentBalance
   const reference = baselineBalance ?? currentBalance
 
@@ -28,10 +28,11 @@ export default function CapitalHero({ label = 'Capital total', currentBalance, h
   return (
     <div className="px-1">
       <p className="text-xs uppercase tracking-[0.18em] text-white/30 mb-2">{label}</p>
-      <div className="flex items-baseline gap-3 flex-wrap">
-        <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-white tabular">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-white tabular leading-none">
           {formatEUR(displayBalance)}
         </h1>
+        {rightSlot && <div className="flex-shrink-0">{rightSlot}</div>}
       </div>
       <div className="flex items-center gap-3 mt-2 text-sm">
         {variation && (
