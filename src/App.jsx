@@ -35,11 +35,13 @@ function Forbidden() {
   )
 }
 
-function ActiveView({ active }) {
+function ActiveView({ active, onNavigate }) {
   switch (active) {
     case 'transactions': return <TransactionsView />
     case 'budgets':      return <BudgetsView />
-    case 'voyage':       return <VoyageView />
+    case 'checklist':    return <VoyageView section="checklist" onNavigate={onNavigate} />
+    case 'timeline':     return <VoyageView section="timeline"  onNavigate={onNavigate} />
+    case 'scenarios':    return <VoyageView section="scenarios" onNavigate={onNavigate} />
     case 'dashboard':
     default:             return <DashboardView />
   }
@@ -57,7 +59,7 @@ export default function App() {
     <UIProvider>
       <Shell active={active} onChange={setActive}>
         <Suspense fallback={<Splash />}>
-          <ActiveView active={active} />
+          <ActiveView active={active} onNavigate={setActive} />
         </Suspense>
       </Shell>
     </UIProvider>

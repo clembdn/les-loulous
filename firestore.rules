@@ -58,6 +58,57 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    function hasValidChecklistShape(data) {
+      return data.label is string
+        && data.label.size() > 0
+        && data.label.size() <= 200
+        && (data.section == "before" || data.section == "arrival" || data.section == "luggage")
+        && (data.status == "todo" || data.status == "in-progress" || data.status == "done")
+        && data.order is number
+        && (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 2000));
+    }
+
+    // Voyage checklist (shared sub-collection)
+    match /couples/main/checklist/{itemId} {
+      allow read: if isAuthorizedUser();
+
+      allow create: if isAuthorizedUser()
+        && hasValidChecklistShape(request.resource.data)
+        && hasValidMetadata(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isAuthorizedUser()
+        && hasValidChecklistShape(request.resource.data)
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isAuthorizedUser();
+    }
+
+    function hasValidTimelineShape(data) {
+      return data.label is string
+        && data.label.size() > 0
+        && data.label.size() <= 200
+        && data.date is string
+        && data.date.size() == 10
+        && (!('description' in data) || data.description == null || (data.description is string && data.description.size() <= 2000));
+    }
+
+    // Voyage timeline (shared sub-collection)
+    match /couples/main/timeline/{itemId} {
+      allow read: if isAuthorizedUser();
+
+      allow create: if isAuthorizedUser()
+        && hasValidTimelineShape(request.resource.data)
+        && hasValidMetadata(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isAuthorizedUser()
+        && hasValidTimelineShape(request.resource.data)
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isAuthorizedUser();
+    }
+
     // Deny everything else.
     match /{document=**} {
       allow read, write: if false;
