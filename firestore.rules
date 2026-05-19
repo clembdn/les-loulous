@@ -3,7 +3,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Only these two UIDs can access the shared couple space.
+    // Only Lise and Clément can access the shared couple space.
     function isAuthorizedUser() {
       return request.auth != null
         && (
@@ -12,57 +12,24 @@ service cloud.firestore {
         );
     }
 
-    function isValidPersonUid(personUid) {
-      return personUid == "J8xOqDWZv5gEss5CBbQ7kQOsTwV2"
-        || personUid == "o8wLosYoh7b989P9gQyZCk8tt3l1";
+    function isValidPersonUid(uid) {
+      return uid == "J8xOqDWZv5gEss5CBbQ7kQOsTwV2"
+        || uid == "o8wLosYoh7b989P9gQyZCk8tt3l1";
     }
 
-    function isValidUserMetadata(data) {
+    function hasValidMetadata(data) {
       return isValidPersonUid(data.createdBy)
         && isValidPersonUid(data.updatedBy)
         && data.updatedBy == request.auth.uid;
     }
 
-    function isValidSplit(split) {
-      return split is map
-        && split.keys().hasOnly(["personUid", "percentage"])
-        && isValidPersonUid(split.personUid)
-        && split.percentage is number
-        && split.percentage >= 0
-        && split.percentage <= 100;
-    }
-
-    function isValidSingleAllocation(data) {
-      return data.splits.size() == 1
-        && isValidSplit(data.splits[0])
-        && data.splits[0].percentage == 100;
-    }
-
-    function isValidSharedAllocation(data) {
-      return data.splits.size() == 2
-        && isValidSplit(data.splits[0])
-        && isValidSplit(data.splits[1])
-        && data.splits[0].personUid != data.splits[1].personUid
-        && (data.splits[0].percentage + data.splits[1].percentage) == 100;
-    }
-
-    function isValidSplitAllocation(data) {
-      return data.allocationType is string
-        && (data.allocationType == "single" || data.allocationType == "shared")
-        && data.splits is list
-        && (
-          (data.allocationType == "single" && isValidSingleAllocation(data))
-          || (data.allocationType == "shared" && isValidSharedAllocation(data))
-        );
-    }
-
-    function isValidLegacyAllocation(data) {
-      return data.personUid is string
+    function hasValidTransactionShape(data) {
+      return data.title is string
+        && data.amountEUR is number
+        && data.amountEUR >= 0
+        && (data.type == "income" || data.type == "expense")
+        && (data.recurrence == "one-off" || data.recurrence == "monthly" || data.recurrence == "weekly")
         && isValidPersonUid(data.personUid);
-    }
-
-    function isValidTransactionAllocation(data) {
-      return isValidSplitAllocation(data) || isValidLegacyAllocation(data);
     }
 
     // Transactions
@@ -70,29 +37,18 @@ service cloud.firestore {
       allow read: if isAuthorizedUser();
 
       allow create: if isAuthorizedUser()
-        && isValidTransactionAllocation(request.resource.data)
-        && isValidUserMetadata(request.resource.data)
+        && hasValidTransactionShape(request.resource.data)
+        && hasValidMetadata(request.resource.data)
         && request.resource.data.createdBy == request.auth.uid;
 
       allow update: if isAuthorizedUser()
-        && isValidTransactionAllocation(request.resource.data)
-        && isValidUserMetadata(request.resource.data);
+        && hasValidTransactionShape(request.resource.data)
+        && request.resource.data.updatedBy == request.auth.uid;
 
       allow delete: if isAuthorizedUser();
     }
 
-    // Checklist
-    match /couples/main/checklist/{itemId} {
-      allow read: if isAuthorizedUser();
-      allow create: if isAuthorizedUser()
-        && isValidUserMetadata(request.resource.data)
-        && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isAuthorizedUser()
-        && isValidUserMetadata(request.resource.data);
-      allow delete: if isAuthorizedUser();
-    }
-
-    // Settings
+    // Settings (single shared doc)
     match /couples/main/settings/{settingsId} {
       allow read: if isAuthorizedUser();
 
@@ -102,16 +58,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Migrations
-    match /couples/main/migrations/{migrationId} {
-      allow read: if isAuthorizedUser();
-
-      allow create, update: if isAuthorizedUser();
-
-      allow delete: if false;
-    }
-
-    // Deny everything else
+    // Deny everything else.
     match /{document=**} {
       allow read, write: if false;
     }

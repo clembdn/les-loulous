@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: #0b0e13;
+  background-image:
+    radial-gradient(1200px 600px at 80% -10%, rgba(45, 127, 249, 0.08), transparent 60%),
+    radial-gradient(800px 400px at 0% 100%, rgba(45, 127, 249, 0.05), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #1f2632;
+  border-radius: 999px;
+  border: 2px solid #0b0e13;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a3242;
+}
+
+/* Recharts tooltip override */
+.recharts-default-tooltip {
+  background-color: #11151c !important;
+  border: 1px solid #1f2632 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Modal animation */
+@keyframes slide-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-in {
+  animation: slide-in-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Bottom sheet animations */
+@keyframes bottom-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes overlay-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.bottom-sheet-content {
+  animation: bottom-sheet-up 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bottom-sheet-overlay {
+  animation: overlay-fade 0.2s ease-out;
+}
+
+@layer components {
+  .card {
+    @apply bg-bg-card border border-border-subtle rounded-xl p-5 shadow-card transition-all duration-200;
+  }
+  .card-hover {
+    @apply hover:bg-bg-hover hover:border-border-strong hover:-translate-y-0.5 hover:shadow-glow;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+  .stat-label {
+    @apply text-xs uppercase tracking-wider text-text-muted font-medium;
+  }
+  .stat-value {
+    @apply text-2xl font-semibold tabular-nums;
+  }
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors;
+  }
+  .nav-item-active {
+    @apply bg-brand/10 text-brand-glow border border-brand/30;
+  }
+}

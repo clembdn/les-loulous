@@ -1,101 +1,60 @@
 import { useState, lazy, Suspense } from 'react'
-import { CurrencyProvider } from './context/CurrencyContext.jsx'
 import { useAuth } from './context/AuthContext.jsx'
-import Header from './components/layout/Header.jsx'
-import Sidebar from './components/layout/Sidebar.jsx'
 import LoginView from './views/LoginView.jsx'
-import LoadingScreen from './components/auth/LoadingScreen.jsx'
-import AccessDeniedScreen from './components/auth/AccessDeniedScreen.jsx'
+import Shell from './components/layout/Shell.jsx'
 
-const AustraliaView = lazy(() => import('./views/AustraliaView.jsx'))
-const EquilibreView = lazy(() => import('./views/EquilibreView.jsx'))
-const SettingsView = lazy(() => import('./views/SettingsView.jsx'))
-const ChecklistView = lazy(() => import('./views/ChecklistView.jsx'))
-const PreDepartView = lazy(() => import('./views/PreDepartView.jsx'))
+const DashboardView = lazy(() => import('./views/DashboardView.jsx'))
+const TransactionsView = lazy(() => import('./views/TransactionsView.jsx'))
+const BudgetsView = lazy(() => import('./views/BudgetsView.jsx'))
 
-function ViewFallback() {
+function Splash() {
   return (
-    <div className="flex items-center justify-center py-20">
-      <span className="inline-block h-6 w-6 border-2 border-brand/30 border-t-brand-glow rounded-full animate-spin" />
+    <div className="min-h-screen flex items-center justify-center">
+      <span className="h-7 w-7 border-2 border-white/15 border-t-white/80 rounded-full animate-spin" />
     </div>
   )
 }
 
-function ViewContainer({ active }) {
+function Forbidden() {
+  const { logout } = useAuth()
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-center px-6 fade-in">
+      <h1 className="text-xl font-semibold text-white">Accès refusé</h1>
+      <p className="text-sm text-white/40 max-w-xs">
+        Cet espace est privé — seuls Clément et Lise y ont accès.
+      </p>
+      <button
+        onClick={logout}
+        className="text-xs text-white/60 hover:text-white underline-offset-4 hover:underline transition"
+      >
+        Se déconnecter
+      </button>
+    </div>
+  )
+}
+
+function ActiveView({ active }) {
   switch (active) {
-    case 'settings':
-      return <SettingsView />
-    case 'checklist':
-      return <ChecklistView />
-    case 'equilibre':
-      return <EquilibreView />
-    case 'predepart':
-      return <PreDepartView />
-    case 'australia':
-    default:
-      return <AustraliaView />
+    case 'transactions': return <TransactionsView />
+    case 'budgets':      return <BudgetsView />
+    case 'dashboard':
+    default:             return <DashboardView />
   }
 }
 
 export default function App() {
   const { isLoading, isAuthenticated, isAuthorized } = useAuth()
-  const [active, setActive] = useState('australia')
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const [active, setActive] = useState('dashboard')
 
-  // 1. Loading: show premium splash
-  if (isLoading) {
-    return <LoadingScreen />
-  }
-
-  // 2. Not logged in: show login
-  if (!isAuthenticated) {
-    return <LoginView />
-  }
-
-  // 3. Logged in but not authorized: show access denied
-  if (!isAuthorized) {
-    return <AccessDeniedScreen />
-  }
-
-  // 4. Authorized: show app
-  const handleSelect = (id) => {
-    setActive(id)
-    setMobileOpen(false)
-  }
-
-  // When the Australia view is active, it renders its own mobile shell
-  const isAustraliaMobile = active === 'australia'
+  if (isLoading) return <Splash />
+  if (!isAuthenticated) return <LoginView />
+  if (!isAuthorized) return <Forbidden />
 
   return (
-    <CurrencyProvider>
-      <div className="min-h-screen lg:flex">
-        {/* Sidebar: hide on mobile when Australia is active (it has its own bottom nav) */}
-        <div className={isAustraliaMobile ? 'hidden lg:contents' : 'contents'}>
-          <Sidebar
-            active={active}
-            onSelect={handleSelect}
-            mobileOpen={mobileOpen}
-            onCloseMobile={() => setMobileOpen(false)}
-          />
-        </div>
-        <div className="flex-1 min-w-0 flex flex-col">
-          {/* Header: hide on mobile when Australia is active (it has its own sticky header) */}
-          <div className={isAustraliaMobile ? 'hidden lg:block' : ''}>
-            <Header
-              onOpenMobile={() => setMobileOpen(true)}
-            />
-          </div>
-          <main className={`flex-1 max-w-[1500px] w-full mx-auto ${
-            isAustraliaMobile
-              ? 'lg:px-4 lg:sm:px-6 lg:py-6'
-              : 'px-4 sm:px-6 py-6'
-          }`}>
-            <Suspense fallback={<ViewFallback />}>
-              <ViewContainer active={active} />
-            </Suspense>
-          </main>
-        </div>
-      </div>
-    </CurrencyProvider>
+    <Shell active={active} onChange={setActive}>
+      <Suspense fallback={<Splash />}>
+        <ActiveView active={active} />
+      </Suspense>
+    </Shell>
   )
 }

@@ -1,3 +1,5 @@
+// FinAuzi Auth Context — Firebase Authentication with UID authorization.
+// Only the two hardcoded UIDs are allowed access.
 import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react'
 import {
   onAuthStateChanged,
@@ -14,6 +16,7 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  // Listen to Firebase auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user)
@@ -36,7 +39,6 @@ export function AuthProvider({ children }) {
 
   const value = useMemo(() => ({
     currentUser,
-    currentUid: currentUser?.uid || null,
     isAuthenticated: !!currentUser,
     isAuthorized: currentUser ? isAuthorizedUid(currentUser.uid) : false,
     isLoading,
