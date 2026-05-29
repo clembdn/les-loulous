@@ -1,4 +1,5 @@
-import { Plus } from 'lucide-react'
+import { Plus, ArrowLeft } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { SIDEBAR_SECTIONS } from '../../config/navigation.js'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { useUI } from '../../context/UIContext.jsx'
@@ -15,8 +16,14 @@ export default function Sidebar({ active, onChange }) {
 
   return (
     <aside className="hidden lg:flex fixed top-0 left-0 h-screen w-60 flex-col border-r border-white/5 bg-[#0B0E13]/90 backdrop-blur-xl z-30">
-      <div className="px-5 pt-6 pb-4">
-        <p className="text-sm font-semibold tracking-tight text-white">FinAuzi</p>
+      <div className="px-3 pt-5 pb-4">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs text-white/40 hover:text-white hover:bg-white/[0.04] transition"
+        >
+          <ArrowLeft size={14} /> Nos apps
+        </Link>
+        <p className="text-sm font-semibold tracking-tight text-white px-2 mt-2">FinAuzi</p>
       </div>
 
       <nav className="flex-1 px-3 overflow-y-auto">
