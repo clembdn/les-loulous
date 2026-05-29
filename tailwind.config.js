@@ -1,5 +1,7 @@
 import tailwindcssAnimate from 'tailwindcss-animate'
 
+const v = (name) => `rgb(var(${name}) / <alpha-value>)`
+
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: 'class',
@@ -7,44 +9,27 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: [
-          'Inter',
-          '-apple-system',
-          'BlinkMacSystemFont',
-          'San Francisco',
-          'Segoe UI',
-          'Roboto',
-          'sans-serif',
-        ],
+        sans: ['Geist', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        mono: ['"Geist Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       colors: {
-        bg: {
-          base: '#0B0E13',
-          elevated: '#11151C',
-          card: '#161B24',
-          hover: '#1C2230',
-        },
-        border: {
-          subtle: '#1F2632',
-          strong: '#2A3242',
-        },
-        text: {
-          primary: '#F5F7FA',
-          secondary: '#9AA3B2',
-          muted: '#6B7280',
-        },
-        brand: {
-          DEFAULT: '#2D7FF9',
-          dim: '#1E5BBE',
-          glow: '#4A95FF',
-        },
+        bg: v('--bg'),
+        surface: v('--surface'),
+        'surface-2': v('--surface-2'),
+        border: v('--border'),
+        'border-strong': v('--border-strong'),
+        fg: v('--fg'),
+        muted: v('--muted'),
+        faint: v('--faint'),
+        accent: v('--accent'),
+        'accent-fg': v('--accent-fg'),
         success: '#22C55E',
         danger: '#EF4444',
         warning: '#F59E0B',
       },
       boxShadow: {
-        card: '0 1px 0 rgba(255,255,255,0.03) inset, 0 8px 24px -12px rgba(0,0,0,0.5)',
-        glow: '0 0 0 1px rgba(45,127,249,0.4), 0 8px 28px -8px rgba(45,127,249,0.4)',
+        card: '0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 28px -16px rgb(0 0 0 / 0.55)',
+        lift: '0 16px 48px -20px rgb(0 0 0 / 0.55)',
       },
     },
   },
