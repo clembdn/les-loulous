@@ -10,6 +10,7 @@ export const APPS = [
     path: '/finauzi',
     icon: Wallet,
     accent: 'amber',   // clé de COLOR_BY_ID (people.js)
+    theme: 'dark',     // mode de l'app (data-theme)
     status: 'live',    // 'live' | 'soon'
   },
   {
@@ -19,6 +20,7 @@ export const APPS = [
     path: '/courses',
     icon: ShoppingCart,
     accent: 'emerald',
+    theme: 'light',
     status: 'soon',
   },
 ]

@@ -1,4 +1,5 @@
 import { useState, lazy, Suspense } from 'react'
+import { useAppTheme } from '@/shared/theme/useAppTheme.js'
 import { UIProvider } from './context/UIContext.jsx'
 import { AppDataProvider } from './context/AppDataContext.jsx'
 import { CurrencyProvider } from './context/CurrencyContext.jsx'
@@ -29,6 +30,7 @@ function ActiveView({ active, onNavigate }) {
 }
 
 export default function FinauziApp() {
+  useAppTheme('dark', 'amber')
   const [active, setActive] = useState('dashboard')
   return (
     <AppDataProvider>
