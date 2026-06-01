@@ -21,7 +21,7 @@ export const APPS = [
     icon: ShoppingCart,
     accent: 'emerald',
     theme: 'light',
-    status: 'soon',
+    status: 'live',
   },
 ]
 
