@@ -154,6 +154,10 @@ couples/
       {transactionId}         # { title, amountEUR, type, recurrence, category, date, endDate, notes, isActive, personUid, createdAt, createdBy, updatedAt, updatedBy }
     migrations/
       localStorageImport      # { importedAt, importedBy, sourceKeys, transactionCount }
+    shoppingItems/
+      {itemId}                # { name, quantityLabel, aisle, checked, checkedBy, checkedAt, note, createdAt, createdBy, updatedAt, updatedBy }
+    shoppingCatalog/
+      {slug}                  # { name, nameLower, aisle, favorite, useCount, lastUsedAt, createdAt, createdBy, updatedAt, updatedBy }
 ```
 
 ---
