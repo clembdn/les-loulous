@@ -76,7 +76,7 @@ export default function RecipeDetail({ recipe, items, catalog, onBack, onEdit, o
       <AddIngredientsSheet
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        recipe={recipe}
+        ingredients={recipe.ingredients}
         items={items}
         catalog={catalog}
         onAdded={onAdded}

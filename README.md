@@ -160,6 +160,8 @@ couples/
       {slug}                  # { name, nameLower, aisle, favorite, useCount, lastUsedAt, createdAt, createdBy, updatedAt, updatedBy }
     recipes/
       {recipeId}              # { title, note, ingredients[{name,quantityLabel}], steps[], createdAt, createdBy, updatedAt, updatedBy }
+    mealPlan/
+      {YYYY-MM-DD}            # { date, midi[{id,recipeId,title,who}], soir[{id,recipeId,title,who}], createdAt, createdBy, updatedAt, updatedBy }
 ```
 
 ---

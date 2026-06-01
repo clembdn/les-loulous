@@ -5,9 +5,13 @@ import { Button } from '@/shared/ui/Button.jsx'
 import { addNamedItem } from '../utils/addItems.js'
 import { normalizeName } from '../utils/aisleGuess.js'
 
-export default function AddIngredientsSheet({ open, onClose, recipe, items, catalog, onAdded }) {
+// Feuille de sélection pré-cochée : ajoute les ingrédients choisis à la liste.
+// Générique : accepte une liste d'ingrédients (détail recette OU agrégat semaine).
+export default function AddIngredientsSheet({
+  open, onClose, ingredients, items, catalog, onAdded, title = 'Ajouter à la liste',
+}) {
   const { currentUid } = useAuth()
-  const ingredients = recipe?.ingredients || []
+  const list = Array.isArray(ingredients) ? ingredients : []
 
   // Noms déjà présents dans la liste active (non cochés) → pour le dédoublonnage.
   const activeNames = useMemo(
@@ -20,9 +24,9 @@ export default function AddIngredientsSheet({ open, onClose, recipe, items, cata
 
   // À l'ouverture : tout pré-coché SAUF ce qui est déjà dans la liste active.
   useEffect(() => {
-    if (open) setChecked(ingredients.map((ing) => !activeNames.has(normalizeName(ing.name))))
+    if (open) setChecked(list.map((ing) => !activeNames.has(normalizeName(ing.name))))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, recipe?.id])
+  }, [open])
 
   const count = checked.filter(Boolean).length
 
@@ -33,10 +37,10 @@ export default function AddIngredientsSheet({ open, onClose, recipe, items, cata
   async function confirm() {
     setBusy(true)
     try {
-      for (let i = 0; i < ingredients.length; i++) {
+      for (let i = 0; i < list.length; i++) {
         if (checked[i]) {
           await addNamedItem(
-            { name: ingredients[i].name, quantityLabel: ingredients[i].quantityLabel },
+            { name: list[i].name, quantityLabel: list[i].quantityLabel },
             { catalog, currentUid },
           )
         }
@@ -49,13 +53,13 @@ export default function AddIngredientsSheet({ open, onClose, recipe, items, cata
   }
 
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && onClose()} title="Ajouter à la liste">
-      {ingredients.length === 0 ? (
-        <p className="text-sm text-muted py-6 text-center">Cette recette n'a pas d'ingrédients.</p>
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()} title={title}>
+      {list.length === 0 ? (
+        <p className="text-sm text-muted py-6 text-center">Aucun ingrédient à ajouter.</p>
       ) : (
         <>
           <div className="space-y-0.5">
-            {ingredients.map((ing, i) => {
+            {list.map((ing, i) => {
               const already = activeNames.has(normalizeName(ing.name))
               return (
                 <label key={i} className="flex items-center gap-3 py-2 cursor-pointer">

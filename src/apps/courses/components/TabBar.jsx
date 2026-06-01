@@ -3,6 +3,7 @@ import { cn } from '@/shared/lib/utils.js'
 const TABS = [
   { id: 'liste', label: 'Liste' },
   { id: 'recettes', label: 'Recettes' },
+  { id: 'planning', label: 'Planning' },
 ]
 
 export default function TabBar({ tab, onTab }) {
@@ -13,7 +14,7 @@ export default function TabBar({ tab, onTab }) {
           key={t.id}
           onClick={() => onTab(t.id)}
           className={cn(
-            'px-3.5 py-1.5 rounded-lg text-sm font-medium transition',
+            'px-3 py-1.5 rounded-lg text-sm font-medium transition',
             tab === t.id ? 'bg-surface text-fg shadow-sm' : 'text-muted hover:text-fg',
           )}
         >
