@@ -109,6 +109,59 @@ service cloud.firestore {
       allow delete: if isAuthorizedUser();
     }
 
+    function hasValidShoppingItemShape(data) {
+      return data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && data.aisle is string
+        && data.checked is bool
+        && (!('quantityLabel' in data) || data.quantityLabel == null || (data.quantityLabel is string && data.quantityLabel.size() <= 40))
+        && (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 500));
+    }
+
+    // Shopping list items (shared single list)
+    match /couples/main/shoppingItems/{itemId} {
+      allow read: if isAuthorizedUser();
+
+      allow create: if isAuthorizedUser()
+        && hasValidShoppingItemShape(request.resource.data)
+        && hasValidMetadata(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isAuthorizedUser()
+        && hasValidShoppingItemShape(request.resource.data)
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isAuthorizedUser();
+    }
+
+    function hasValidCatalogShape(data) {
+      return data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && data.nameLower is string
+        && data.aisle is string
+        && data.favorite is bool
+        && data.useCount is number
+        && data.useCount >= 0;
+    }
+
+    // Shopping catalog (known products: frequents/favorites/remembered aisle)
+    match /couples/main/shoppingCatalog/{slug} {
+      allow read: if isAuthorizedUser();
+
+      allow create: if isAuthorizedUser()
+        && hasValidCatalogShape(request.resource.data)
+        && hasValidMetadata(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isAuthorizedUser()
+        && hasValidCatalogShape(request.resource.data)
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isAuthorizedUser();
+    }
+
     // Deny everything else.
     match /{document=**} {
       allow read, write: if false;
