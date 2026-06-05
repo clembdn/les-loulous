@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
 import { AISLE_BY_ID, DEFAULT_AISLE } from '../config/aisles.js'
+import { formatQuantity } from '../utils/quantity.js'
 
 const ITEMS_PATH = 'couples/main/shoppingItems'
 function itemsCol() { return collection(db, ITEMS_PATH) }
@@ -18,6 +19,8 @@ function normalize(raw) {
     id: raw.id,
     name: raw.name || '',
     quantityLabel: raw.quantityLabel || null,
+    quantity: typeof raw.quantity === 'number' ? raw.quantity : null,
+    unit: raw.unit || null,
     aisle: resolveAisle(raw.aisle),
     checked: raw.checked === true,
     checkedBy: raw.checkedBy || null,
@@ -42,9 +45,17 @@ export function subscribeToItems(callback, onError) {
 
 export async function addItem(input, currentUid) {
   const now = new Date().toISOString()
+  const quantity = typeof input.quantity === 'number' ? input.quantity : null
+  const unit = input.unit || null
+  const structured = quantity != null || unit != null
+  const quantityLabel = structured
+    ? (formatQuantity(quantity, unit) || null)
+    : (input.quantityLabel ? String(input.quantityLabel).trim() : null)
   const data = {
     name: String(input.name || '').trim(),
-    quantityLabel: input.quantityLabel ? String(input.quantityLabel).trim() : null,
+    quantityLabel,
+    quantity,
+    unit,
     aisle: resolveAisle(input.aisle),
     checked: false,
     checkedBy: null,
@@ -63,7 +74,13 @@ export async function updateItem(id, updates, currentUid) {
   const payload = { ...updates, updatedAt: new Date().toISOString(), updatedBy: currentUid }
   if (updates.name != null) payload.name = String(updates.name).trim()
   if (updates.aisle != null) payload.aisle = resolveAisle(updates.aisle)
-  if ('quantityLabel' in updates) {
+  if ('quantity' in updates || 'unit' in updates) {
+    const quantity = typeof updates.quantity === 'number' ? updates.quantity : null
+    const unit = updates.unit || null
+    payload.quantity = quantity
+    payload.unit = unit
+    payload.quantityLabel = formatQuantity(quantity, unit) || null
+  } else if ('quantityLabel' in updates) {
     payload.quantityLabel = updates.quantityLabel ? String(updates.quantityLabel).trim() : null
   }
   if ('note' in updates) {
@@ -116,6 +133,8 @@ export async function restoreItems(items, currentUid) {
     batch.set(ref, {
       name: String(it.name || '').trim(),
       quantityLabel: it.quantityLabel || null,
+      quantity: typeof it.quantity === 'number' ? it.quantity : null,
+      unit: it.unit || null,
       aisle: resolveAisle(it.aisle),
       checked: it.checked === true,
       checkedBy: it.checkedBy || null,

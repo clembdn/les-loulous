@@ -5,17 +5,22 @@ import { Input } from '@/shared/ui/Input.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { AISLES } from '../config/aisles.js'
+import QuantityField from './QuantityField.jsx'
+import { readQuantity, toNumber } from '../utils/quantity.js'
 
 export default function ItemEditSheet({ item, onClose, onSave, onDelete }) {
   const [name, setName] = useState('')
-  const [quantityLabel, setQuantityLabel] = useState('')
+  const [qty, setQty] = useState('')
+  const [unit, setUnit] = useState('')
   const [aisle, setAisle] = useState('autres')
   const [note, setNote] = useState('')
 
   useEffect(() => {
     if (item) {
       setName(item.name)
-      setQuantityLabel(item.quantityLabel || '')
+      const q = readQuantity(item)
+      setQty(q.quantity != null ? String(q.quantity) : '')
+      setUnit(q.unit || '')
       setAisle(item.aisle)
       setNote(item.note || '')
     }
@@ -24,7 +29,7 @@ export default function ItemEditSheet({ item, onClose, onSave, onDelete }) {
   function save() {
     const v = name.trim()
     if (!v) return
-    onSave(item.id, { name: v, quantityLabel: quantityLabel.trim() || null, aisle, note: note.trim() || null })
+    onSave(item.id, { name: v, quantity: toNumber(qty), unit: unit || null, aisle, note: note.trim() || null })
     onClose()
   }
 
@@ -37,11 +42,11 @@ export default function ItemEditSheet({ item, onClose, onSave, onDelete }) {
             <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </div>
           <div>
-            <label className="block text-xs text-muted mb-1.5">Quantité (libre)</label>
-            <Input
-              value={quantityLabel}
-              onChange={(e) => setQuantityLabel(e.target.value)}
-              placeholder="ex. 500 g, 2, 1 paquet"
+            <label className="block text-xs text-muted mb-1.5">Quantité</label>
+            <QuantityField
+              quantity={qty}
+              unit={unit}
+              onChange={({ quantity, unit: u }) => { setQty(quantity); setUnit(u || '') }}
             />
           </div>
           <div>

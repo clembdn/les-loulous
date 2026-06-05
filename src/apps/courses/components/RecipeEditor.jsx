@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react'
 import { ArrowLeft, Plus, X, ImagePlus } from 'lucide-react'
 import { Input } from '@/shared/ui/Input.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
+import QuantityField from './QuantityField.jsx'
+import { readQuantity, toNumber } from '../utils/quantity.js'
 import ImagePickerSheet from './ImagePickerSheet.jsx'
 
-const EMPTY_ING = { name: '', quantityLabel: '' }
+const EMPTY_ING = { name: '', quantity: '', unit: '' }
 const TEXTAREA_CLS =
   'w-full px-4 py-2.5 rounded-xl bg-surface-2 border border-border text-sm text-fg placeholder:text-faint focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus:border-transparent transition resize-none'
 
@@ -23,7 +25,10 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
       setImage(recipe.imageUrl || '')
       setIngredients(
         recipe.ingredients.length
-          ? recipe.ingredients.map((i) => ({ name: i.name, quantityLabel: i.quantityLabel || '' }))
+          ? recipe.ingredients.map((i) => {
+            const q = readQuantity(i)
+            return { name: i.name, quantity: q.quantity != null ? String(q.quantity) : '', unit: q.unit || '' }
+          })
           : [{ ...EMPTY_ING }],
       )
       setSteps(recipe.steps.length ? [...recipe.steps] : [''])
@@ -41,6 +46,9 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
   function setIngredient(i, field, value) {
     setIngredients((arr) => arr.map((it, j) => (j === i ? { ...it, [field]: value } : it)))
   }
+  function setIngredientQty(i, { quantity, unit }) {
+    setIngredients((arr) => arr.map((it, j) => (j === i ? { ...it, quantity, unit: unit || '' } : it)))
+  }
   function addIngredient() { setIngredients((arr) => [...arr, { ...EMPTY_ING }]) }
   function removeIngredient(i) { setIngredients((arr) => (arr.length > 1 ? arr.filter((_, j) => j !== i) : arr)) }
 
@@ -56,7 +64,7 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
       imageUrl: image || null,
       ingredients: ingredients
         .filter((i) => i.name.trim())
-        .map((i) => ({ name: i.name.trim(), quantityLabel: i.quantityLabel.trim() || null })),
+        .map((i) => ({ name: i.name.trim(), quantity: toNumber(i.quantity), unit: i.unit || null })),
       steps: steps.map((s) => s.trim()).filter(Boolean),
     })
   }
@@ -110,12 +118,19 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
           <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-2">Ingrédients</label>
           <div className="space-y-2">
             {ingredients.map((ing, i) => (
-              <div key={i} className="flex gap-2">
-                <Input value={ing.name} onChange={(e) => setIngredient(i, 'name', e.target.value)} placeholder="Ingrédient" className="flex-1" />
-                <Input value={ing.quantityLabel} onChange={(e) => setIngredient(i, 'quantityLabel', e.target.value)} placeholder="Qté" className="w-24" />
-                <button onClick={() => removeIngredient(i)} aria-label="Retirer l'ingrédient" disabled={ingredients.length === 1} className="shrink-0 p-2 text-faint hover:text-danger transition disabled:opacity-30 disabled:pointer-events-none">
-                  <X size={16} />
-                </button>
+              <div key={i} className="flex flex-wrap gap-2 items-center">
+                <Input value={ing.name} onChange={(e) => setIngredient(i, 'name', e.target.value)} placeholder="Ingrédient" className="flex-1 min-w-[7rem]" />
+                <div className="flex gap-2 items-center">
+                  <QuantityField
+                    quantity={ing.quantity}
+                    unit={ing.unit}
+                    onChange={(q) => setIngredientQty(i, q)}
+                    numberClassName="w-16"
+                  />
+                  <button onClick={() => removeIngredient(i)} aria-label="Retirer l'ingrédient" disabled={ingredients.length === 1} className="shrink-0 p-2 text-faint hover:text-danger transition disabled:opacity-30 disabled:pointer-events-none">
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>

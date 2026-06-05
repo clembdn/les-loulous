@@ -35,7 +35,7 @@ export default function FrigoView({ items, catalog, pantry, pantryLoading, onGoT
   const suggestions = useMemo(() => {
     const inPantry = new Set(pantry.map((p) => normalizeName(p.name)))
     return [...catalog]
-      .filter((c) => !inPantry.has(c.nameLower))
+      .filter((c) => !inPantry.has(normalizeName(c.name)))
       .sort((a, b) => (Number(b.favorite) - Number(a.favorite)) || (b.useCount - a.useCount) || a.name.localeCompare(b.name))
       .slice(0, 6)
   }, [catalog, pantry])
@@ -54,7 +54,10 @@ export default function FrigoView({ items, catalog, pantry, pantryLoading, onGoT
   const handleSave = (id, updates) => updatePantryItem(id, updates, currentUid)
   const handleDelete = (id) => deletePantryItem(id)
   function handleSendOne(item) {
-    addNamedItem({ name: item.name, quantityLabel: item.quantityLabel }, { catalog, currentUid })
+    addNamedItem(
+      { name: item.name, quantity: item.quantity, unit: item.unit, quantityLabel: item.quantityLabel },
+      { catalog, currentUid, items },
+    )
   }
 
   return (
@@ -134,7 +137,7 @@ export default function FrigoView({ items, catalog, pantry, pantryLoading, onGoT
       <AddIngredientsSheet
         open={bulkOpen}
         onClose={() => setBulkOpen(false)}
-        ingredients={toRestock.map((p) => ({ name: p.name, quantityLabel: p.quantityLabel }))}
+        ingredients={toRestock.map((p) => ({ name: p.name, quantity: p.quantity, unit: p.unit, quantityLabel: p.quantityLabel }))}
         items={items}
         catalog={catalog}
         pantry={pantry}

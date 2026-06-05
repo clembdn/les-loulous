@@ -2,16 +2,20 @@ import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, query, orderBy,
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
+import { formatQuantity } from '../utils/quantity.js'
 
 const RECIPES_PATH = 'couples/main/recipes'
 function recipesCol() { return collection(db, RECIPES_PATH) }
 function recipeDoc(id) { return doc(db, RECIPES_PATH, id) }
 
 function normalizeIngredient(raw) {
-  return {
-    name: String(raw?.name || '').trim(),
-    quantityLabel: raw?.quantityLabel ? String(raw.quantityLabel).trim() : null,
-  }
+  const quantity = typeof raw?.quantity === 'number' ? raw.quantity : null
+  const unit = raw?.unit || null
+  const structured = quantity != null || unit != null
+  const quantityLabel = structured
+    ? (formatQuantity(quantity, unit) || null)
+    : (raw?.quantityLabel ? String(raw.quantityLabel).trim() : null)
+  return { name: String(raw?.name || '').trim(), quantity, unit, quantityLabel }
 }
 
 function normalize(raw) {

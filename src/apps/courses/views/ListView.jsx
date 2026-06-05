@@ -36,7 +36,7 @@ export default function ListView({ items, catalog, pantry, isLoading }) {
   const suggestions = useMemo(() => {
     const inList = new Set(items.map((i) => normalizeName(i.name)))
     return [...catalog]
-      .filter((c) => !inList.has(c.nameLower))
+      .filter((c) => !inList.has(normalizeName(c.name)))
       .sort((a, b) => (Number(b.favorite) - Number(a.favorite)) || (b.useCount - a.useCount) || a.name.localeCompare(b.name))
       .slice(0, 6)
   }, [catalog, items])
@@ -47,7 +47,7 @@ export default function ListView({ items, catalog, pantry, isLoading }) {
     [pantry],
   )
 
-  const handleAdd = (name) => addNamedItem({ name }, { catalog, currentUid })
+  const handleAdd = (name) => addNamedItem({ name }, { catalog, currentUid, items })
   function handleToggle(it) {
     const willCheck = !it.checked
     setItemChecked(it, willCheck, currentUid)

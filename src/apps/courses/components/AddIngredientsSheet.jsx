@@ -5,6 +5,7 @@ import { Button } from '@/shared/ui/Button.jsx'
 import { addNamedItem } from '../utils/addItems.js'
 import { normalizeName } from '../utils/aisleGuess.js'
 import { buildStockIndex, getStockStatus, getStatusMeta } from '../config/pantryStatus.js'
+import { readQuantity } from '../utils/quantity.js'
 import { cn } from '@/shared/lib/utils.js'
 
 // Feuille de sélection pré-cochée : ajoute les ingrédients choisis à la liste.
@@ -30,8 +31,11 @@ export default function AddIngredientsSheet({
   useEffect(() => {
     if (open) {
       setChecked(list.map((ing) => {
-        const nn = normalizeName(ing.name)
-        return !activeNames.has(nn) && getStockStatus(ing.name, stockIndex) !== 'ok'
+        const inStock = getStockStatus(ing.name, stockIndex) === 'ok'
+        const already = activeNames.has(normalizeName(ing.name))
+        const hasQty = readQuantity(ing).quantity != null
+        // décoché si déjà en stock, ou déjà listé sans quantité à cumuler
+        return !inStock && !(already && !hasQty)
       }))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -49,8 +53,8 @@ export default function AddIngredientsSheet({
       for (let i = 0; i < list.length; i++) {
         if (checked[i]) {
           await addNamedItem(
-            { name: list[i].name, quantityLabel: list[i].quantityLabel },
-            { catalog, currentUid },
+            { name: list[i].name, quantity: list[i].quantity, unit: list[i].unit, quantityLabel: list[i].quantityLabel },
+            { catalog, currentUid, items },
           )
         }
       }

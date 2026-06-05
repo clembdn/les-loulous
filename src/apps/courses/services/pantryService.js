@@ -3,6 +3,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
 import { AISLE_BY_ID, DEFAULT_AISLE } from '../config/aisles.js'
+import { formatQuantity } from '../utils/quantity.js'
 
 // Inventaire du foyer (frigo / placards). Une entrée = un produit qu'on a (ou qu'on n'a plus).
 const PANTRY_PATH = 'couples/main/pantryItems'
@@ -24,6 +25,8 @@ function normalize(raw) {
     id: raw.id,
     name: raw.name || '',
     quantityLabel: raw.quantityLabel || null,
+    quantity: typeof raw.quantity === 'number' ? raw.quantity : null,
+    unit: raw.unit || null,
     aisle: resolveAisle(raw.aisle),
     status: resolveStatus(raw.status),
     note: raw.note || null,
@@ -46,9 +49,17 @@ export function subscribeToPantry(callback, onError) {
 
 export async function addPantryItem(input, currentUid) {
   const now = new Date().toISOString()
+  const quantity = typeof input.quantity === 'number' ? input.quantity : null
+  const unit = input.unit || null
+  const structured = quantity != null || unit != null
+  const quantityLabel = structured
+    ? (formatQuantity(quantity, unit) || null)
+    : (input.quantityLabel ? String(input.quantityLabel).trim() : null)
   const data = {
     name: String(input.name || '').trim(),
-    quantityLabel: input.quantityLabel ? String(input.quantityLabel).trim() : null,
+    quantityLabel,
+    quantity,
+    unit,
     aisle: resolveAisle(input.aisle),
     status: resolveStatus(input.status),
     note: input.note ? String(input.note).trim() : null,
@@ -66,7 +77,13 @@ export async function updatePantryItem(id, updates, currentUid) {
   if (updates.name != null) payload.name = String(updates.name).trim()
   if (updates.aisle != null) payload.aisle = resolveAisle(updates.aisle)
   if (updates.status != null) payload.status = resolveStatus(updates.status)
-  if ('quantityLabel' in updates) {
+  if ('quantity' in updates || 'unit' in updates) {
+    const quantity = typeof updates.quantity === 'number' ? updates.quantity : null
+    const unit = updates.unit || null
+    payload.quantity = quantity
+    payload.unit = unit
+    payload.quantityLabel = formatQuantity(quantity, unit) || null
+  } else if ('quantityLabel' in updates) {
     payload.quantityLabel = updates.quantityLabel ? String(updates.quantityLabel).trim() : null
   }
   if ('note' in updates) {

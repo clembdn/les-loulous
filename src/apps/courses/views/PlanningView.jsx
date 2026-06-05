@@ -10,6 +10,7 @@ import { useWeekPlan } from '../hooks/useWeekPlan.js'
 import { getWeek } from '../utils/week.js'
 import { addMeal, removeMeal } from '../services/mealPlanService.js'
 import { normalizeName } from '../utils/aisleGuess.js'
+import { readQuantity, mergeQuantity, formatQuantity } from '../utils/quantity.js'
 
 export default function PlanningView({ recipes, items, catalog, pantry, onGoToList }) {
   const { currentUid } = useAuth()
@@ -24,8 +25,7 @@ export default function PlanningView({ recipes, items, catalog, pantry, onGoToLi
 
   // Agrège les ingrédients de toutes les recettes planifiées de la semaine (dédoublonnés par nom).
   const weekIngredients = useMemo(() => {
-    const seen = new Set()
-    const out = []
+    const map = new Map()
     for (const day of week.days) {
       const d = dayMap[day.id]
       if (!d) continue
@@ -35,14 +35,25 @@ export default function PlanningView({ recipes, items, catalog, pantry, onGoToLi
           if (!r) continue
           for (const ing of r.ingredients) {
             const key = normalizeName(ing.name)
-            if (!key || seen.has(key)) continue
-            seen.add(key)
-            out.push(ing)
+            if (!key) continue
+            const incoming = readQuantity(ing)
+            if (!map.has(key)) {
+              map.set(key, { name: ing.name, quantity: incoming.quantity, unit: incoming.unit })
+            } else {
+              const cur = map.get(key)
+              const merged = mergeQuantity(cur, incoming)
+              map.set(key, { name: cur.name, quantity: merged.quantity, unit: merged.unit })
+            }
           }
         }
       }
     }
-    return out
+    return [...map.values()].map((x) => ({
+      name: x.name,
+      quantity: x.quantity,
+      unit: x.unit,
+      quantityLabel: formatQuantity(x.quantity, x.unit) || null,
+    }))
   }, [week.days, dayMap, recipeById])
 
   function submitMeal(meal) {
