@@ -1,10 +1,8 @@
 import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, ChevronLeft, ChevronRight, ListPlus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ListPlus } from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
 import { cn } from '@/shared/lib/utils.js'
-import TabBar from '../components/TabBar.jsx'
 import MealSlot from '../components/MealSlot.jsx'
 import MealPickerSheet from '../components/MealPickerSheet.jsx'
 import AddIngredientsSheet from '../components/AddIngredientsSheet.jsx'
@@ -13,7 +11,7 @@ import { getWeek } from '../utils/week.js'
 import { addMeal, removeMeal } from '../services/mealPlanService.js'
 import { normalizeName } from '../utils/aisleGuess.js'
 
-export default function PlanningView({ tab, onTab, recipes, items, catalog, onGoToList }) {
+export default function PlanningView({ recipes, items, catalog, onGoToList }) {
   const { currentUid } = useAuth()
   const [offset, setOffset] = useState(0)
   const week = useMemo(() => getWeek(offset), [offset])
@@ -64,35 +62,26 @@ export default function PlanningView({ tab, onTab, recipes, items, catalog, onGo
   }
 
   return (
-    <div className="min-h-screen bg-bg">
-      <header className="sticky top-0 z-20 bg-bg/85 backdrop-blur-xl border-b border-border">
-        <div className="max-w-xl mx-auto px-4 py-3">
-          <Link to="/" className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-fg transition mb-1">
-            <ArrowLeft size={14} /> Nos apps
-          </Link>
-          <div className="flex items-center justify-between mb-2">
-            <TabBar tab={tab} onTab={onTab} />
-          </div>
-          <div className="flex items-center justify-between">
-            <button onClick={() => setOffset((o) => o - 1)} className="p-1.5 rounded-lg text-muted hover:text-fg hover:bg-surface-2 transition" aria-label="Semaine précédente">
-              <ChevronLeft size={18} />
+    <div className="max-w-xl mx-auto px-4 pb-44 lg:pb-28 pt-4">
+      <h1 className="text-xl font-semibold tracking-tight text-fg mb-3">Planning</h1>
+      <div className="flex items-center justify-between mb-5 rounded-xl border border-border bg-surface px-2 py-1.5">
+        <button onClick={() => setOffset((o) => o - 1)} className="p-1.5 rounded-lg text-muted hover:text-fg hover:bg-surface-2 transition" aria-label="Semaine précédente">
+          <ChevronLeft size={18} />
+        </button>
+        <div className="text-center">
+          <p className="text-sm font-medium text-fg">{week.label}</p>
+          {offset !== 0 && (
+            <button onClick={() => setOffset(0)} className="text-xs text-accent hover:opacity-80 transition">
+              Revenir à cette semaine
             </button>
-            <div className="text-center">
-              <p className="text-sm font-medium text-fg">{week.label}</p>
-              {offset !== 0 && (
-                <button onClick={() => setOffset(0)} className="text-xs text-accent hover:opacity-80 transition">
-                  Revenir à cette semaine
-                </button>
-              )}
-            </div>
-            <button onClick={() => setOffset((o) => o + 1)} className="p-1.5 rounded-lg text-muted hover:text-fg hover:bg-surface-2 transition" aria-label="Semaine suivante">
-              <ChevronRight size={18} />
-            </button>
-          </div>
+          )}
         </div>
-      </header>
+        <button onClick={() => setOffset((o) => o + 1)} className="p-1.5 rounded-lg text-muted hover:text-fg hover:bg-surface-2 transition" aria-label="Semaine suivante">
+          <ChevronRight size={18} />
+        </button>
+      </div>
 
-      <div className="max-w-xl mx-auto px-4 pb-28 pt-4">
+      <div>
         {isLoading ? (
           <p className="text-center text-muted py-16">Chargement…</p>
         ) : (
@@ -128,7 +117,7 @@ export default function PlanningView({ tab, onTab, recipes, items, catalog, onGo
         )}
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 z-20 p-4 bg-gradient-to-t from-bg to-transparent pointer-events-none">
+      <div className="fixed bottom-16 lg:bottom-0 inset-x-0 lg:left-60 z-20 p-4 bg-gradient-to-t from-bg to-transparent pointer-events-none">
         <div className="max-w-xl mx-auto pointer-events-auto">
           <Button className="w-full shadow-lift" size="lg" onClick={openWeekAdd} disabled={weekIngredients.length === 0}>
             <ListPlus size={18} /> Ingrédients de la semaine{weekIngredients.length > 0 ? ` (${weekIngredients.length})` : ''}

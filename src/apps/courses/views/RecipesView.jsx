@@ -1,17 +1,15 @@
 import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Plus, ChefHat } from 'lucide-react'
+import { Plus, ChefHat } from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
 import { Input } from '@/shared/ui/Input.jsx'
-import TabBar from '../components/TabBar.jsx'
 import RecipeCard from '../components/RecipeCard.jsx'
 import RecipeDetail from '../components/RecipeDetail.jsx'
 import RecipeEditor from '../components/RecipeEditor.jsx'
 import { addRecipe, updateRecipe, deleteRecipe } from '../services/recipesService.js'
 import { normalizeName } from '../utils/aisleGuess.js'
 
-export default function RecipesView({ tab, onTab, recipes, recipesLoading, items, catalog, onGoToList }) {
+export default function RecipesView({ recipes, recipesLoading, items, catalog, onGoToList }) {
   const { currentUid } = useAuth()
   const [mode, setMode] = useState('browse') // 'browse' | 'detail' | 'edit'
   const [selectedId, setSelectedId] = useState(null)
@@ -74,20 +72,13 @@ export default function RecipesView({ tab, onTab, recipes, recipesLoading, items
   }
 
   return (
-    <div className="min-h-screen bg-bg">
-      <header className="sticky top-0 z-20 bg-bg/85 backdrop-blur-xl border-b border-border">
-        <div className="max-w-xl mx-auto px-4 py-3">
-          <Link to="/" className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-fg transition mb-1">
-            <ArrowLeft size={14} /> Nos apps
-          </Link>
-          <div className="flex items-center justify-between">
-            <TabBar tab={tab} onTab={onTab} />
-            <Button size="sm" onClick={openNew}><Plus size={16} /> Nouvelle</Button>
-          </div>
-        </div>
-      </header>
+    <div className="max-w-xl mx-auto px-4 pb-28 lg:pb-12 pt-4">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-semibold tracking-tight text-fg">Recettes</h1>
+        <Button size="sm" onClick={openNew}><Plus size={16} /> Nouvelle</Button>
+      </div>
 
-      <div className="max-w-xl mx-auto px-4 pb-28 pt-4">
+      <div>
         {recipesLoading ? (
           <p className="text-center text-muted py-16">Chargement…</p>
         ) : recipes.length === 0 ? (

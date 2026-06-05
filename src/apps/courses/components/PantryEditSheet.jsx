@@ -1,0 +1,111 @@
+import { useState, useEffect } from 'react'
+import { Trash2 } from 'lucide-react'
+import { Sheet } from './Sheet.jsx'
+import { Input } from '@/shared/ui/Input.jsx'
+import { Button } from '@/shared/ui/Button.jsx'
+import { cn } from '@/shared/lib/utils.js'
+import { AISLES } from '../config/aisles.js'
+import { PANTRY_STATUSES } from '../services/pantryService.js'
+import { getStatusMeta } from '../config/pantryStatus.js'
+
+export default function PantryEditSheet({ item, onClose, onSave, onDelete }) {
+  const [name, setName] = useState('')
+  const [quantityLabel, setQuantityLabel] = useState('')
+  const [aisle, setAisle] = useState('autres')
+  const [status, setStatus] = useState('ok')
+  const [note, setNote] = useState('')
+
+  useEffect(() => {
+    if (item) {
+      setName(item.name)
+      setQuantityLabel(item.quantityLabel || '')
+      setAisle(item.aisle)
+      setStatus(item.status)
+      setNote(item.note || '')
+    }
+  }, [item])
+
+  function save() {
+    const v = name.trim()
+    if (!v) return
+    onSave(item.id, { name: v, quantityLabel: quantityLabel.trim() || null, aisle, status, note: note.trim() || null })
+    onClose()
+  }
+
+  return (
+    <Sheet open={!!item} onOpenChange={(o) => !o && onClose()} title="Modifier le produit">
+      {item && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs text-muted mb-1.5">Nom</label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1.5">Quantité (libre)</label>
+            <Input
+              value={quantityLabel}
+              onChange={(e) => setQuantityLabel(e.target.value)}
+              placeholder="ex. 2 boîtes, 500 g, 1 pack"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1.5">Stock</label>
+            <div className="flex gap-2">
+              {PANTRY_STATUSES.map((s) => {
+                const meta = getStatusMeta(s)
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setStatus(s)}
+                    className={cn(
+                      'flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition',
+                      status === s ? meta.pillClass : 'bg-surface-2 text-muted border-border hover:text-fg',
+                    )}
+                  >
+                    <span className={cn('h-1.5 w-1.5 rounded-full', meta.dotClass)} />
+                    {meta.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1.5">Rayon</label>
+            <div className="flex flex-wrap gap-2">
+              {AISLES.map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => setAisle(a.id)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-full text-xs border transition',
+                    aisle === a.id
+                      ? 'bg-accent text-accent-fg border-accent'
+                      : 'bg-surface-2 text-muted border-border hover:text-fg',
+                  )}
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1.5">Note (optionnel)</label>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+              placeholder="ex. au congélateur, marque précise…"
+              className="w-full px-4 py-2.5 rounded-xl bg-surface-2 border border-border text-sm text-fg placeholder:text-faint focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus:border-transparent transition resize-none"
+            />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button variant="secondary" className="flex-1" onClick={() => { onDelete(item.id); onClose() }}>
+              <Trash2 size={16} /> Supprimer
+            </Button>
+            <Button className="flex-1" onClick={save}>Enregistrer</Button>
+          </div>
+        </div>
+      )}
+    </Sheet>
+  )
+}

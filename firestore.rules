@@ -162,6 +162,32 @@ service cloud.firestore {
       allow delete: if isAuthorizedUser();
     }
 
+    function hasValidPantryItemShape(data) {
+      return data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && data.aisle is string
+        && (data.status == "ok" || data.status == "low" || data.status == "out")
+        && (!('quantityLabel' in data) || data.quantityLabel == null || (data.quantityLabel is string && data.quantityLabel.size() <= 40))
+        && (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 500));
+    }
+
+    // Pantry / stock (what we have at home: fridge, cupboards)
+    match /couples/main/pantryItems/{itemId} {
+      allow read: if isAuthorizedUser();
+
+      allow create: if isAuthorizedUser()
+        && hasValidPantryItemShape(request.resource.data)
+        && hasValidMetadata(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isAuthorizedUser()
+        && hasValidPantryItemShape(request.resource.data)
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isAuthorizedUser();
+    }
+
     function hasValidRecipeShape(data) {
       return data.title is string
         && data.title.size() > 0
