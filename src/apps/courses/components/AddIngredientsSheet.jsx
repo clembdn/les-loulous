@@ -4,11 +4,13 @@ import { Sheet } from './Sheet.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
 import { addNamedItem } from '../utils/addItems.js'
 import { normalizeName } from '../utils/aisleGuess.js'
+import { buildStockIndex, getStockStatus, getStatusMeta } from '../config/pantryStatus.js'
+import { cn } from '@/shared/lib/utils.js'
 
 // Feuille de sélection pré-cochée : ajoute les ingrédients choisis à la liste.
 // Générique : accepte une liste d'ingrédients (détail recette OU agrégat semaine).
 export default function AddIngredientsSheet({
-  open, onClose, ingredients, items, catalog, onAdded, title = 'Ajouter à la liste',
+  open, onClose, ingredients, items, catalog, pantry = [], onAdded, title = 'Ajouter à la liste',
 }) {
   const { currentUid } = useAuth()
   const list = Array.isArray(ingredients) ? ingredients : []
@@ -18,13 +20,20 @@ export default function AddIngredientsSheet({
     () => new Set(items.filter((i) => !i.checked).map((i) => normalizeName(i.name))),
     [items],
   )
+  // Index du frigo → savoir ce qu'on a déjà en stock.
+  const stockIndex = useMemo(() => buildStockIndex(pantry), [pantry])
 
   const [checked, setChecked] = useState([])
   const [busy, setBusy] = useState(false)
 
-  // À l'ouverture : tout pré-coché SAUF ce qui est déjà dans la liste active.
+  // À l'ouverture : pré-coché SAUF ce qui est déjà dans la liste OU déjà en stock (statut « ok »).
   useEffect(() => {
-    if (open) setChecked(list.map((ing) => !activeNames.has(normalizeName(ing.name))))
+    if (open) {
+      setChecked(list.map((ing) => {
+        const nn = normalizeName(ing.name)
+        return !activeNames.has(nn) && getStockStatus(ing.name, stockIndex) !== 'ok'
+      }))
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -61,6 +70,8 @@ export default function AddIngredientsSheet({
           <div className="space-y-0.5">
             {list.map((ing, i) => {
               const already = activeNames.has(normalizeName(ing.name))
+              const stock = getStockStatus(ing.name, stockIndex)
+              const stockMeta = stock ? getStatusMeta(stock) : null
               return (
                 <label key={i} className="flex items-center gap-3 py-2 cursor-pointer">
                   <input
@@ -74,7 +85,14 @@ export default function AddIngredientsSheet({
                     {ing.name}
                     {ing.quantityLabel && <span className="text-muted"> · {ing.quantityLabel}</span>}
                   </span>
-                  {already && <span className="text-xs text-faint shrink-0">déjà dans la liste</span>}
+                  {already ? (
+                    <span className="text-xs text-faint shrink-0">déjà dans la liste</span>
+                  ) : stockMeta ? (
+                    <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border shrink-0', stockMeta.pillClass)}>
+                      <span className={cn('h-1.5 w-1.5 rounded-full', stockMeta.dotClass)} />
+                      {stockMeta.label}
+                    </span>
+                  ) : null}
                 </label>
               )
             })}

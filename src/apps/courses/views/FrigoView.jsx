@@ -3,7 +3,6 @@ import { Refrigerator, ListPlus } from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
 import { cn } from '@/shared/lib/utils.js'
-import { usePantry } from '../hooks/usePantry.js'
 import {
   addPantryItem, updatePantryItem, deletePantryItem, setPantryStatus,
 } from '../services/pantryService.js'
@@ -16,9 +15,9 @@ import PantrySection from '../components/PantrySection.jsx'
 import PantryEditSheet from '../components/PantryEditSheet.jsx'
 import AddIngredientsSheet from '../components/AddIngredientsSheet.jsx'
 
-export default function FrigoView({ items, catalog, onGoToList }) {
+export default function FrigoView({ items, catalog, pantry, pantryLoading, onGoToList }) {
   const { currentUid } = useAuth()
-  const { pantry, isLoading } = usePantry()
+  const isLoading = pantryLoading
   const [editing, setEditing] = useState(null)
   const [filter, setFilter] = useState('all') // 'all' | 'needed'
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -134,6 +133,7 @@ export default function FrigoView({ items, catalog, onGoToList }) {
         ingredients={toRestock.map((p) => ({ name: p.name, quantityLabel: p.quantityLabel }))}
         items={items}
         catalog={catalog}
+        pantry={pantry}
         onAdded={onGoToList}
         title="Ajouter les manquants à la liste"
       />

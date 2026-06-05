@@ -56,7 +56,7 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
   }
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-bg">
       <header className="sticky top-0 z-20 bg-bg/85 backdrop-blur-xl border-b border-border">
         <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between">
           <button onClick={onCancel} className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-fg transition">

@@ -1,15 +1,19 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { ArrowLeft, Pencil, Copy, Trash2, Plus } from 'lucide-react'
 import { Button } from '@/shared/ui/Button.jsx'
+import { cn } from '@/shared/lib/utils.js'
+import { buildStockIndex, getStockStatus, getStatusMeta } from '../config/pantryStatus.js'
 import ConfirmDialog from './ConfirmDialog.jsx'
 import AddIngredientsSheet from './AddIngredientsSheet.jsx'
 
-export default function RecipeDetail({ recipe, items, catalog, onBack, onEdit, onDuplicate, onDelete, onAdded }) {
+export default function RecipeDetail({ recipe, items, catalog, pantry = [], onBack, onEdit, onDuplicate, onDelete, onAdded }) {
   const [addOpen, setAddOpen] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
+  const stockIndex = useMemo(() => buildStockIndex(pantry), [pantry])
+  const inStockCount = recipe.ingredients.filter((ing) => getStockStatus(ing.name, stockIndex) === 'ok').length
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-bg">
       <header className="sticky top-0 z-20 bg-bg/85 backdrop-blur-xl border-b border-border">
         <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between">
           <button onClick={onBack} className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-fg transition">
@@ -36,17 +40,32 @@ export default function RecipeDetail({ recipe, items, catalog, onBack, onEdit, o
         <section className="mt-6">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
             Ingrédients ({recipe.ingredients.length})
+            {inStockCount > 0 && (
+              <span className="normal-case font-medium text-emerald-600"> · {inStockCount} déjà en stock</span>
+            )}
           </h2>
           {recipe.ingredients.length === 0 ? (
             <p className="text-sm text-faint">Aucun ingrédient.</p>
           ) : (
             <ul className="divide-y divide-border">
-              {recipe.ingredients.map((ing, i) => (
-                <li key={i} className="flex items-center justify-between py-2.5">
-                  <span className="text-[15px] text-fg">{ing.name}</span>
-                  {ing.quantityLabel && <span className="text-sm text-muted">{ing.quantityLabel}</span>}
-                </li>
-              ))}
+              {recipe.ingredients.map((ing, i) => {
+                const stock = getStockStatus(ing.name, stockIndex)
+                const meta = stock ? getStatusMeta(stock) : null
+                return (
+                  <li key={i} className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="text-[15px] text-fg">{ing.name}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {ing.quantityLabel && <span className="text-sm text-muted">{ing.quantityLabel}</span>}
+                      {meta && (
+                        <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border', meta.pillClass)}>
+                          <span className={cn('h-1.5 w-1.5 rounded-full', meta.dotClass)} />
+                          {meta.label}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </section>
@@ -82,6 +101,7 @@ export default function RecipeDetail({ recipe, items, catalog, onBack, onEdit, o
         ingredients={recipe.ingredients}
         items={items}
         catalog={catalog}
+        pantry={pantry}
         onAdded={onAdded}
       />
       <ConfirmDialog

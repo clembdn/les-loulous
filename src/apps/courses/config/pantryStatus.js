@@ -1,3 +1,5 @@
+import { normalizeName } from '../utils/aisleGuess.js'
+
 // Méta d'affichage des statuts de stock. Classes Tailwind pré-bakées (scannées par le bundler).
 export const STATUS_META = {
   ok:  { label: 'En stock',     short: 'OK',      pillClass: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20', dotClass: 'bg-emerald-500' },
@@ -16,4 +18,16 @@ export function getStatusMeta(status) {
 export const NEEDED_STATUSES = ['low', 'out']
 export function isNeeded(status) {
   return NEEDED_STATUSES.includes(status)
+}
+
+// Index nom normalisé → statut de stock, pour répondre à « est-ce qu'on l'a déjà ? ».
+export function buildStockIndex(pantry) {
+  const index = new Map()
+  for (const p of pantry || []) index.set(normalizeName(p.name), p.status)
+  return index
+}
+
+// Statut de stock d'un ingrédient ('ok' | 'low' | 'out'), ou null s'il n'est pas dans le frigo.
+export function getStockStatus(name, index) {
+  return (index && index.get(normalizeName(name))) || null
 }
