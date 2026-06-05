@@ -40,7 +40,7 @@ export default function RecipesView({ recipes, recipesLoading, items, catalog, p
   }
   async function handleDuplicate(recipe) {
     await addRecipe(
-      { title: `${recipe.title} (copie)`, note: recipe.note, imageUrl: recipe.imageUrl, ingredients: recipe.ingredients, steps: recipe.steps },
+      { title: `${recipe.title} (copie)`, note: recipe.note, imageUrl: recipe.imageUrl, servings: recipe.servings, prepMinutes: recipe.prepMinutes, ingredients: recipe.ingredients, steps: recipe.steps },
       currentUid,
     )
     backToBrowse()

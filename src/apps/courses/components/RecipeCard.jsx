@@ -1,5 +1,6 @@
 import { Card } from '@/shared/ui/Card.jsx'
-import { ChevronRight, ChefHat } from 'lucide-react'
+import { ChevronRight, ChefHat, Clock, Users } from 'lucide-react'
+import { formatPrepTime } from '../utils/recipeMeta.js'
 
 export default function RecipeCard({ recipe, onClick }) {
   const ing = recipe.ingredients.length
@@ -24,6 +25,16 @@ export default function RecipeCard({ recipe, onClick }) {
           <p className="text-xs text-muted mt-0.5">
             {ing} ingrédient{ing > 1 ? 's' : ''}{st > 0 && ` · ${st} étape${st > 1 ? 's' : ''}`}
           </p>
+          {(recipe.prepMinutes > 0 || recipe.servings > 0) && (
+            <div className="flex items-center gap-3 mt-1.5 text-xs text-muted">
+              {recipe.prepMinutes > 0 && (
+                <span className="inline-flex items-center gap-1"><Clock size={12} /> {formatPrepTime(recipe.prepMinutes)}</span>
+              )}
+              {recipe.servings > 0 && (
+                <span className="inline-flex items-center gap-1"><Users size={12} /> {recipe.servings}</span>
+              )}
+            </div>
+          )}
         </div>
         <ChevronRight size={18} className="text-faint shrink-0" />
       </div>

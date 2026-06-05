@@ -15,6 +15,8 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
   const [note, setNote] = useState('')
   const [ingredients, setIngredients] = useState([{ ...EMPTY_ING }])
   const [steps, setSteps] = useState([''])
+  const [servings, setServings] = useState('')
+  const [prepMinutes, setPrepMinutes] = useState('')
   const [image, setImage] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
 
@@ -32,12 +34,16 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
           : [{ ...EMPTY_ING }],
       )
       setSteps(recipe.steps.length ? [...recipe.steps] : [''])
+      setServings(recipe.servings != null ? String(recipe.servings) : '')
+      setPrepMinutes(recipe.prepMinutes != null ? String(recipe.prepMinutes) : '')
     } else {
       setTitle('')
       setNote('')
       setImage('')
       setIngredients([{ ...EMPTY_ING }])
       setSteps([''])
+      setServings('')
+      setPrepMinutes('')
     }
   }, [recipe])
 
@@ -66,6 +72,8 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
         .filter((i) => i.name.trim())
         .map((i) => ({ name: i.name.trim(), quantity: toNumber(i.quantity), unit: i.unit || null })),
       steps: steps.map((s) => s.trim()).filter(Boolean),
+      servings: toNumber(servings),
+      prepMinutes: toNumber(prepMinutes),
     })
   }
 
@@ -88,7 +96,18 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
 
         <div>
           <label className="block text-xs text-muted mb-1.5">Note (optionnel)</label>
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Pour 4 · plat du soir…" className={TEXTAREA_CLS} />
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="plat du soir, idée d'accompagnement…" className={TEXTAREA_CLS} />
+        </div>
+
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <label className="block text-xs text-muted mb-1.5">Portions</label>
+            <Input type="number" inputMode="numeric" min="0" value={servings} onChange={(e) => setServings(e.target.value)} placeholder="ex. 4" />
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs text-muted mb-1.5">Temps (min)</label>
+            <Input type="number" inputMode="numeric" min="0" value={prepMinutes} onChange={(e) => setPrepMinutes(e.target.value)} placeholder="ex. 20" />
+          </div>
         </div>
 
         <div>

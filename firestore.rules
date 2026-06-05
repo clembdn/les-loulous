@@ -201,7 +201,9 @@ service cloud.firestore {
         && data.steps is list
         && data.steps.size() <= 30
         && (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 500))
-        && (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1000));
+        && (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1000))
+        && (!('servings' in data) || data.servings == null || (data.servings is number && data.servings >= 0))
+        && (!('prepMinutes' in data) || data.prepMinutes == null || (data.prepMinutes is number && data.prepMinutes >= 0));
     }
 
     // Recipes (title + ingredients + preparation steps)

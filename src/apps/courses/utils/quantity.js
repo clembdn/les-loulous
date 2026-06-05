@@ -115,3 +115,9 @@ export function mergeQuantity(existing, incoming) {
   if (existing?.quantity != null) return { quantity: existing.quantity, unit: existing.unit || null }
   return { quantity: null, unit: null }
 }
+
+// Met une quantité à l'échelle (× facteur), pour adapter une recette au nombre de portions.
+export function scaleQuantity(quantity, factor) {
+  if (quantity == null || !factor || factor === 1) return quantity
+  return round2(quantity * factor)
+}

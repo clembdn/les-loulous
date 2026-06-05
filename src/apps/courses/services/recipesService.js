@@ -24,6 +24,8 @@ function normalize(raw) {
     title: raw.title || '',
     note: raw.note || null,
     imageUrl: raw.imageUrl || null,
+    servings: typeof raw.servings === 'number' ? raw.servings : null,
+    prepMinutes: typeof raw.prepMinutes === 'number' ? raw.prepMinutes : null,
     ingredients: Array.isArray(raw.ingredients) ? raw.ingredients.map(normalizeIngredient) : [],
     steps: Array.isArray(raw.steps) ? raw.steps.map((s) => String(s)) : [],
     createdAt: raw.createdAt,
@@ -45,6 +47,8 @@ function sanitizeInput(input) {
     title: String(input.title || '').trim(),
     note: input.note ? String(input.note).trim() : null,
     imageUrl: input.imageUrl ? String(input.imageUrl).trim() : null,
+    servings: typeof input.servings === 'number' && input.servings > 0 ? input.servings : null,
+    prepMinutes: typeof input.prepMinutes === 'number' && input.prepMinutes > 0 ? input.prepMinutes : null,
     ingredients,
     steps,
   }

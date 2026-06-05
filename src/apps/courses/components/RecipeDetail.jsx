@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react'
-import { ArrowLeft, Pencil, Copy, Trash2, Plus } from 'lucide-react'
+import { useState, useMemo, useEffect } from 'react'
+import { ArrowLeft, Pencil, Copy, Trash2, Plus, Clock, Users } from 'lucide-react'
 import { Button } from '@/shared/ui/Button.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { buildStockIndex, getStockStatus, getStatusMeta } from '../config/pantryStatus.js'
+import { scaleQuantity, formatQuantity } from '../utils/quantity.js'
+import { formatPrepTime } from '../utils/recipeMeta.js'
 import ConfirmDialog from './ConfirmDialog.jsx'
 import AddIngredientsSheet from './AddIngredientsSheet.jsx'
 
@@ -10,7 +12,22 @@ export default function RecipeDetail({ recipe, items, catalog, pantry = [], onBa
   const [addOpen, setAddOpen] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
   const stockIndex = useMemo(() => buildStockIndex(pantry), [pantry])
-  const inStockCount = recipe.ingredients.filter((ing) => getStockStatus(ing.name, stockIndex) === 'ok').length
+
+  // Portions ajustables → met les quantités à l'échelle (affichage + ajout à la liste).
+  const baseServings = recipe.servings || null
+  const [targetServings, setTargetServings] = useState(baseServings || 1)
+  useEffect(() => { setTargetServings(recipe.servings || 1) }, [recipe.id, recipe.servings])
+  const factor = baseServings && targetServings ? targetServings / baseServings : 1
+
+  const scaledIngredients = useMemo(
+    () => recipe.ingredients.map((ing) => {
+      if (factor === 1 || ing.quantity == null) return ing
+      const quantity = scaleQuantity(ing.quantity, factor)
+      return { ...ing, quantity, quantityLabel: formatQuantity(quantity, ing.unit) || ing.quantityLabel }
+    }),
+    [recipe.ingredients, factor],
+  )
+  const inStockCount = scaledIngredients.filter((ing) => getStockStatus(ing.name, stockIndex) === 'ok').length
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-bg">
@@ -44,6 +61,30 @@ export default function RecipeDetail({ recipe, items, catalog, pantry = [], onBa
         <h1 className="text-2xl font-semibold tracking-[-0.01em] text-fg">{recipe.title}</h1>
         {recipe.note && <p className="text-sm text-muted mt-2 whitespace-pre-line">{recipe.note}</p>}
 
+        {(recipe.prepMinutes > 0 || baseServings) && (
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-3">
+            {recipe.prepMinutes > 0 && (
+              <span className="inline-flex items-center gap-1.5 text-sm text-muted">
+                <Clock size={15} /> {formatPrepTime(recipe.prepMinutes)}
+              </span>
+            )}
+            {baseServings && (
+              <div className="inline-flex items-center gap-2 text-sm text-muted">
+                <Users size={15} />
+                <div className="inline-flex items-center rounded-lg border border-border overflow-hidden">
+                  <button onClick={() => setTargetServings((t) => Math.max(1, t - 1))} className="px-2.5 py-1 text-fg hover:bg-surface-2 transition" aria-label="Moins de portions">−</button>
+                  <span className="px-2 min-w-[2rem] text-center tabular-nums text-fg">{targetServings}</span>
+                  <button onClick={() => setTargetServings((t) => t + 1)} className="px-2.5 py-1 text-fg hover:bg-surface-2 transition" aria-label="Plus de portions">+</button>
+                </div>
+                <span>portion{targetServings > 1 ? 's' : ''}</span>
+              </div>
+            )}
+          </div>
+        )}
+        {factor !== 1 && (
+          <p className="text-xs text-accent mt-2">Quantités ajustées pour {targetServings} portions (recette de base : {baseServings}).</p>
+        )}
+
         <section className="mt-6">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
             Ingrédients ({recipe.ingredients.length})
@@ -55,7 +96,7 @@ export default function RecipeDetail({ recipe, items, catalog, pantry = [], onBa
             <p className="text-sm text-faint">Aucun ingrédient.</p>
           ) : (
             <ul className="divide-y divide-border">
-              {recipe.ingredients.map((ing, i) => {
+              {scaledIngredients.map((ing, i) => {
                 const stock = getStockStatus(ing.name, stockIndex)
                 const meta = stock ? getStatusMeta(stock) : null
                 return (
@@ -105,7 +146,7 @@ export default function RecipeDetail({ recipe, items, catalog, pantry = [], onBa
       <AddIngredientsSheet
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        ingredients={recipe.ingredients}
+        ingredients={scaledIngredients}
         items={items}
         catalog={catalog}
         pantry={pantry}
