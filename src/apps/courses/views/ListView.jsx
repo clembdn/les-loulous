@@ -8,6 +8,7 @@ import {
 import {
   toggleFavorite, setCatalogAisle, removeCatalogEntry,
 } from '../services/catalogService.js'
+import { setPantryStatus } from '../services/pantryService.js'
 import { normalizeName } from '../utils/aisleGuess.js'
 import { addNamedItem } from '../utils/addItems.js'
 import { groupByAisle } from '../utils/grouping.js'
@@ -19,7 +20,7 @@ import StoreModeView from '../components/StoreModeView.jsx'
 import FavoritesSheet from '../components/FavoritesSheet.jsx'
 import ConfirmDialog from '../components/ConfirmDialog.jsx'
 
-export default function ListView({ items, catalog, isLoading }) {
+export default function ListView({ items, catalog, pantry, isLoading }) {
   const { currentUid } = useAuth()
   const [storeMode, setStoreMode] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -27,6 +28,7 @@ export default function ListView({ items, catalog, isLoading }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirmAll, setConfirmAll] = useState(false)
   const [undo, setUndo] = useState(null)
+  const [restock, setRestock] = useState(null)
 
   const active = useMemo(() => items.filter((i) => !i.checked), [items])
   const checked = useMemo(() => items.filter((i) => i.checked), [items])
@@ -39,8 +41,25 @@ export default function ListView({ items, catalog, isLoading }) {
       .slice(0, 6)
   }, [catalog, items])
 
+  // Frigo indexé par nom → pour la boucle « acheté → en stock ».
+  const pantryByName = useMemo(
+    () => new Map((pantry || []).map((p) => [normalizeName(p.name), p])),
+    [pantry],
+  )
+
   const handleAdd = (name) => addNamedItem({ name }, { catalog, currentUid })
-  const handleToggle = (it) => setItemChecked(it, !it.checked, currentUid)
+  function handleToggle(it) {
+    const willCheck = !it.checked
+    setItemChecked(it, willCheck, currentUid)
+    // Cocher (= acheter) remet le produit correspondant du frigo « En stock ».
+    if (willCheck) {
+      const p = pantryByName.get(normalizeName(it.name))
+      if (p && p.status !== 'ok') {
+        setPantryStatus(p, 'ok', currentUid)
+        setRestock({ id: p.id, name: p.name, prevStatus: p.status })
+      }
+    }
+  }
   const handleSave = (id, updates) => updateItem(id, updates, currentUid)
   const handleDelete = (id) => deleteItem(id)
 
@@ -49,6 +68,12 @@ export default function ListView({ items, catalog, isLoading }) {
     const t = setTimeout(() => setUndo(null), 6000)
     return () => clearTimeout(t)
   }, [undo])
+
+  useEffect(() => {
+    if (!restock) return
+    const t = setTimeout(() => setRestock(null), 6000)
+    return () => clearTimeout(t)
+  }, [restock])
 
   function doClearChecked() {
     if (checked.length === 0) return
@@ -62,6 +87,10 @@ export default function ListView({ items, catalog, isLoading }) {
   function handleUndo() {
     if (undo) restoreItems(undo.items, currentUid)
     setUndo(null)
+  }
+  function undoRestock() {
+    if (restock) setPantryStatus({ id: restock.id }, restock.prevStatus, currentUid)
+    setRestock(null)
   }
 
   if (storeMode) {
@@ -127,6 +156,14 @@ export default function ListView({ items, catalog, isLoading }) {
 
       <div className="fixed bottom-16 lg:bottom-0 inset-x-0 lg:left-60 z-20 p-4 bg-gradient-to-t from-bg to-transparent pointer-events-none">
         <div className="max-w-xl mx-auto pointer-events-auto space-y-2">
+          {restock && (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface shadow-lift px-4 py-2.5">
+              <span className="text-sm text-fg">« {restock.name} » remis en stock 🧊</span>
+              <button onClick={undoRestock} className="text-sm font-medium text-accent hover:opacity-80 transition">
+                Annuler
+              </button>
+            </div>
+          )}
           {undo && (
             <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface shadow-lift px-4 py-2.5">
               <span className="text-sm text-fg">{undo.label}</span>

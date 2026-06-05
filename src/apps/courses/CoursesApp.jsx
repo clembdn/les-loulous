@@ -20,7 +20,7 @@ export default function CoursesApp() {
 
   return (
     <Shell active={tab} onChange={setTab}>
-      {tab === 'liste' && <ListView items={items} catalog={catalog} isLoading={isLoading} />}
+      {tab === 'liste' && <ListView items={items} catalog={catalog} pantry={pantry} isLoading={isLoading} />}
       {tab === 'frigo' && (
         <FrigoView
           items={items}
