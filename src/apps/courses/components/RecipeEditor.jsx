@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Plus, X } from 'lucide-react'
+import { ArrowLeft, Plus, X, ImagePlus } from 'lucide-react'
 import { Input } from '@/shared/ui/Input.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
+import ImagePickerSheet from './ImagePickerSheet.jsx'
 
 const EMPTY_ING = { name: '', quantityLabel: '' }
 const TEXTAREA_CLS =
@@ -12,11 +13,14 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
   const [note, setNote] = useState('')
   const [ingredients, setIngredients] = useState([{ ...EMPTY_ING }])
   const [steps, setSteps] = useState([''])
+  const [image, setImage] = useState('')
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   useEffect(() => {
     if (recipe) {
       setTitle(recipe.title)
       setNote(recipe.note || '')
+      setImage(recipe.imageUrl || '')
       setIngredients(
         recipe.ingredients.length
           ? recipe.ingredients.map((i) => ({ name: i.name, quantityLabel: i.quantityLabel || '' }))
@@ -26,6 +30,7 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
     } else {
       setTitle('')
       setNote('')
+      setImage('')
       setIngredients([{ ...EMPTY_ING }])
       setSteps([''])
     }
@@ -48,6 +53,7 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
     onSave({
       title,
       note: note.trim() || null,
+      imageUrl: image || null,
       ingredients: ingredients
         .filter((i) => i.name.trim())
         .map((i) => ({ name: i.name.trim(), quantityLabel: i.quantityLabel.trim() || null })),
@@ -75,6 +81,29 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
         <div>
           <label className="block text-xs text-muted mb-1.5">Note (optionnel)</label>
           <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Pour 4 · plat du soir…" className={TEXTAREA_CLS} />
+        </div>
+
+        <div>
+          <label className="block text-xs text-muted mb-1.5">Photo</label>
+          {image ? (
+            <div className="relative overflow-hidden rounded-xl">
+              <img src={image} alt="" className="w-full aspect-[16/9] object-cover" />
+              <div className="absolute top-2 right-2 flex gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>Changer</Button>
+                <Button size="sm" variant="secondary" aria-label="Retirer la photo" onClick={() => setImage('')}>
+                  <X size={14} />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className="w-full flex items-center justify-center gap-2 aspect-[16/9] rounded-xl border border-dashed border-border text-sm text-muted hover:text-fg hover:border-border-strong transition"
+            >
+              <ImagePlus size={18} /> Ajouter une photo
+            </button>
+          )}
         </div>
 
         <div>
@@ -115,6 +144,13 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
           </button>
         </div>
       </div>
+
+      <ImagePickerSheet
+        open={pickerOpen}
+        initialQuery={title}
+        onClose={() => setPickerOpen(false)}
+        onPick={(url) => { setImage(url); setPickerOpen(false) }}
+      />
     </div>
   )
 }

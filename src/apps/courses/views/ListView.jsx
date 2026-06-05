@@ -98,7 +98,7 @@ export default function ListView({ items, catalog, pantry, isLoading }) {
   }
 
   return (
-    <div className="max-w-xl mx-auto px-4 pb-44 lg:pb-28 pt-4">
+    <div className="max-w-xl lg:max-w-5xl mx-auto px-4 pb-44 lg:pb-28 pt-4">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold tracking-tight text-fg">Nos courses</h1>
         <div className="flex items-center gap-1">
@@ -134,7 +134,9 @@ export default function ListView({ items, catalog, pantry, isLoading }) {
         </div>
       </div>
 
-      <QuickAddBar catalog={catalog} suggestions={suggestions} onAdd={handleAdd} />
+      <div className="lg:max-w-2xl">
+        <QuickAddBar catalog={catalog} suggestions={suggestions} onAdd={handleAdd} />
+      </div>
 
       <div className="mt-5">
         {isLoading ? (
@@ -146,9 +148,11 @@ export default function ListView({ items, catalog, pantry, isLoading }) {
           </div>
         ) : (
           <>
-            {groups.map(({ aisle, items: its }) => (
-              <AisleSection key={aisle.id} aisle={aisle} items={its} onToggle={handleToggle} onEdit={setEditing} />
-            ))}
+            <div className="lg:columns-2 xl:columns-3 lg:gap-x-8">
+              {groups.map(({ aisle, items: its }) => (
+                <AisleSection key={aisle.id} aisle={aisle} items={its} onToggle={handleToggle} onEdit={setEditing} />
+              ))}
+            </div>
             <CheckedZone items={checked} onToggle={handleToggle} onEdit={setEditing} />
           </>
         )}

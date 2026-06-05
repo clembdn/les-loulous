@@ -58,12 +58,14 @@ export default function FrigoView({ items, catalog, pantry, pantryLoading, onGoT
   }
 
   return (
-    <div className="max-w-xl mx-auto px-4 pb-44 lg:pb-28 pt-4">
+    <div className="max-w-xl lg:max-w-5xl mx-auto px-4 pb-44 lg:pb-28 pt-4">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold tracking-tight text-fg">Frigo &amp; placards</h1>
       </div>
 
-      <QuickAddBar catalog={catalog} suggestions={suggestions} onAdd={handleAdd} />
+      <div className="lg:max-w-2xl">
+        <QuickAddBar catalog={catalog} suggestions={suggestions} onAdd={handleAdd} />
+      </div>
 
       {pantry.length > 0 && (
         <div className="flex items-center gap-2 mt-5">
@@ -99,17 +101,19 @@ export default function FrigoView({ items, catalog, pantry, pantryLoading, onGoT
         ) : shown.length === 0 ? (
           <p className="text-center text-muted py-12">Rien à racheter pour l'instant 🎉</p>
         ) : (
-          groups.map(({ aisle, items: its }) => (
-            <PantrySection
-              key={aisle.id}
-              aisle={aisle}
-              items={its}
-              listedNames={listedNames}
-              onCycleStatus={handleCycle}
-              onEdit={setEditing}
-              onSendToList={handleSendOne}
-            />
-          ))
+          <div className="lg:columns-2 xl:columns-3 lg:gap-x-8">
+            {groups.map(({ aisle, items: its }) => (
+              <PantrySection
+                key={aisle.id}
+                aisle={aisle}
+                items={its}
+                listedNames={listedNames}
+                onCycleStatus={handleCycle}
+                onEdit={setEditing}
+                onSendToList={handleSendOne}
+              />
+            ))}
+          </div>
         )}
       </div>
 

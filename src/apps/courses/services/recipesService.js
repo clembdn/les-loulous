@@ -19,6 +19,7 @@ function normalize(raw) {
     id: raw.id,
     title: raw.title || '',
     note: raw.note || null,
+    imageUrl: raw.imageUrl || null,
     ingredients: Array.isArray(raw.ingredients) ? raw.ingredients.map(normalizeIngredient) : [],
     steps: Array.isArray(raw.steps) ? raw.steps.map((s) => String(s)) : [],
     createdAt: raw.createdAt,
@@ -39,6 +40,7 @@ function sanitizeInput(input) {
   return {
     title: String(input.title || '').trim(),
     note: input.note ? String(input.note).trim() : null,
+    imageUrl: input.imageUrl ? String(input.imageUrl).trim() : null,
     ingredients,
     steps,
   }

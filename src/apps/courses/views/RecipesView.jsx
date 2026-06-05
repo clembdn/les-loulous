@@ -40,7 +40,7 @@ export default function RecipesView({ recipes, recipesLoading, items, catalog, p
   }
   async function handleDuplicate(recipe) {
     await addRecipe(
-      { title: `${recipe.title} (copie)`, note: recipe.note, ingredients: recipe.ingredients, steps: recipe.steps },
+      { title: `${recipe.title} (copie)`, note: recipe.note, imageUrl: recipe.imageUrl, ingredients: recipe.ingredients, steps: recipe.steps },
       currentUid,
     )
     backToBrowse()
@@ -73,7 +73,7 @@ export default function RecipesView({ recipes, recipesLoading, items, catalog, p
   }
 
   return (
-    <div className="max-w-xl mx-auto px-4 pb-28 lg:pb-12 pt-4">
+    <div className="max-w-xl lg:max-w-5xl mx-auto px-4 pb-28 lg:pb-12 pt-4">
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold tracking-tight text-fg">Recettes</h1>
         <Button size="sm" onClick={openNew}><Plus size={16} /> Nouvelle</Button>
@@ -96,12 +96,12 @@ export default function RecipesView({ recipes, recipesLoading, items, catalog, p
               onChange={(e) => setQ(e.target.value)}
               placeholder="Rechercher une recette…"
               aria-label="Rechercher une recette"
-              className="mb-4"
+              className="mb-4 lg:max-w-md"
             />
             {filtered.length === 0 ? (
               <p className="text-center text-muted py-12">Aucune recette trouvée.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 lg:space-y-0 lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-3">
                 {filtered.map((r) => (
                   <RecipeCard key={r.id} recipe={r} onClick={() => openDetail(r)} />
                 ))}

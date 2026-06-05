@@ -196,7 +196,8 @@ service cloud.firestore {
         && data.ingredients.size() <= 50
         && data.steps is list
         && data.steps.size() <= 30
-        && (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 500));
+        && (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 500))
+        && (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1000));
     }
 
     // Recipes (title + ingredients + preparation steps)

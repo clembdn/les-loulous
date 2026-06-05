@@ -3,7 +3,7 @@ import ItemRow from './ItemRow.jsx'
 export default function AisleSection({ aisle, items, onToggle, onEdit }) {
   const Icon = aisle.icon
   return (
-    <section className="mb-5">
+    <section className="mb-5 break-inside-avoid">
       <div className="flex items-center gap-2 mb-1">
         <Icon size={16} className={aisle.colorClass} />
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{aisle.label}</h3>

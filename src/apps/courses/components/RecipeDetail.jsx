@@ -34,6 +34,13 @@ export default function RecipeDetail({ recipe, items, catalog, pantry = [], onBa
       </header>
 
       <div className="max-w-xl mx-auto px-4 pb-28 pt-4">
+        {recipe.imageUrl && (
+          <img
+            src={recipe.imageUrl}
+            alt={recipe.title}
+            className="w-full aspect-[16/9] object-cover rounded-2xl mb-4"
+          />
+        )}
         <h1 className="text-2xl font-semibold tracking-[-0.01em] text-fg">{recipe.title}</h1>
         {recipe.note && <p className="text-sm text-muted mt-2 whitespace-pre-line">{recipe.note}</p>}
 
