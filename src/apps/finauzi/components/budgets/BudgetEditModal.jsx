@@ -11,45 +11,34 @@ export default function BudgetEditModal({ open, onClose, category, currentBudget
   const [amount, setAmount] = useState(
     existingAmount != null ? String(existingAmount) : ''
   )
-  const [busy, setBusy] = useState(false)
 
   if (!category) return null
   const Icon = category.icon
 
-  async function onSave(e) {
+  // Écritures optimistes : l'UI est mise à jour par le cache local, fonctionne hors-ligne.
+  function onSave(e) {
     e.preventDefault()
     const value = parseFloat(amount.replace(',', '.'))
     if (!isFinite(value) || value < 0) {
       toast.error('Montant invalide')
       return
     }
-    setBusy(true)
-    try {
-      await updateSettings(
-        { budgets: { ...currentBudgets, [category.id]: Math.round(value) } },
-        currentUid,
-      )
-      toast.success(`Budget « ${category.label} » enregistré`)
-      onClose()
-    } catch (err) {
-      toast.error(err.message || 'Erreur')
-      setBusy(false)
-    }
+    updateSettings(
+      { budgets: { ...currentBudgets, [category.id]: Math.round(value) } },
+      currentUid,
+    ).catch((err) => toast.error(err.message || 'Erreur de synchronisation'))
+    toast.success(`Budget « ${category.label} » enregistré`)
+    onClose()
   }
 
-  async function onDelete() {
+  function onDelete() {
     if (!confirm(`Supprimer le budget « ${category.label} » ?`)) return
-    setBusy(true)
-    try {
-      const next = { ...(currentBudgets || {}) }
-      delete next[category.id]
-      await updateSettings({ budgets: next }, currentUid)
-      toast.success('Budget supprimé')
-      onClose()
-    } catch (err) {
-      toast.error(err.message || 'Erreur')
-      setBusy(false)
-    }
+    const next = { ...(currentBudgets || {}) }
+    delete next[category.id]
+    updateSettings({ budgets: next }, currentUid)
+      .catch((err) => toast.error(err.message || 'Erreur de synchronisation'))
+    toast.success('Budget supprimé')
+    onClose()
   }
 
   return (
@@ -89,8 +78,7 @@ export default function BudgetEditModal({ open, onClose, category, currentBudget
             <button
               type="button"
               onClick={onDelete}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 text-sm font-medium transition disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 text-sm font-medium transition"
             >
               <Trash2 size={14} />
               Supprimer
@@ -98,10 +86,9 @@ export default function BudgetEditModal({ open, onClose, category, currentBudget
           )}
           <button
             type="submit"
-            disabled={busy}
-            className="flex-1 py-3 rounded-xl bg-white text-black font-medium text-sm disabled:opacity-50 hover:bg-white/90 transition"
+            className="flex-1 py-3 rounded-xl bg-white text-black font-medium text-sm hover:bg-white/90 transition"
           >
-            {busy ? '…' : 'Enregistrer'}
+            Enregistrer
           </button>
         </div>
       </form>

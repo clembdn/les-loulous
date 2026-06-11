@@ -26,23 +26,17 @@ export default function Timeline() {
   const { currentUser } = useAuth()
   const [editing, setEditing] = useState(null)
   const [adding, setAdding] = useState(false)
-  const [seeding, setSeeding] = useState(false)
 
   const items = useMemo(
     () => [...timeline].sort((a, b) => a.date.localeCompare(b.date)),
     [timeline],
   )
 
-  async function onSeed() {
-    setSeeding(true)
-    try {
-      await seedTimelineSuggestions(currentUser?.uid)
-      toast.success('Timeline initialisée')
-    } catch (err) {
-      toast.error(err.message || 'Erreur d\'initialisation')
-    } finally {
-      setSeeding(false)
-    }
+  // Écriture optimiste : l'UI est mise à jour par le cache local, fonctionne hors-ligne.
+  function onSeed() {
+    seedTimelineSuggestions(currentUser?.uid)
+      .catch((err) => toast.error(err.message || 'Erreur d\'initialisation'))
+    toast.success('Timeline initialisée')
   }
 
   const openAdd = () => { setEditing(null); setAdding(true) }
@@ -58,7 +52,7 @@ export default function Timeline() {
   }
 
   if (items.length === 0) {
-    return <EmptyState onSeed={onSeed} onAddManually={openAdd} seeding={seeding} />
+    return <EmptyState onSeed={onSeed} onAddManually={openAdd} />
   }
 
   return (
@@ -341,7 +335,7 @@ function formatDayShort(iso) {
   }
 }
 
-function EmptyState({ onSeed, onAddManually, seeding }) {
+function EmptyState({ onSeed, onAddManually }) {
   return (
     <div className="bg-white/[0.02] border border-dashed border-white/10 rounded-2xl p-8 text-center">
       <div className="h-12 w-12 mx-auto rounded-full bg-cyan-500/15 text-cyan-400 flex items-center justify-center mb-4">
@@ -356,11 +350,10 @@ function EmptyState({ onSeed, onAddManually, seeding }) {
         <button
           type="button"
           onClick={onSeed}
-          disabled={seeding}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-black text-sm font-medium hover:bg-white/90 transition disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-black text-sm font-medium hover:bg-white/90 transition"
         >
           <Sparkles size={14} />
-          {seeding ? 'Initialisation…' : 'Initialiser avec les suggestions'}
+          Initialiser avec les suggestions
         </button>
         <button
           type="button"

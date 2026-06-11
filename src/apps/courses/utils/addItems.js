@@ -12,7 +12,9 @@ export function resolveAisleForName(name, catalog) {
 
 // Ajoute un article à la liste (+ met à jour le catalogue). Si un article actif du même
 // nom existe déjà (passer `items`), on cumule les quantités au lieu de créer un doublon.
-export async function addNamedItem({ name, quantity = null, unit = null, quantityLabel = null }, { catalog, currentUid, items }) {
+// Écritures fire-and-forget : le cache local met l'UI à jour immédiatement, et hors-ligne
+// les promesses Firestore ne se résolvent qu'au retour du réseau — il ne faut pas les attendre.
+export function addNamedItem({ name, quantity = null, unit = null, quantityLabel = null }, { catalog, currentUid, items }) {
   const incoming = readQuantity({ quantity, unit, quantityLabel })
   const key = normalizeName(name)
   const existing = (items || []).find((i) => !i.checked && normalizeName(i.name) === key)
@@ -20,15 +22,17 @@ export async function addNamedItem({ name, quantity = null, unit = null, quantit
   if (existing) {
     const merged = mergeQuantity(readQuantity(existing), incoming)
     if (merged.quantity != null) {
-      await updateItem(existing.id, { quantity: merged.quantity, unit: merged.unit }, currentUid)
+      updateItem(existing.id, { quantity: merged.quantity, unit: merged.unit }, currentUid)
+        .catch((err) => console.error('[Courses] addNamedItem merge error:', err))
     }
     return
   }
 
   const aisle = resolveAisleForName(name, catalog)
-  await addItem(
+  addItem(
     { name, aisle, quantity: incoming.quantity, unit: incoming.unit, quantityLabel: incoming.quantity == null ? quantityLabel : null },
     currentUid,
-  )
-  await recordUsage(name, aisle, currentUid)
+  ).catch((err) => console.error('[Courses] addNamedItem error:', err))
+  recordUsage(name, aisle, currentUid)
+    .catch((err) => console.error('[Courses] recordUsage error:', err))
 }

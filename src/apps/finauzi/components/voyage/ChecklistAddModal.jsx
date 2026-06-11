@@ -25,7 +25,6 @@ export default function ChecklistAddModal({
   const [label, setLabel] = useState('')
   const [section, setSection] = useState(defaultSection || 'before')
   const [status, setStatus] = useState('todo')
-  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -34,39 +33,30 @@ export default function ChecklistAddModal({
     setStatus(existing?.status || 'todo')
   }, [open, existing, defaultSection])
 
-  async function onSubmit(e) {
+  // Écritures optimistes : l'UI est mise à jour par le cache local, fonctionne hors-ligne.
+  function onSubmit(e) {
     e.preventDefault()
     const trimmed = label.trim()
     if (!trimmed) return toast.error('Donne un libellé')
-    setBusy(true)
-    try {
-      if (isEdit) {
-        await updateChecklistItem(existing.id, { label: trimmed, section, status }, currentUid)
-        toast.success('Item mis à jour')
-      } else {
-        await createChecklistItem({ label: trimmed, section }, currentUid)
-        toast.success('Item ajouté')
-      }
-      onClose()
-    } catch (err) {
-      toast.error(err.message || 'Erreur')
-    } finally {
-      setBusy(false)
+    if (isEdit) {
+      updateChecklistItem(existing.id, { label: trimmed, section, status }, currentUid)
+        .catch((err) => toast.error(err.message || 'Erreur de synchronisation'))
+      toast.success('Item mis à jour')
+    } else {
+      createChecklistItem({ label: trimmed, section }, currentUid)
+        .catch((err) => toast.error(err.message || 'Erreur de synchronisation'))
+      toast.success('Item ajouté')
     }
+    onClose()
   }
 
-  async function onDelete() {
+  function onDelete() {
     if (!existing?.id) return
     if (!confirm(`Supprimer « ${existing.label} » ?`)) return
-    setBusy(true)
-    try {
-      await deleteChecklistItem(existing.id)
-      toast.success('Item supprimé')
-      onClose()
-    } catch (err) {
-      toast.error(err.message || 'Erreur')
-      setBusy(false)
-    }
+    deleteChecklistItem(existing.id)
+      .catch((err) => toast.error(err.message || 'Erreur de synchronisation'))
+    toast.success('Item supprimé')
+    onClose()
   }
 
   return (
@@ -135,8 +125,7 @@ export default function ChecklistAddModal({
             <button
               type="button"
               onClick={onDelete}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 text-sm font-medium transition disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 text-sm font-medium transition"
             >
               <Trash2 size={14} />
               Supprimer
@@ -144,10 +133,9 @@ export default function ChecklistAddModal({
           )}
           <button
             type="submit"
-            disabled={busy}
-            className="flex-1 py-3 rounded-xl bg-white text-black font-medium text-sm disabled:opacity-50 hover:bg-white/90 transition"
+            className="flex-1 py-3 rounded-xl bg-white text-black font-medium text-sm hover:bg-white/90 transition"
           >
-            {busy ? '…' : isEdit ? 'Enregistrer' : 'Ajouter'}
+            {isEdit ? 'Enregistrer' : 'Ajouter'}
           </button>
         </div>
       </form>

@@ -1,6 +1,10 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore'
 
 function readEnv(key) {
   const value = import.meta.env[key]
@@ -19,5 +23,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
-export const db = getFirestore(app)
+// Cache persistant (IndexedDB) : démarrage instantané depuis le cache local,
+// app utilisable hors-ligne (magasin sans réseau), sync auto au retour du réseau.
+// Multi-onglets pour que PWA installée + onglet navigateur cohabitent.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+})
 export default app

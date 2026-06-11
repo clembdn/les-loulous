@@ -25,7 +25,6 @@ export default function AddIngredientsSheet({
   const stockIndex = useMemo(() => buildStockIndex(pantry), [pantry])
 
   const [checked, setChecked] = useState([])
-  const [busy, setBusy] = useState(false)
 
   // À l'ouverture : pré-coché SAUF ce qui est déjà dans la liste OU déjà en stock (statut « ok »).
   useEffect(() => {
@@ -47,22 +46,19 @@ export default function AddIngredientsSheet({
     setChecked((c) => c.map((v, j) => (j === i ? !v : v)))
   }
 
-  async function confirm() {
-    setBusy(true)
-    try {
-      for (let i = 0; i < list.length; i++) {
-        if (checked[i]) {
-          await addNamedItem(
-            { name: list[i].name, quantity: list[i].quantity, unit: list[i].unit, quantityLabel: list[i].quantityLabel },
-            { catalog, currentUid, items },
-          )
-        }
+  // Ajouts fire-and-forget (cf. addNamedItem) : fonctionne aussi hors-ligne,
+  // la sheet se ferme immédiatement et les articles apparaissent via le cache local.
+  function confirm() {
+    for (let i = 0; i < list.length; i++) {
+      if (checked[i]) {
+        addNamedItem(
+          { name: list[i].name, quantity: list[i].quantity, unit: list[i].unit, quantityLabel: list[i].quantityLabel },
+          { catalog, currentUid, items },
+        )
       }
-      onClose()
-      onAdded?.()
-    } finally {
-      setBusy(false)
     }
+    onClose()
+    onAdded?.()
   }
 
   return (
@@ -103,7 +99,7 @@ export default function AddIngredientsSheet({
           </div>
           <div className="flex gap-2 pt-4">
             <Button variant="secondary" className="flex-1" onClick={onClose}>Annuler</Button>
-            <Button className="flex-1" onClick={confirm} disabled={count === 0 || busy}>
+            <Button className="flex-1" onClick={confirm} disabled={count === 0}>
               Ajouter ({count})
             </Button>
           </div>

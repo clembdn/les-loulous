@@ -25,9 +25,6 @@ export default function SettingsDrawer({ open, onClose }) {
   const [commonInitial, setCommonInitial] = useState('')
   const [safetyBuffer, setSafetyBuffer] = useState('')
   const [eurToAud, setEurToAud] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [savingRate, setSavingRate] = useState(false)
-  const [savingColor, setSavingColor] = useState(false)
 
   useEffect(() => {
     if (!isLoading) {
@@ -38,7 +35,8 @@ export default function SettingsDrawer({ open, onClose }) {
     }
   }, [isLoading, settings.initialCapitalEUR, settings.commonInitialCapitalEUR, settings.safetyBufferEUR, settings.eurToAud])
 
-  async function onSave(e) {
+  // Écritures optimistes : l'UI est mise à jour par le cache local, fonctionne hors-ligne.
+  function onSave(e) {
     e.preventDefault()
     const total = Number(initialCapital.replace(',', '.')) || 0
     const common = Number(commonInitial.replace(',', '.')) || 0
@@ -46,59 +44,38 @@ export default function SettingsDrawer({ open, onClose }) {
       toast.error('Le capital commun ne peut pas dépasser le capital total.')
       return
     }
-    setSaving(true)
-    try {
-      await updateSettings({
-        initialCapitalEUR: total,
-        commonInitialCapitalEUR: common,
-        safetyBufferEUR: Number(safetyBuffer.replace(',', '.')) || 0,
-      }, currentUser?.uid)
-      toast.success('Réglages enregistrés')
-    } catch (err) {
-      toast.error(err.message || 'Erreur d\'enregistrement')
-    } finally {
-      setSaving(false)
-    }
+    updateSettings({
+      initialCapitalEUR: total,
+      commonInitialCapitalEUR: common,
+      safetyBufferEUR: Number(safetyBuffer.replace(',', '.')) || 0,
+    }, currentUser?.uid)
+      .catch((err) => toast.error(err.message || 'Erreur de synchronisation'))
+    toast.success('Réglages enregistrés')
   }
 
-  async function onPickColor(colorId) {
-    if (!currentUser?.uid || savingColor) return
+  function onPickColor(colorId) {
+    if (!currentUser?.uid) return
     const nextUserColors = { ...(settings.userColors || {}), [currentUser.uid]: colorId }
-    setSavingColor(true)
-    try {
-      await updateSettings({ userColors: nextUserColors }, currentUser.uid)
-      toast.success('Couleur mise à jour')
-    } catch (err) {
-      toast.error(err.message || 'Erreur')
-    } finally {
-      setSavingColor(false)
-    }
+    updateSettings({ userColors: nextUserColors }, currentUser.uid)
+      .catch((err) => toast.error(err.message || 'Erreur de synchronisation'))
+    toast.success('Couleur mise à jour')
   }
 
-  async function onToggleCurrency() {
+  function onToggleCurrency() {
     const next = currency === 'EUR' ? 'AUD' : 'EUR'
-    try {
-      await updateSettings({ currency: next }, currentUser?.uid)
-    } catch (err) {
-      toast.error(err.message || 'Erreur')
-    }
+    updateSettings({ currency: next }, currentUser?.uid)
+      .catch((err) => toast.error(err.message || 'Erreur de synchronisation'))
   }
 
-  async function onSaveRate() {
+  function onSaveRate() {
     const value = Number(eurToAud.replace(',', '.'))
     if (!isFinite(value) || value <= 0) {
       toast.error('Taux invalide')
       return
     }
-    setSavingRate(true)
-    try {
-      await updateSettings({ eurToAud: value }, currentUser?.uid)
-      toast.success('Taux mis à jour')
-    } catch (err) {
-      toast.error(err.message || 'Erreur')
-    } finally {
-      setSavingRate(false)
-    }
+    updateSettings({ eurToAud: value }, currentUser?.uid)
+      .catch((err) => toast.error(err.message || 'Erreur de synchronisation'))
+    toast.success('Taux mis à jour')
   }
 
   const lockedColorId = getLockedColorId(currentUser?.uid, settings.userColors)
@@ -143,7 +120,7 @@ export default function SettingsDrawer({ open, onClose }) {
                     <button
                       key={c.id}
                       type="button"
-                      disabled={isLocked || savingColor}
+                      disabled={isLocked}
                       onClick={() => onPickColor(c.id)}
                       title={isLocked ? `Pris par l'autre utilisateur` : c.label}
                       className={cn(
@@ -215,8 +192,7 @@ export default function SettingsDrawer({ open, onClose }) {
                   <button
                     type="button"
                     onClick={onSaveRate}
-                    disabled={savingRate}
-                    className="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 text-white text-sm font-medium transition disabled:opacity-50"
+                    className="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 text-white text-sm font-medium transition"
                   >
                     OK
                   </button>
@@ -270,11 +246,10 @@ export default function SettingsDrawer({ open, onClose }) {
 
               <button
                 type="submit"
-                disabled={saving}
-                className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-white text-black font-medium text-sm disabled:opacity-50 hover:bg-white/90 transition"
+                className="w-full inline-flex items-center justify-center gap-2 py-3 rounded-xl bg-white text-black font-medium text-sm hover:bg-white/90 transition"
               >
                 <Save size={14} />
-                {saving ? 'Enregistrement…' : 'Enregistrer'}
+                Enregistrer
               </button>
             </form>
           </Section>

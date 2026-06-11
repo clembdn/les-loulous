@@ -18,7 +18,6 @@ export default function TimelineAddModal({ open, onClose, existing, currentUid }
   const [label, setLabel] = useState('')
   const [date, setDate] = useState(todayISO())
   const [description, setDescription] = useState('')
-  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -27,48 +26,32 @@ export default function TimelineAddModal({ open, onClose, existing, currentUid }
     setDescription(existing?.description || '')
   }, [open, existing])
 
-  async function onSubmit(e) {
+  // Écritures optimistes : l'UI est mise à jour par le cache local, fonctionne hors-ligne.
+  function onSubmit(e) {
     e.preventDefault()
     const trimmed = label.trim()
     if (!trimmed) return toast.error('Donne un libellé')
     if (!date) return toast.error('Choisis une date')
-    setBusy(true)
-    try {
-      if (isEdit) {
-        await updateTimelineItem(existing.id, {
-          label: trimmed,
-          date,
-          description: description.trim() || null,
-        }, currentUid)
-        toast.success('Jalon mis à jour')
-      } else {
-        await createTimelineItem({
-          label: trimmed,
-          date,
-          description: description.trim() || null,
-        }, currentUid)
-        toast.success('Jalon ajouté')
-      }
-      onClose()
-    } catch (err) {
-      toast.error(err.message || 'Erreur')
-    } finally {
-      setBusy(false)
+    const payload = { label: trimmed, date, description: description.trim() || null }
+    if (isEdit) {
+      updateTimelineItem(existing.id, payload, currentUid)
+        .catch((err) => toast.error(err.message || 'Erreur de synchronisation'))
+      toast.success('Jalon mis à jour')
+    } else {
+      createTimelineItem(payload, currentUid)
+        .catch((err) => toast.error(err.message || 'Erreur de synchronisation'))
+      toast.success('Jalon ajouté')
     }
+    onClose()
   }
 
-  async function onDelete() {
+  function onDelete() {
     if (!existing?.id) return
     if (!confirm(`Supprimer « ${existing.label} » ?`)) return
-    setBusy(true)
-    try {
-      await deleteTimelineItem(existing.id)
-      toast.success('Jalon supprimé')
-      onClose()
-    } catch (err) {
-      toast.error(err.message || 'Erreur')
-      setBusy(false)
-    }
+    deleteTimelineItem(existing.id)
+      .catch((err) => toast.error(err.message || 'Erreur de synchronisation'))
+    toast.success('Jalon supprimé')
+    onClose()
   }
 
   return (
@@ -104,8 +87,7 @@ export default function TimelineAddModal({ open, onClose, existing, currentUid }
             <button
               type="button"
               onClick={onDelete}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 text-sm font-medium transition disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 text-sm font-medium transition"
             >
               <Trash2 size={14} />
               Supprimer
@@ -113,10 +95,9 @@ export default function TimelineAddModal({ open, onClose, existing, currentUid }
           )}
           <button
             type="submit"
-            disabled={busy}
-            className="flex-1 py-3 rounded-xl bg-white text-black font-medium text-sm disabled:opacity-50 hover:bg-white/90 transition"
+            className="flex-1 py-3 rounded-xl bg-white text-black font-medium text-sm hover:bg-white/90 transition"
           >
-            {busy ? '…' : isEdit ? 'Enregistrer' : 'Ajouter'}
+            {isEdit ? 'Enregistrer' : 'Ajouter'}
           </button>
         </div>
       </form>

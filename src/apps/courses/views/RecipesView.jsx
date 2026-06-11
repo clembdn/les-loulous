@@ -25,24 +25,29 @@ export default function RecipesView({ recipes, recipesLoading, items, catalog, p
   function openNew() { setSelectedId(null); setMode('edit') }
   function backToBrowse() { setSelectedId(null); setMode('browse') }
 
-  async function handleSave(input) {
+  // Écritures fire-and-forget : l'UI est mise à jour par le cache local (latency
+  // compensation), et hors-ligne un `await` ne se résoudrait qu'au retour du réseau.
+  function handleSave(input) {
     if (selectedId) {
-      await updateRecipe(selectedId, input, currentUid)
+      updateRecipe(selectedId, input, currentUid)
+        .catch((err) => console.error('[Courses] updateRecipe error:', err))
       setMode('detail')
     } else {
-      await addRecipe(input, currentUid)
+      addRecipe(input, currentUid)
+        .catch((err) => console.error('[Courses] addRecipe error:', err))
       backToBrowse()
     }
   }
-  async function handleDelete(id) {
-    await deleteRecipe(id)
+  function handleDelete(id) {
+    deleteRecipe(id)
+      .catch((err) => console.error('[Courses] deleteRecipe error:', err))
     backToBrowse()
   }
-  async function handleDuplicate(recipe) {
-    await addRecipe(
+  function handleDuplicate(recipe) {
+    addRecipe(
       { title: `${recipe.title} (copie)`, note: recipe.note, imageUrl: recipe.imageUrl, servings: recipe.servings, prepMinutes: recipe.prepMinutes, ingredients: recipe.ingredients, steps: recipe.steps },
       currentUid,
-    )
+    ).catch((err) => console.error('[Courses] duplicateRecipe error:', err))
     backToBrowse()
   }
 

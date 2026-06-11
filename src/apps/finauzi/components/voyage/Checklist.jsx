@@ -19,7 +19,6 @@ export default function Checklist() {
   const [editing, setEditing] = useState(null)
   const [adding, setAdding] = useState(false)
   const [addSection, setAddSection] = useState('before')
-  const [seeding, setSeeding] = useState(false)
 
   const bySection = useMemo(() => {
     const map = { before: [], arrival: [], luggage: [] }
@@ -38,24 +37,16 @@ export default function Checklist() {
     }
   }, [checklist])
 
-  async function onCycleStatus(item, nextStatus) {
-    try {
-      await updateChecklistItem(item.id, { status: nextStatus }, currentUser?.uid)
-    } catch (err) {
-      toast.error(err.message || 'Impossible de mettre à jour')
-    }
+  // Écritures optimistes : l'UI est mise à jour par le cache local, fonctionne hors-ligne.
+  function onCycleStatus(item, nextStatus) {
+    updateChecklistItem(item.id, { status: nextStatus }, currentUser?.uid)
+      .catch((err) => toast.error(err.message || 'Impossible de mettre à jour'))
   }
 
-  async function onSeed() {
-    setSeeding(true)
-    try {
-      await seedChecklistSuggestions(currentUser?.uid)
-      toast.success('Checklist initialisée')
-    } catch (err) {
-      toast.error(err.message || 'Erreur d\'initialisation')
-    } finally {
-      setSeeding(false)
-    }
+  function onSeed() {
+    seedChecklistSuggestions(currentUser?.uid)
+      .catch((err) => toast.error(err.message || 'Erreur d\'initialisation'))
+    toast.success('Checklist initialisée')
   }
 
   function openAdd(section) {
@@ -84,7 +75,6 @@ export default function Checklist() {
         <EmptyState
           onSeed={onSeed}
           onAddManually={() => openAdd('before')}
-          seeding={seeding}
         />
       ) : (
         <PopulatedView
@@ -109,7 +99,7 @@ export default function Checklist() {
   )
 }
 
-function EmptyState({ onSeed, onAddManually, seeding }) {
+function EmptyState({ onSeed, onAddManually }) {
   return (
     <div className="bg-white/[0.02] border border-dashed border-white/10 rounded-2xl p-8 text-center">
       <div className="h-12 w-12 mx-auto rounded-full bg-cyan-500/15 text-cyan-400 flex items-center justify-center mb-4">
@@ -124,11 +114,10 @@ function EmptyState({ onSeed, onAddManually, seeding }) {
         <button
           type="button"
           onClick={onSeed}
-          disabled={seeding}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-black text-sm font-medium hover:bg-white/90 transition disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white text-black text-sm font-medium hover:bg-white/90 transition"
         >
           <Sparkles size={14} />
-          {seeding ? 'Initialisation…' : 'Initialiser avec les suggestions'}
+          Initialiser avec les suggestions
         </button>
         <button
           type="button"

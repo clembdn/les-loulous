@@ -35,7 +35,6 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
   const [personUid, setPersonUid] = useState(existing?.personUid || currentUid || CLEMENT_UID)
   const [categoryId, setCategoryId] = useState(existing?.category || getDefaultCategoryId(existing?.type || 'expense'))
   const [notes, setNotes] = useState(existing?.notes || '')
-  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (!AUTHORIZED_UIDS.includes(personUid)) {
@@ -56,54 +55,45 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
     return amountCurrency === 'AUD' ? raw / rate : raw
   }, [amount, amountCurrency, rate])
 
-  async function onSubmit(e) {
+  // Écritures optimistes : le cache local Firestore met l'UI à jour immédiatement
+  // (et hors-ligne, un `await` ne se résoudrait qu'au retour du réseau).
+  function onSubmit(e) {
     e.preventDefault()
     if (!title.trim()) return toast.error('Donne un titre')
     if (amountInEUR == null || amountInEUR <= 0) return toast.error('Montant invalide')
     const amt = Math.round(amountInEUR * 100) / 100
-    setBusy(true)
-    try {
-      const payload = {
-        title: title.trim(),
-        amountEUR: amt,
-        type,
-        recurrence,
-        date,
-        endDate: recurrence !== 'one-off' && endDate ? endDate : null,
-        personUid,
-        category: categoryId,
-        account,
-        notes: notes.trim() || null,
-        isActive: existing?.isActive !== false,
-      }
-      if (isEdit) {
-        await updateTransaction(existing.id, payload, currentUid)
-        toast.success('Transaction mise à jour')
-      } else {
-        await createTransaction(payload, currentUid)
-        toast.success('Transaction ajoutée')
-      }
-      onClose()
-    } catch (err) {
-      console.error(err)
-      toast.error(err.message || 'Erreur, réessaie')
-    } finally {
-      setBusy(false)
+    const payload = {
+      title: title.trim(),
+      amountEUR: amt,
+      type,
+      recurrence,
+      date,
+      endDate: recurrence !== 'one-off' && endDate ? endDate : null,
+      personUid,
+      category: categoryId,
+      account,
+      notes: notes.trim() || null,
+      isActive: existing?.isActive !== false,
     }
+    if (isEdit) {
+      updateTransaction(existing.id, payload, currentUid)
+        .catch((err) => { console.error(err); toast.error(err.message || 'Erreur de synchronisation') })
+      toast.success('Transaction mise à jour')
+    } else {
+      createTransaction(payload, currentUid)
+        .catch((err) => { console.error(err); toast.error(err.message || 'Erreur de synchronisation') })
+      toast.success('Transaction ajoutée')
+    }
+    onClose()
   }
 
-  async function onDelete() {
+  function onDelete() {
     if (!existing?.id) return
     if (!confirm('Supprimer cette transaction ?')) return
-    setBusy(true)
-    try {
-      await deleteTransaction(existing.id)
-      toast.success('Transaction supprimée')
-      onClose()
-    } catch (err) {
-      toast.error(err.message || 'Suppression impossible')
-      setBusy(false)
-    }
+    deleteTransaction(existing.id)
+      .catch((err) => toast.error(err.message || 'Suppression impossible'))
+    toast.success('Transaction supprimée')
+    onClose()
   }
 
   return (
@@ -289,18 +279,16 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
             <button
               type="button"
               onClick={onDelete}
-              disabled={busy}
-              className="px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 text-sm font-medium transition disabled:opacity-50"
+              className="px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 text-sm font-medium transition"
             >
               Supprimer
             </button>
           )}
           <button
             type="submit"
-            disabled={busy}
-            className="flex-1 py-3 rounded-xl bg-white text-black font-medium text-sm disabled:opacity-50 hover:bg-white/90 transition"
+            className="flex-1 py-3 rounded-xl bg-white text-black font-medium text-sm hover:bg-white/90 transition"
           >
-            {busy ? '…' : isEdit ? 'Enregistrer' : 'Ajouter'}
+            {isEdit ? 'Enregistrer' : 'Ajouter'}
           </button>
         </div>
       </form>
