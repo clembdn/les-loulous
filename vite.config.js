@@ -27,24 +27,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Fonts auto-hébergées → précachées comme le reste, plus besoin de runtime caching.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
         navigateFallback: '/index.html',
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.origin === 'https://fonts.googleapis.com',
-            handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'google-fonts-stylesheets' },
-          },
-          {
-            urlPattern: ({ url }) => url.origin === 'https://fonts.gstatic.com',
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-webfonts',
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
       },
       devOptions: { enabled: false },
     }),
@@ -73,11 +58,6 @@ export default defineConfig({
             normalizedId.includes('/node_modules/firebase/') ||
             normalizedId.includes('/node_modules/@firebase/')
           ) return 'firebase'
-          if (
-            normalizedId.includes('/node_modules/recharts/') ||
-            normalizedId.includes('/node_modules/d3-') ||
-            normalizedId.includes('/node_modules/victory-vendor/')
-          ) return 'charts'
           if (normalizedId.includes('/node_modules/lucide-react/')) return 'icons'
         },
       },
