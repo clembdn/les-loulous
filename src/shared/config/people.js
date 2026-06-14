@@ -6,7 +6,7 @@ export const AUTHORIZED_UIDS = [CLEMENT_UID, LISE_UID]
 // Email d'authentification par profil (login picker → écran mot de passe).
 export const EMAIL_BY_UID = {
   [CLEMENT_UID]: 'clemboudon06@gmail.com',
-  [LISE_UID]: '', // À renseigner par Clément : email de Lise (son login reste inactif tant que vide)
+  [LISE_UID]: 'liselabonne09@gmail.com',
 }
 
 export function getEmailForUid(uid) {

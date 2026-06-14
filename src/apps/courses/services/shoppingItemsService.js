@@ -17,6 +17,7 @@ function resolveAisle(raw) {
 function normalize(raw) {
   return {
     id: raw.id,
+    listId: raw.listId || null,
     name: raw.name || '',
     quantityLabel: raw.quantityLabel || null,
     quantity: typeof raw.quantity === 'number' ? raw.quantity : null,
@@ -52,6 +53,7 @@ export async function addItem(input, currentUid) {
     ? (formatQuantity(quantity, unit) || null)
     : (input.quantityLabel ? String(input.quantityLabel).trim() : null)
   const data = {
+    listId: input.listId || null,
     name: String(input.name || '').trim(),
     quantityLabel,
     quantity,
@@ -113,14 +115,28 @@ async function deleteWhere(predicate) {
   await batch.commit()
 }
 
-// Supprime les articles cochés (fin de courses).
-export function clearChecked() {
-  return deleteWhere((it) => it.checked === true)
+// Supprime les articles cochés d'une liste (fin de courses).
+export function clearChecked(listId) {
+  return deleteWhere((it) => it.checked === true && (it.listId || null) === listId)
 }
 
-// Supprime tous les articles (le catalogue persiste).
-export function clearAll() {
-  return deleteWhere(() => true)
+// Supprime tous les articles d'une liste (le catalogue persiste).
+export function clearAll(listId) {
+  return deleteWhere((it) => (it.listId || null) === listId)
+}
+
+// Rattache à `listId` les articles « legacy » créés avant l'introduction des
+// listes (migration unique, idempotente). Fire-and-forget.
+export async function assignLegacyItems(listId, currentUid) {
+  const snap = await getDocs(itemsCol())
+  const orphans = snap.docs.filter((d) => !d.data().listId)
+  if (orphans.length === 0) return
+  const now = new Date().toISOString()
+  const batch = writeBatch(db)
+  orphans.forEach((d) => {
+    batch.update(d.ref, { listId, updatedAt: now, updatedBy: currentUid })
+  })
+  await batch.commit()
 }
 
 // Recrée des articles supprimés (annulation d'un vidage). Le restaurateur devient
@@ -131,6 +147,7 @@ export async function restoreItems(items, currentUid) {
   items.forEach((it) => {
     const ref = doc(itemsCol())
     batch.set(ref, {
+      listId: it.listId || null,
       name: String(it.name || '').trim(),
       quantityLabel: it.quantityLabel || null,
       quantity: typeof it.quantity === 'number' ? it.quantity : null,

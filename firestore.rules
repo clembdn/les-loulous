@@ -118,10 +118,35 @@ service cloud.firestore {
         && (!('quantityLabel' in data) || data.quantityLabel == null || (data.quantityLabel is string && data.quantityLabel.size() <= 40))
         && (!('quantity' in data) || data.quantity == null || (data.quantity is number && data.quantity >= 0))
         && (!('unit' in data) || data.unit == null || (data.unit is string && data.unit.size() <= 20))
+        && (!('listId' in data) || data.listId == null || (data.listId is string && data.listId.size() <= 120))
         && (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 500));
     }
 
-    // Shopping list items (shared single list)
+    function hasValidShoppingListShape(data) {
+      return data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 80
+        && (data.status == "active" || data.status == "archived")
+        && (!('archivedAt' in data) || data.archivedAt == null || (data.archivedAt is string && data.archivedAt.size() <= 40));
+    }
+
+    // Shopping lists (named lists: create / archive for traceability / delete)
+    match /couples/main/shoppingLists/{listId} {
+      allow read: if isAuthorizedUser();
+
+      allow create: if isAuthorizedUser()
+        && hasValidShoppingListShape(request.resource.data)
+        && hasValidMetadata(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isAuthorizedUser()
+        && hasValidShoppingListShape(request.resource.data)
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isAuthorizedUser();
+    }
+
+    // Shopping list items (scoped to a list via listId)
     match /couples/main/shoppingItems/{itemId} {
       allow read: if isAuthorizedUser();
 

@@ -19,13 +19,17 @@ import ItemEditSheet from '../components/ItemEditSheet.jsx'
 import StoreModeView from '../components/StoreModeView.jsx'
 import FavoritesSheet from '../components/FavoritesSheet.jsx'
 import ConfirmDialog from '../components/ConfirmDialog.jsx'
+import ListPicker from '../components/ListPicker.jsx'
+import ManageListsSheet from '../components/ManageListsSheet.jsx'
 
-export default function ListView({ items, catalog, pantry, isLoading }) {
+export default function ListView({ items, catalog, pantry, isLoading, listsApi, counts }) {
   const { currentUid } = useAuth()
+  const { activeListId } = listsApi
   const [storeMode, setStoreMode] = useState(false)
   const [editing, setEditing] = useState(null)
   const [favOpen, setFavOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [manageOpen, setManageOpen] = useState(false)
   const [confirmAll, setConfirmAll] = useState(false)
   const [undo, setUndo] = useState(null)
   const [restock, setRestock] = useState(null)
@@ -47,7 +51,7 @@ export default function ListView({ items, catalog, pantry, isLoading }) {
     [pantry],
   )
 
-  const handleAdd = (name) => addNamedItem({ name }, { catalog, currentUid, items })
+  const handleAdd = (name) => addNamedItem({ name }, { catalog, currentUid, items, listId: activeListId })
   function handleToggle(it) {
     const willCheck = !it.checked
     setItemChecked(it, willCheck, currentUid)
@@ -78,11 +82,11 @@ export default function ListView({ items, catalog, pantry, isLoading }) {
   function doClearChecked() {
     if (checked.length === 0) return
     setUndo({ items: checked, label: `${checked.length} article${checked.length > 1 ? 's' : ''} retiré${checked.length > 1 ? 's' : ''}` })
-    clearChecked()
+    clearChecked(activeListId)
   }
   function doClearAll() {
     setUndo({ items, label: 'Liste vidée' })
-    clearAll()
+    clearAll(activeListId)
   }
   function handleUndo() {
     if (undo) restoreItems(undo.items, currentUid)
@@ -99,9 +103,17 @@ export default function ListView({ items, catalog, pantry, isLoading }) {
 
   return (
     <div className="max-w-xl lg:max-w-5xl mx-auto px-4 pb-44 lg:pb-28 pt-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold tracking-tight text-fg">Nos courses</h1>
-        <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <ListPicker
+          activeLists={listsApi.activeLists}
+          activeListId={activeListId}
+          activeList={listsApi.activeList}
+          counts={counts}
+          onSelect={listsApi.selectList}
+          onCreate={() => listsApi.createList()}
+          onManage={() => setManageOpen(true)}
+        />
+        <div className="flex items-center gap-1 shrink-0">
           <button onClick={() => setFavOpen(true)} className="p-2 rounded-lg text-muted hover:text-fg hover:bg-surface-2 transition" aria-label="Favoris">
             <Star size={18} />
           </button>
@@ -190,6 +202,17 @@ export default function ListView({ items, catalog, pantry, isLoading }) {
         onToggleFavorite={(c) => toggleFavorite(c, currentUid)}
         onSetAisle={(c, aisle) => setCatalogAisle(c, aisle, currentUid)}
         onRemove={removeCatalogEntry}
+      />
+      <ManageListsSheet
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+        activeLists={listsApi.activeLists}
+        archivedLists={listsApi.archivedLists}
+        counts={counts}
+        onRename={listsApi.renameList}
+        onArchive={listsApi.archiveList}
+        onUnarchive={listsApi.unarchiveList}
+        onDelete={listsApi.deleteList}
       />
       <ConfirmDialog
         open={confirmAll}

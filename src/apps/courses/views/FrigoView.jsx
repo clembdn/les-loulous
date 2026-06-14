@@ -15,7 +15,7 @@ import PantrySection from '../components/PantrySection.jsx'
 import PantryEditSheet from '../components/PantryEditSheet.jsx'
 import AddIngredientsSheet from '../components/AddIngredientsSheet.jsx'
 
-export default function FrigoView({ items, catalog, pantry, pantryLoading, onGoToList }) {
+export default function FrigoView({ items, catalog, pantry, pantryLoading, activeListId, onGoToList }) {
   const { currentUid } = useAuth()
   const isLoading = pantryLoading
   const [editing, setEditing] = useState(null)
@@ -56,7 +56,7 @@ export default function FrigoView({ items, catalog, pantry, pantryLoading, onGoT
   function handleSendOne(item) {
     addNamedItem(
       { name: item.name, quantity: item.quantity, unit: item.unit, quantityLabel: item.quantityLabel },
-      { catalog, currentUid, items },
+      { catalog, currentUid, items, listId: activeListId },
     )
   }
 
@@ -141,6 +141,7 @@ export default function FrigoView({ items, catalog, pantry, pantryLoading, onGoT
         items={items}
         catalog={catalog}
         pantry={pantry}
+        listId={activeListId}
         onAdded={onGoToList}
         title="Ajouter les manquants à la liste"
       />

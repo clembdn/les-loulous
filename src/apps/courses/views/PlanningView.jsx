@@ -12,7 +12,7 @@ import { addMeal, removeMeal } from '../services/mealPlanService.js'
 import { normalizeName } from '../utils/aisleGuess.js'
 import { readQuantity, mergeQuantity, formatQuantity } from '../utils/quantity.js'
 
-export default function PlanningView({ recipes, items, catalog, pantry, onGoToList }) {
+export default function PlanningView({ recipes, items, catalog, pantry, activeListId, onGoToList }) {
   const { currentUid } = useAuth()
   const [offset, setOffset] = useState(0)
   const week = useMemo(() => getWeek(offset), [offset])
@@ -144,6 +144,7 @@ export default function PlanningView({ recipes, items, catalog, pantry, onGoToLi
         items={items}
         catalog={catalog}
         pantry={pantry}
+        listId={activeListId}
         onAdded={onGoToList}
         title={addState.title}
       />

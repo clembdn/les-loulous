@@ -8,7 +8,7 @@ import { formatPrepTime } from '../utils/recipeMeta.js'
 import ConfirmDialog from './ConfirmDialog.jsx'
 import AddIngredientsSheet from './AddIngredientsSheet.jsx'
 
-export default function RecipeDetail({ recipe, items, catalog, pantry = [], onBack, onEdit, onDuplicate, onDelete, onAdded }) {
+export default function RecipeDetail({ recipe, items, catalog, pantry = [], activeListId, onBack, onEdit, onDuplicate, onDelete, onAdded }) {
   const [addOpen, setAddOpen] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
   const stockIndex = useMemo(() => buildStockIndex(pantry), [pantry])
@@ -150,6 +150,7 @@ export default function RecipeDetail({ recipe, items, catalog, pantry = [], onBa
         items={items}
         catalog={catalog}
         pantry={pantry}
+        listId={activeListId}
         onAdded={onAdded}
       />
       <ConfirmDialog

@@ -14,7 +14,7 @@ export function resolveAisleForName(name, catalog) {
 // nom existe déjà (passer `items`), on cumule les quantités au lieu de créer un doublon.
 // Écritures fire-and-forget : le cache local met l'UI à jour immédiatement, et hors-ligne
 // les promesses Firestore ne se résolvent qu'au retour du réseau — il ne faut pas les attendre.
-export function addNamedItem({ name, quantity = null, unit = null, quantityLabel = null }, { catalog, currentUid, items }) {
+export function addNamedItem({ name, quantity = null, unit = null, quantityLabel = null }, { catalog, currentUid, items, listId = null }) {
   const incoming = readQuantity({ quantity, unit, quantityLabel })
   const key = normalizeName(name)
   const existing = (items || []).find((i) => !i.checked && normalizeName(i.name) === key)
@@ -30,7 +30,7 @@ export function addNamedItem({ name, quantity = null, unit = null, quantityLabel
 
   const aisle = resolveAisleForName(name, catalog)
   addItem(
-    { name, aisle, quantity: incoming.quantity, unit: incoming.unit, quantityLabel: incoming.quantity == null ? quantityLabel : null },
+    { name, aisle, listId, quantity: incoming.quantity, unit: incoming.unit, quantityLabel: incoming.quantity == null ? quantityLabel : null },
     currentUid,
   ).catch((err) => console.error('[Courses] addNamedItem error:', err))
   recordUsage(name, aisle, currentUid)

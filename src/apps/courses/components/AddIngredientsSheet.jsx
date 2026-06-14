@@ -11,7 +11,7 @@ import { cn } from '@/shared/lib/utils.js'
 // Feuille de sélection pré-cochée : ajoute les ingrédients choisis à la liste.
 // Générique : accepte une liste d'ingrédients (détail recette OU agrégat semaine).
 export default function AddIngredientsSheet({
-  open, onClose, ingredients, items, catalog, pantry = [], onAdded, title = 'Ajouter à la liste',
+  open, onClose, ingredients, items, catalog, pantry = [], listId = null, onAdded, title = 'Ajouter à la liste',
 }) {
   const { currentUid } = useAuth()
   const list = Array.isArray(ingredients) ? ingredients : []
@@ -53,7 +53,7 @@ export default function AddIngredientsSheet({
       if (checked[i]) {
         addNamedItem(
           { name: list[i].name, quantity: list[i].quantity, unit: list[i].unit, quantityLabel: list[i].quantityLabel },
-          { catalog, currentUid, items },
+          { catalog, currentUid, items, listId },
         )
       }
     }

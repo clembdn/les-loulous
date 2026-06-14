@@ -9,7 +9,7 @@ import RecipeEditor from '../components/RecipeEditor.jsx'
 import { addRecipe, updateRecipe, deleteRecipe } from '../services/recipesService.js'
 import { normalizeName } from '../utils/aisleGuess.js'
 
-export default function RecipesView({ recipes, recipesLoading, items, catalog, pantry, onGoToList }) {
+export default function RecipesView({ recipes, recipesLoading, items, catalog, pantry, activeListId, onGoToList }) {
   const { currentUid } = useAuth()
   const [mode, setMode] = useState('browse') // 'browse' | 'detail' | 'edit'
   const [selectedId, setSelectedId] = useState(null)
@@ -68,6 +68,7 @@ export default function RecipesView({ recipes, recipesLoading, items, catalog, p
         items={items}
         catalog={catalog}
         pantry={pantry}
+        activeListId={activeListId}
         onBack={backToBrowse}
         onEdit={() => setMode('edit')}
         onDuplicate={handleDuplicate}
