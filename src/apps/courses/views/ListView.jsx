@@ -19,17 +19,15 @@ import ItemEditSheet from '../components/ItemEditSheet.jsx'
 import StoreModeView from '../components/StoreModeView.jsx'
 import FavoritesSheet from '../components/FavoritesSheet.jsx'
 import ConfirmDialog from '../components/ConfirmDialog.jsx'
-import ListPicker from '../components/ListPicker.jsx'
-import ManageListsSheet from '../components/ManageListsSheet.jsx'
+import ListChips from '../components/ListChips.jsx'
 
-export default function ListView({ items, catalog, pantry, isLoading, listsApi, counts }) {
+export default function ListView({ items, catalog, pantry, isLoading, listsApi, counts, onManageLists }) {
   const { currentUid } = useAuth()
   const { activeListId } = listsApi
   const [storeMode, setStoreMode] = useState(false)
   const [editing, setEditing] = useState(null)
   const [favOpen, setFavOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [manageOpen, setManageOpen] = useState(false)
   const [confirmAll, setConfirmAll] = useState(false)
   const [undo, setUndo] = useState(null)
   const [restock, setRestock] = useState(null)
@@ -37,13 +35,6 @@ export default function ListView({ items, catalog, pantry, isLoading, listsApi, 
   const active = useMemo(() => items.filter((i) => !i.checked), [items])
   const checked = useMemo(() => items.filter((i) => i.checked), [items])
   const groups = useMemo(() => groupByAisle(active), [active])
-  const suggestions = useMemo(() => {
-    const inList = new Set(items.map((i) => normalizeName(i.name)))
-    return [...catalog]
-      .filter((c) => !inList.has(normalizeName(c.name)))
-      .sort((a, b) => (Number(b.favorite) - Number(a.favorite)) || (b.useCount - a.useCount) || a.name.localeCompare(b.name))
-      .slice(0, 6)
-  }, [catalog, items])
 
   // Frigo indexé par nom → pour la boucle « acheté → en stock ».
   const pantryByName = useMemo(
@@ -104,15 +95,22 @@ export default function ListView({ items, catalog, pantry, isLoading, listsApi, 
   return (
     <div className="max-w-xl lg:max-w-5xl mx-auto px-4 pb-44 lg:pb-28 pt-4">
       <div className="flex items-center justify-between gap-2 mb-4">
-        <ListPicker
-          activeLists={listsApi.activeLists}
-          activeListId={activeListId}
-          activeList={listsApi.activeList}
-          counts={counts}
-          onSelect={listsApi.selectList}
-          onCreate={() => listsApi.createList()}
-          onManage={() => setManageOpen(true)}
-        />
+        <div className="min-w-0 flex-1">
+          {/* Desktop : titre statique — le changement de liste se fait dans la sidebar. */}
+          <h1 className="hidden lg:block text-xl font-semibold tracking-tight text-fg truncate">
+            {listsApi.activeList?.name || 'Nos courses'}
+          </h1>
+          {/* Mobile/tablette : pastilles de listes défilables. */}
+          <ListChips
+            className="lg:hidden"
+            activeLists={listsApi.activeLists}
+            activeListId={activeListId}
+            counts={counts}
+            onSelect={listsApi.selectList}
+            onCreate={() => listsApi.createList()}
+            onManage={onManageLists}
+          />
+        </div>
         <div className="flex items-center gap-1 shrink-0">
           <button onClick={() => setFavOpen(true)} className="p-2 rounded-lg text-muted hover:text-fg hover:bg-surface-2 transition" aria-label="Favoris">
             <Star size={18} />
@@ -147,7 +145,7 @@ export default function ListView({ items, catalog, pantry, isLoading, listsApi, 
       </div>
 
       <div className="lg:max-w-2xl">
-        <QuickAddBar catalog={catalog} suggestions={suggestions} onAdd={handleAdd} />
+        <QuickAddBar catalog={catalog} items={items} onAdd={handleAdd} />
       </div>
 
       <div className="mt-5">
@@ -202,17 +200,6 @@ export default function ListView({ items, catalog, pantry, isLoading, listsApi, 
         onToggleFavorite={(c) => toggleFavorite(c, currentUid)}
         onSetAisle={(c, aisle) => setCatalogAisle(c, aisle, currentUid)}
         onRemove={removeCatalogEntry}
-      />
-      <ManageListsSheet
-        open={manageOpen}
-        onClose={() => setManageOpen(false)}
-        activeLists={listsApi.activeLists}
-        archivedLists={listsApi.archivedLists}
-        counts={counts}
-        onRename={listsApi.renameList}
-        onArchive={listsApi.archiveList}
-        onUnarchive={listsApi.unarchiveList}
-        onDelete={listsApi.deleteList}
       />
       <ConfirmDialog
         open={confirmAll}

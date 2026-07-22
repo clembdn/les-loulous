@@ -6,12 +6,12 @@ import { getTab } from '../../config/navigation.js'
 
 // Shell de l'app Courses : sidebar (lg+), top-bar + bottom-nav (mobile/tablette).
 // Les vues ne rendent que leur contenu (+ leur propre toolbar d'actions).
-export default function Shell({ active, onChange, children }) {
+export default function Shell({ active, onChange, lists, counts, onManageLists, children }) {
   const tab = getTab(active)
 
   return (
     <div className="min-h-screen bg-bg text-fg lg:flex">
-      <Sidebar active={active} onChange={onChange} />
+      <Sidebar active={active} onChange={onChange} lists={lists} counts={counts} onManageLists={onManageLists} />
 
       <div className="flex-1 min-w-0 lg:ml-60">
         {/* Top-bar mobile/tablette : retour plateforme + libellé de la sous-feature. */}

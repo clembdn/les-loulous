@@ -10,10 +10,12 @@ import ListView from './views/ListView.jsx'
 import RecipesView from './views/RecipesView.jsx'
 import PlanningView from './views/PlanningView.jsx'
 import FrigoView from './views/FrigoView.jsx'
+import ManageListsSheet from './components/ManageListsSheet.jsx'
 
 export default function CoursesApp() {
   useAppTheme('light', 'emerald')
   const [tab, setTab] = useState(DEFAULT_TAB)
+  const [manageOpen, setManageOpen] = useState(false)
   const { items, catalog, isLoading } = useCoursesData()
   const { recipes, isLoading: recipesLoading } = useRecipes()
   const { pantry, isLoading: pantryLoading } = usePantry()
@@ -40,7 +42,8 @@ export default function CoursesApp() {
   }, [items, defaultListId])
 
   return (
-    <Shell active={tab} onChange={setTab}>
+    <>
+    <Shell active={tab} onChange={setTab} lists={lists} counts={counts} onManageLists={() => setManageOpen(true)}>
       {tab === 'liste' && (
         <ListView
           items={activeItems}
@@ -49,6 +52,7 @@ export default function CoursesApp() {
           isLoading={isLoading || lists.isLoading}
           listsApi={lists}
           counts={counts}
+          onManageLists={() => setManageOpen(true)}
         />
       )}
       {tab === 'frigo' && (
@@ -83,5 +87,18 @@ export default function CoursesApp() {
         />
       )}
     </Shell>
+
+    <ManageListsSheet
+      open={manageOpen}
+      onClose={() => setManageOpen(false)}
+      activeLists={lists.activeLists}
+      archivedLists={lists.archivedLists}
+      counts={counts}
+      onRename={lists.renameList}
+      onArchive={lists.archiveList}
+      onUnarchive={lists.unarchiveList}
+      onDelete={lists.deleteList}
+    />
+    </>
   )
 }
