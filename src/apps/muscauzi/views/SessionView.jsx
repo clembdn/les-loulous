@@ -53,8 +53,17 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
     return { parity: weekParity(date), dayOfWeek: isoDayOfWeek(date) }
   }, [dateKey])
 
-  const [override, setOverride] = useState(() => readStoredPlan(todayKey))
-  useEffect(() => { setOverride(readStoredPlan(dateKey)); setOpenId(null) }, [dateKey])
+  /**
+   * L'override est lu depuis localStorage EN DIRECT, pas recopié dans un state
+   * mis à jour par un effet. Un effet ne tourne qu'APRÈS le rendu qui a changé
+   * `dateKey` : entre les deux, l'écran affichait un instant la nouvelle date
+   * avec l'override de l'ANCIENNE — visible et déroutant en cliquant vite sur
+   * les flèches. `planVersion` ne sert qu'à forcer une relecture après une
+   * écriture (`applyPlan` / `resetPlan`), sans jamais désynchroniser de `dateKey`.
+   */
+  const [planVersion, setPlanVersion] = useState(0)
+  const override = useMemo(() => readStoredPlan(dateKey), [dateKey, planVersion])
+  useEffect(() => { setOpenId(null) }, [dateKey])
 
   const plan = override || natural
   const isForced = plan.parity !== natural.parity || plan.dayOfWeek !== natural.dayOfWeek
@@ -79,12 +88,18 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
 
   /**
    * Ce qui s'affiche : la prescription du jour, lue EN DIRECT dans le
-   * programme, puis les entrées déjà saisies qui n'en font pas partie.
+   * programme. Rien n'est figé dans la séance : changer de jour ou de parité
+   * change simplement la liste, sans jamais rien écrire.
    *
-   * Rien n'est figé dans la séance : changer de jour ou de parité change
-   * simplement la liste. Les entrées hors programme sont montrées à part —
-   * elles ne peuvent apparaître que si on a saisi quelque chose sous une autre
-   * prescription, et il faut pouvoir les retrouver pour les corriger.
+   * « Hors programme » retrouve ce qui a été saisi sous une AUTRE prescription
+   * ce jour-là (rattrapage forcé, ou programme changé depuis) — mais
+   * UNIQUEMENT sur la vue naturelle. Le document de séance ne change pas
+   * quand on force un jour : deux clics différents dans le sélecteur de jour
+   * donnaient donc accès au MÊME `session.entries`, et cette section
+   * réaffichait alors le même contenu pour chaque jour cliqué — d'où
+   * l'impression d'« une seule séance recopiée partout ». En vue forcée, on
+   * ne montre plus que la prescription forcée elle-même : ce qu'on y a saisi
+   * réapparaît ici, en une fois, dès qu'on revient à la vue naturelle.
    */
   const { lines, extras } = useMemo(() => {
     const prescribed = visible(programDays?.[plan.dayOfWeek] || []).map((l, i) => ({
@@ -95,6 +110,8 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
       prescribedSets: l.sets,
       prescribedReps: l.reps,
     }))
+    if (isForced) return { lines: prescribed, extras: [] }
+
     const known = new Set(prescribed.map((l) => l.instanceId))
     const off = Object.values(session?.entries || {})
       .filter((e) => !known.has(e.instanceId) && hasWork(e))
@@ -108,7 +125,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
         prescribedReps: e.prescribedReps,
       }))
     return { lines: prescribed, extras: off }
-  }, [programDays, plan.dayOfWeek, exerciseById, session, visible])
+  }, [programDays, plan.dayOfWeek, exerciseById, session, visible, isForced])
 
   const dayCounts = useMemo(
     () => Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map((d) => [d, visible(programDays?.[d] || []).length])),
@@ -116,15 +133,15 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
   )
 
   const applyPlan = useCallback((next) => {
-    setOverride(next)
-    setOpenId(null)
     try { localStorage.setItem(planStorageKey(dateKey), JSON.stringify(next)) } catch { /* mode privé */ }
+    setPlanVersion((v) => v + 1)
+    setOpenId(null)
   }, [dateKey])
 
   const resetPlan = useCallback(() => {
-    setOverride(null)
-    setOpenId(null)
     try { localStorage.removeItem(planStorageKey(dateKey)) } catch { /* mode privé */ }
+    setPlanVersion((v) => v + 1)
+    setOpenId(null)
   }, [dateKey])
 
   const save = useCallback((line, { sets, skipped }) => {

@@ -20,12 +20,20 @@ export function isParity(value) {
   return PARITIES.includes(value)
 }
 
-function normalizeLine(raw, index) {
+// Secours pour une ligne sans instanceId (données antérieures à son
+// introduction). DÉTERMINISTE — un aléatoire tiré à chaque lecture changerait
+// à chaque écho de Firestore et la séance perdrait ses saisies — mais
+// NAMESPACÉ par parité ET jour : un index seul valait aussi bien pour le
+// vendredi que pour le samedi, et une ligne de chaque jour finissait par
+// partager le même `legacy-0`. Les deux exercices affichaient alors les
+// MÊMES séries, et enregistrer l'un écrasait l'autre.
+function fallbackInstanceId(parity, dayOfWeek, index) {
+  return `legacy-${parity}-${dayOfWeek}-${index}`
+}
+
+function normalizeLine(raw, index, parity, dayOfWeek) {
   return {
-    // Une ligne sans instanceId ne devrait pas exister. On en fabrique un
-    // DÉTERMINISTE plutôt qu'un aléatoire : tiré au sort à chaque lecture, il
-    // changerait à chaque écho de Firestore et la séance perdrait ses saisies.
-    instanceId: raw?.instanceId || `legacy-${index}`,
+    instanceId: raw?.instanceId || fallbackInstanceId(parity, dayOfWeek, index),
     exerciseId: raw?.exerciseId || '',
     // Nom recopié : supprimer l'exercice du catalogue ne doit pas rendre le
     // programme illisible. L'affichage préfère le nom vivant du catalogue et
@@ -58,13 +66,13 @@ export function withoutOrphans(lines, exerciseById, ready) {
   return lines.filter((l) => exerciseById?.[l?.exerciseId])
 }
 
-function normalizeDays(raw) {
+function normalizeDays(raw, parity) {
   const days = {}
   for (const dow of DOWS) {
     const stored = raw?.[dow] ?? raw?.[String(dow)]
     const list = Array.isArray(stored) ? stored : []
     days[dow] = list
-      .map(normalizeLine)
+      .map((line, i) => normalizeLine(line, i, parity, dow))
       .filter((l) => l.exerciseId)
       .sort((a, b) => a.order - b.order)
       .map((l, i) => ({ ...l, order: i }))
@@ -73,12 +81,12 @@ function normalizeDays(raw) {
 }
 
 export function emptyProgram() {
-  return normalizeDays(null)
+  return normalizeDays(null, 'even')
 }
 
 export function subscribeToProgram(uid, parity, callback, onError) {
   return onSnapshot(programDoc(uid, parity), (snap) => {
-    callback(normalizeDays(snap.exists() ? snap.data()?.days : null))
+    callback(normalizeDays(snap.exists() ? snap.data()?.days : null, parity))
   }, (err) => {
     console.error('[MuscAuzi] program error:', err)
     onError?.(err)
@@ -101,7 +109,7 @@ export function subscribeToProgram(uid, parity, callback, onError) {
  */
 export function saveProgramDay(uid, parity, dayOfWeek, lines, currentUid) {
   const cleaned = lines
-    .map(normalizeLine)
+    .map((line, i) => normalizeLine(line, i, parity, dayOfWeek))
     .filter((l) => l.exerciseId)
     .map((l, i) => ({ ...l, order: i }))
   return setDoc(programDoc(uid, parity), {
