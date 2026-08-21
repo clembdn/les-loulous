@@ -4,6 +4,7 @@ import {
 import { db } from '@/shared/lib/firebase.js'
 import { AISLE_BY_ID, DEFAULT_AISLE } from '../config/aisles.js'
 import { formatQuantity } from '../utils/quantity.js'
+import { cleanName } from '../utils/aisleGuess.js'
 
 // Inventaire du foyer (frigo / placards). Une entrée = un produit qu'on a (ou qu'on n'a plus).
 const PANTRY_PATH = 'couples/main/pantryItems'
@@ -23,7 +24,7 @@ function resolveStatus(raw) {
 function normalize(raw) {
   return {
     id: raw.id,
-    name: raw.name || '',
+    name: cleanName(raw.name),
     quantityLabel: raw.quantityLabel || null,
     quantity: typeof raw.quantity === 'number' ? raw.quantity : null,
     unit: raw.unit || null,
@@ -56,7 +57,7 @@ export async function addPantryItem(input, currentUid) {
     ? (formatQuantity(quantity, unit) || null)
     : (input.quantityLabel ? String(input.quantityLabel).trim() : null)
   const data = {
-    name: String(input.name || '').trim(),
+    name: cleanName(input.name),
     quantityLabel,
     quantity,
     unit,
@@ -74,7 +75,7 @@ export async function addPantryItem(input, currentUid) {
 
 export async function updatePantryItem(id, updates, currentUid) {
   const payload = { ...updates, updatedAt: new Date().toISOString(), updatedBy: currentUid }
-  if (updates.name != null) payload.name = String(updates.name).trim()
+  if (updates.name != null) payload.name = cleanName(updates.name)
   if (updates.aisle != null) payload.aisle = resolveAisle(updates.aisle)
   if (updates.status != null) payload.status = resolveStatus(updates.status)
   if ('quantity' in updates || 'unit' in updates) {

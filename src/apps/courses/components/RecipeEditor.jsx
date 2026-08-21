@@ -4,6 +4,7 @@ import { Input } from '@/shared/ui/Input.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
 import QuantityField from './QuantityField.jsx'
 import { readQuantity, toNumber } from '../utils/quantity.js'
+import { cleanName } from '../utils/aisleGuess.js'
 import ImagePickerSheet from './ImagePickerSheet.jsx'
 
 const EMPTY_ING = { name: '', quantity: '', unit: '' }
@@ -70,7 +71,7 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
       imageUrl: image || null,
       ingredients: ingredients
         .filter((i) => i.name.trim())
-        .map((i) => ({ name: i.name.trim(), quantity: toNumber(i.quantity), unit: i.unit || null })),
+        .map((i) => ({ name: cleanName(i.name), quantity: toNumber(i.quantity), unit: i.unit || null })),
       steps: steps.map((s) => s.trim()).filter(Boolean),
       servings: toNumber(servings),
       prepMinutes: toNumber(prepMinutes),
@@ -138,7 +139,7 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
           <div className="space-y-2">
             {ingredients.map((ing, i) => (
               <div key={i} className="flex flex-wrap gap-2 items-center">
-                <Input value={ing.name} onChange={(e) => setIngredient(i, 'name', e.target.value)} placeholder="Ingrédient" className="flex-1 min-w-[7rem]" />
+                <Input value={ing.name} onChange={(e) => setIngredient(i, 'name', e.target.value)} onBlur={() => setIngredient(i, 'name', cleanName(ing.name))} placeholder="Ingrédient" className="flex-1 min-w-[7rem]" />
                 <div className="flex gap-2 items-center">
                   <QuantityField
                     quantity={ing.quantity}

@@ -9,6 +9,7 @@ import { PANTRY_STATUSES } from '../services/pantryService.js'
 import { getStatusMeta } from '../config/pantryStatus.js'
 import QuantityField from './QuantityField.jsx'
 import { readQuantity, toNumber } from '../utils/quantity.js'
+import { cleanName } from '../utils/aisleGuess.js'
 
 export default function PantryEditSheet({ item, onClose, onSave, onDelete }) {
   const [name, setName] = useState('')
@@ -31,7 +32,7 @@ export default function PantryEditSheet({ item, onClose, onSave, onDelete }) {
   }, [item])
 
   function save() {
-    const v = name.trim()
+    const v = cleanName(name)
     if (!v) return
     onSave(item.id, { name: v, quantity: toNumber(qty), unit: unit || null, aisle, status, note: note.trim() || null })
     onClose()
@@ -43,7 +44,7 @@ export default function PantryEditSheet({ item, onClose, onSave, onDelete }) {
         <div className="space-y-4">
           <div>
             <label className="block text-xs text-muted mb-1.5">Nom</label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+            <Input value={name} onChange={(e) => setName(e.target.value)} onBlur={() => setName(cleanName(name))} autoFocus />
           </div>
           <div>
             <label className="block text-xs text-muted mb-1.5">Quantité</label>

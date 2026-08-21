@@ -20,6 +20,21 @@ export function normalizeName(name) {
   return rawNormalize(name).split(' ').map(singularize).join(' ')
 }
 
+// Casse d'affichage d'un nom d'ingrédient (« linter » de saisie) : espaces superflus
+// retirés, apostrophes recollées, première lettre en capitale. Les sigles saisis en
+// capitales sont préservés (« Lait UHT »), sauf si TOUT est en capitales (« EMMENTAL »).
+//   "  emmental " → "Emmental"   ·   "huile d' olive" → "Huile d'olive"
+export function cleanName(name) {
+  const raw = String(name ?? '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([’'])\s*/g, '$1')
+    .trim()
+  if (!raw) return ''
+  const hasLower = raw !== raw.toLocaleUpperCase('fr-FR')
+  const base = hasLower ? raw : raw.toLocaleLowerCase('fr-FR')
+  return base.replace(/^\p{L}/u, (c) => c.toLocaleUpperCase('fr-FR'))
+}
+
 // Identifiant déterministe pour le catalogue (slug stable, non dé-pluralisé).
 export function slugify(name) {
   const base = rawNormalize(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')

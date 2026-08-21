@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Plus, Star } from 'lucide-react'
 import { Input } from '@/shared/ui/Input.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
-import { normalizeName } from '../utils/aisleGuess.js'
+import { normalizeName, cleanName } from '../utils/aisleGuess.js'
 import { cn } from '@/shared/lib/utils.js'
 
 const MAX_SUGGESTIONS = 8
@@ -27,7 +27,7 @@ export default function QuickAddBar({ catalog, items, onAdd }) {
   }, [catalog, listedNames, name])
 
   function add(v) {
-    const val = v.trim()
+    const val = cleanName(v)
     if (!val) return
     onAdd(val)
     setName('')

@@ -3,6 +3,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
 import { formatQuantity } from '../utils/quantity.js'
+import { cleanName } from '../utils/aisleGuess.js'
 
 const RECIPES_PATH = 'couples/main/recipes'
 function recipesCol() { return collection(db, RECIPES_PATH) }
@@ -15,7 +16,7 @@ function normalizeIngredient(raw) {
   const quantityLabel = structured
     ? (formatQuantity(quantity, unit) || null)
     : (raw?.quantityLabel ? String(raw.quantityLabel).trim() : null)
-  return { name: String(raw?.name || '').trim(), quantity, unit, quantityLabel }
+  return { name: cleanName(raw?.name), quantity, unit, quantityLabel }
 }
 
 function normalize(raw) {

@@ -5,6 +5,7 @@ import {
 import { db } from '@/shared/lib/firebase.js'
 import { AISLE_BY_ID, DEFAULT_AISLE } from '../config/aisles.js'
 import { formatQuantity } from '../utils/quantity.js'
+import { cleanName } from '../utils/aisleGuess.js'
 
 const ITEMS_PATH = 'couples/main/shoppingItems'
 function itemsCol() { return collection(db, ITEMS_PATH) }
@@ -18,7 +19,7 @@ function normalize(raw) {
   return {
     id: raw.id,
     listId: raw.listId || null,
-    name: raw.name || '',
+    name: cleanName(raw.name),
     quantityLabel: raw.quantityLabel || null,
     quantity: typeof raw.quantity === 'number' ? raw.quantity : null,
     unit: raw.unit || null,
@@ -54,7 +55,7 @@ export async function addItem(input, currentUid) {
     : (input.quantityLabel ? String(input.quantityLabel).trim() : null)
   const data = {
     listId: input.listId || null,
-    name: String(input.name || '').trim(),
+    name: cleanName(input.name),
     quantityLabel,
     quantity,
     unit,
@@ -74,7 +75,7 @@ export async function addItem(input, currentUid) {
 
 export async function updateItem(id, updates, currentUid) {
   const payload = { ...updates, updatedAt: new Date().toISOString(), updatedBy: currentUid }
-  if (updates.name != null) payload.name = String(updates.name).trim()
+  if (updates.name != null) payload.name = cleanName(updates.name)
   if (updates.aisle != null) payload.aisle = resolveAisle(updates.aisle)
   if ('quantity' in updates || 'unit' in updates) {
     const quantity = typeof updates.quantity === 'number' ? updates.quantity : null
@@ -148,7 +149,7 @@ export async function restoreItems(items, currentUid) {
     const ref = doc(itemsCol())
     batch.set(ref, {
       listId: it.listId || null,
-      name: String(it.name || '').trim(),
+      name: cleanName(it.name),
       quantityLabel: it.quantityLabel || null,
       quantity: typeof it.quantity === 'number' ? it.quantity : null,
       unit: it.unit || null,

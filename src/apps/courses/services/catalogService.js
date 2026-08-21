@@ -2,7 +2,7 @@ import {
   collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDoc,
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
-import { slugify, normalizeName } from '../utils/aisleGuess.js'
+import { slugify, normalizeName, cleanName } from '../utils/aisleGuess.js'
 import { AISLE_BY_ID, DEFAULT_AISLE } from '../config/aisles.js'
 
 const CATALOG_PATH = 'couples/main/shoppingCatalog'
@@ -16,7 +16,7 @@ function resolveAisle(raw) {
 function normalize(raw) {
   return {
     id: raw.id,
-    name: raw.name || '',
+    name: cleanName(raw.name),
     nameLower: raw.nameLower || '',
     aisle: resolveAisle(raw.aisle),
     favorite: raw.favorite === true,
@@ -44,7 +44,7 @@ export async function recordUsage(name, aisle, currentUid) {
   if (snap.exists()) {
     const prev = snap.data()
     await updateDoc(ref, {
-      name: String(name).trim(),
+      name: cleanName(name),
       nameLower: normalizeName(name),
       aisle: resolveAisle(aisle),
       useCount: (Number(prev.useCount) || 0) + 1,
@@ -54,7 +54,7 @@ export async function recordUsage(name, aisle, currentUid) {
     })
   } else {
     await setDoc(ref, {
-      name: String(name).trim(),
+      name: cleanName(name),
       nameLower: normalizeName(name),
       aisle: resolveAisle(aisle),
       favorite: false,
