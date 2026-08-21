@@ -7,6 +7,7 @@ import DashboardView from '@/platform/DashboardView.jsx'
 
 const FinauziApp = lazy(() => import('@/apps/finauzi/FinauziApp.jsx'))
 const CoursesApp = lazy(() => import('@/apps/courses/CoursesApp.jsx'))
+const MuscauziApp = lazy(() => import('@/apps/muscauzi/MuscauziApp.jsx'))
 
 export default function App() {
   return (
@@ -27,6 +28,14 @@ export default function App() {
           element={
             <Suspense fallback={<Splash />}>
               <CoursesApp />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/muscauzi"
+          element={
+            <Suspense fallback={<Splash />}>
+              <MuscauziApp />
             </Suspense>
           }
         />

@@ -1,14 +1,7 @@
-import { startOfWeek, endOfWeek, addWeeks, eachDayOfInterval, format } from 'date-fns'
+import { startOfWeek, endOfWeek, addWeeks, eachDayOfInterval } from 'date-fns'
+import { toDateId, DAY_LABELS, MONTHS } from '@/shared/lib/dates.js'
 
-const DAY_LABELS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
-const MONTHS = [
-  'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-  'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
-]
-
-export function toDateId(date) {
-  return format(date, 'yyyy-MM-dd')
-}
+export { toDateId }
 
 function formatRange(start, end) {
   const sd = start.getDate()

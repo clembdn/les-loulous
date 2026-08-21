@@ -25,6 +25,7 @@
 [data-accent="indigo"]  { --accent: 124 92 252; --accent-fg: 255 255 255; }
 [data-accent="amber"]   { --accent: 245 158 11;  --accent-fg: 23 23 23;  }
 [data-accent="emerald"] { --accent: 16 185 129;  --accent-fg: 255 255 255; }
+[data-accent="red"]     { --accent: 220 38 38;   --accent-fg: 255 255 255; }
 
 html, body, #root { height: 100%; }
 

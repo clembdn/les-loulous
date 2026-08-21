@@ -13,3 +13,6 @@ export const DEFAULT_TAB = 'liste'
 export function getTab(id) {
   return COURSES_TABS.find((t) => t.id === id) || COURSES_TABS[0]
 }
+
+// Sidebar desktop : l'app Courses est à plat, une seule section d'items.
+export const SIDEBAR_SECTIONS = [{ type: 'items', items: COURSES_TABS }]
