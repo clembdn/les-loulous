@@ -1,68 +1,154 @@
-import { useState, useEffect, useCallback } from 'react'
-import { ChevronDown, Check, SkipForward, LineChart, RotateCcw } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { ChevronDown, Check, SkipForward, LineChart, RotateCcw, Plus } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { weightHint } from '../../config/exercises.js'
+import SetRow from './SetRow.jsx'
+import ExerciseNote from './ExerciseNote.jsx'
 
-// Une série vide se saisit au clavier numérique : pas de boutons ±2.5 kg,
-// on tape la valeur et c'est tout.
 function toField(value) {
   return value === null || value === undefined || value === '' ? '' : String(value)
 }
 
-// Pré-remplissage : la même série la dernière fois. Si l'exercice a gagné des
-// séries depuis, les nouvelles reprennent la dernière série connue.
-function prefillRows(setCount, entry, lastSets) {
-  return Array.from({ length: setCount }, (_, i) => {
-    const saved = entry?.sets?.[i]
-    if (saved) return { weight: toField(saved.weight), reps: toField(saved.reps) }
-    const previous = lastSets?.[i] || lastSets?.[lastSets.length - 1]
-    if (previous) return { weight: toField(previous.weight), reps: toField(previous.reps) }
-    return { weight: '', reps: '' }
-  })
+/**
+ * Construit les lignes affichées à partir de la prescription figée et de ce
+ * qui est déjà enregistré.
+ *
+ * Les rangs 0…N-1 sont les séries prescrites : elles existent toujours, même
+ * vides, et ne se suppriment pas. Tout rang ≥ N est une série ajoutée à la
+ * main. Les clés ne sont jamais renumérotées — seule la numérotation affichée
+ * reste continue.
+ */
+function buildRows(prescribed, entry, lastSets) {
+  const stored = entry?.sets || {}
+  const keys = new Set()
+  for (let i = 0; i < prescribed; i++) keys.add(String(i))
+  for (const k of Object.keys(stored)) keys.add(k)
+
+  return [...keys]
+    .sort((a, b) => Number(a) - Number(b))
+    .map((key) => {
+      const rank = Number(key)
+      const saved = stored[key]
+      const extra = rank >= prescribed
+      if (saved) {
+        return {
+          key, extra, dirty: false,
+          weightKg: toField(saved.weightKg),
+          reps: toField(saved.reps),
+          completed: saved.completed === true,
+        }
+      }
+      // Pré-remplissage depuis la même série la dernière fois. Purement
+      // visuel : tant que la série n'est pas validée, elle ne compte pas.
+      const previous = lastSets?.[rank] || lastSets?.[lastSets.length - 1]
+      return {
+        key, extra, dirty: false,
+        weightKg: previous ? toField(previous.weightKg) : '',
+        reps: previous ? toField(previous.reps) : '',
+        completed: false,
+      }
+    })
 }
 
-function parseRows(rows) {
-  return rows.map((r) => ({
-    weight: Number(String(r.weight).replace(',', '.')) || 0,
-    reps: Math.max(0, Math.round(Number(r.reps) || 0)),
-  }))
+function parseNumber(value) {
+  return Number(String(value).replace(',', '.')) || 0
+}
+
+// N'est persisté que ce qui a été touché ou validé : une ligne pré-remplie et
+// laissée telle quelle reste absente du document.
+function toSetsMap(rows) {
+  const out = {}
+  for (const r of rows) {
+    if (!r.completed && !r.dirty && !r.extra) continue
+    out[r.key] = {
+      weightKg: parseNumber(r.weightKg),
+      reps: Math.max(0, Math.round(parseNumber(r.reps))),
+      completed: r.completed === true,
+    }
+  }
+  return out
 }
 
 export default function ExerciseAccordion({
-  exercise,
   line,
+  exercise,
   entry,
   lastPerf,
+  note,
   expanded,
   onToggle,
   onSave,
   onClear,
   onOpenDetail,
+  onSaveNote,
 }) {
   const lastSets = lastPerf?.sets || null
-  const [rows, setRows] = useState(() => prefillRows(line.sets, entry, lastSets))
+  const [rows, setRows] = useState(() => buildRows(line.sets, entry, lastSets))
 
-  // La séance se resynchronise (autre onglet, retour du réseau) ou la
-  // prescription change : on repart de l'état serveur, sauf pendant la saisie
-  // — d'où la dépendance sur l'identité de l'entrée plutôt que sur `rows`.
+  // Resynchronisation (autre onglet, retour du réseau, changement de séance).
+  // On ne dépend pas du contenu de `entry` pour ne pas écraser une saisie en
+  // cours à chaque écho du cache Firestore.
+  const storedSignature = Object.keys(entry?.sets || {}).sort().join(',')
   useEffect(() => {
-    setRows(prefillRows(line.sets, entry, lastSets))
+    setRows(buildRows(line.sets, entry, lastSets))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [exercise.id, line.sets, entry?.skipped, lastPerf?.date])
+  }, [line.instanceId, line.sets, entry?.skipped, storedSignature, lastPerf?.date])
 
   const commit = useCallback((next) => {
-    onSave({ sets: parseRows(next), skipped: false })
+    onSave({ sets: toSetsMap(next), skipped: false })
   }, [onSave])
 
-  const setField = (index, field, value) => {
-    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)))
+  const setField = (key, field, value) => {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, [field]: value, dirty: true } : r)))
+  }
+
+  const toggleComplete = (key) => {
+    setRows((prev) => {
+      const next = prev.map((r) => (r.key === key ? { ...r, completed: !r.completed } : r))
+      commit(next)
+      return next
+    })
+  }
+
+  const removeRow = (key) => {
+    setRows((prev) => {
+      const next = prev.filter((r) => r.key !== key)
+      commit(next)
+      return next
+    })
+  }
+
+  // La série ajoutée recopie la dernière série RÉELLEMENT renseignée — pas la
+  // dernière ligne affichée si celle-ci est restée vide.
+  const addRow = () => {
+    setRows((prev) => {
+      const source = [...prev].reverse().find((r) => (r.completed || r.dirty) && parseNumber(r.reps) > 0)
+      const nextRank = prev.reduce((max, r) => Math.max(max, Number(r.key)), line.sets - 1) + 1
+      const next = [...prev, {
+        key: String(nextRank),
+        extra: true,
+        dirty: false,
+        weightKg: source ? source.weightKg : '',
+        reps: source ? source.reps : '',
+        completed: false,
+      }]
+      commit(next)
+      return next
+    })
   }
 
   const skipped = entry?.skipped === true
-  const doneCount = rows.filter((r) => Number(r.reps) > 0).length
-  const savedCount = entry?.sets?.filter((s) => s.reps > 0).length || 0
-  const isComplete = !skipped && savedCount >= line.sets
-  const isPartial = !skipped && savedCount > 0 && savedCount < line.sets
+  const savedDone = useMemo(
+    () => Object.values(entry?.sets || {}).filter((s) => s.completed && s.reps > 0).length,
+    [entry],
+  )
+  const isComplete = !skipped && savedDone >= line.sets
+  const isPartial = !skipped && savedDone > 0 && savedDone < line.sets
+  const extraCount = Math.max(0, savedDone - line.sets)
+
+  // Le nom vient du snapshot de la séance : renommer l'exercice au catalogue
+  // ne doit pas réécrire ce qui a été fait.
+  const displayName = line.name || exercise?.name || 'Exercice supprimé'
 
   return (
     <div
@@ -71,33 +157,31 @@ export default function ExerciseAccordion({
         skipped ? 'border-border opacity-60' : isComplete ? 'border-accent/40' : 'border-border',
       )}
     >
-      <div className="flex items-stretch">
-        {/* Zone de repli : large, on la vise d'une main entre deux séries. */}
-        <button
-          onClick={onToggle}
-          className="flex-1 min-w-0 flex items-center gap-3 px-4 py-4 text-left active:bg-surface-2 transition"
-        >
-          <StatusDot skipped={skipped} complete={isComplete} partial={isPartial} />
-          <span className="flex-1 min-w-0">
-            <span className="block text-[15px] font-semibold text-fg truncate">{exercise.name}</span>
-            <span className="block text-xs text-muted mt-0.5">
-              {line.sets} × {line.reps}
-              {skipped && ' · non fait'}
-              {isPartial && ` · ${savedCount}/${line.sets} enregistrées`}
-            </span>
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-3 px-4 py-4 text-left active:bg-surface-2 transition"
+      >
+        <StatusDot skipped={skipped} complete={isComplete} partial={isPartial} />
+        <span className="flex-1 min-w-0">
+          <span className="block text-[15px] font-semibold text-fg truncate">{displayName}</span>
+          <span className="block text-xs text-muted mt-0.5">
+            {line.sets} × {line.reps}
+            {skipped && ' · non fait'}
+            {isPartial && ` · ${savedDone}/${line.sets}`}
+            {extraCount > 0 && ` · +${extraCount}`}
           </span>
-          <ChevronDown
-            size={18}
-            className={cn('shrink-0 text-faint transition-transform', expanded && 'rotate-180')}
-          />
-        </button>
-      </div>
+        </span>
+        <ChevronDown
+          size={18}
+          className={cn('shrink-0 text-faint transition-transform', expanded && 'rotate-180')}
+        />
+      </button>
 
       {expanded && (
         <div className="px-4 pb-4 border-t border-border pt-3 slide-up">
           <div className="flex items-center justify-between mb-3">
             <button
-              onClick={() => onOpenDetail(exercise.id)}
+              onClick={() => onOpenDetail(line.exerciseId)}
               className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:opacity-80 transition"
             >
               <LineChart size={13} /> Voir la progression
@@ -111,7 +195,7 @@ export default function ExerciseAccordion({
               </button>
             ) : (
               <button
-                onClick={() => onSave({ sets: [], skipped: true })}
+                onClick={() => onSave({ sets: {}, skipped: true })}
                 className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-fg transition"
               >
                 <SkipForward size={13} /> Non fait
@@ -121,25 +205,38 @@ export default function ExerciseAccordion({
 
           {!skipped && (
             <>
-              <div className="space-y-2.5">
+              <ExerciseNote note={note} onSave={(text) => onSaveNote(line.exerciseId, text)} />
+
+              <div className="space-y-3">
                 {rows.map((row, i) => (
                   <SetRow
-                    key={i}
-                    index={i}
+                    key={row.key}
                     row={row}
-                    previous={lastSets?.[i]}
-                    onChange={(field, value) => setField(i, field, value)}
+                    label={row.extra ? 'Série supplémentaire' : `Série ${Number(row.key) + 1}`}
+                    previous={lastSets?.[Number(row.key)] || (row.extra ? lastSets?.[lastSets.length - 1] : null)}
+                    onChange={(field, value) => setField(row.key, field, value)}
                     onCommit={() => commit(rows)}
+                    onToggleComplete={() => toggleComplete(row.key)}
+                    onRemove={row.extra ? () => removeRow(row.key) : null}
                   />
                 ))}
               </div>
+
+              <button
+                onClick={addRow}
+                className="w-full mt-3 h-11 rounded-xl border border-dashed border-border-strong text-xs font-medium text-muted hover:text-fg hover:border-accent transition inline-flex items-center justify-center gap-1.5"
+              >
+                <Plus size={14} /> série
+              </button>
+
               <p className="text-[11px] text-faint mt-3 leading-relaxed">{weightHint(exercise)}</p>
-              {doneCount > 0 && (
+
+              {savedDone > 0 && (
                 <button
-                  onClick={() => { commit(rows); onToggle() }}
+                  onClick={onToggle}
                   className="w-full mt-3 h-12 rounded-xl bg-accent text-accent-fg text-sm font-semibold active:scale-[0.98] transition inline-flex items-center justify-center gap-2"
                 >
-                  <Check size={16} strokeWidth={2.6} /> Terminé
+                  <Check size={16} strokeWidth={2.6} /> Replier
                 </button>
               )}
             </>
@@ -152,66 +249,23 @@ export default function ExerciseAccordion({
 
 function StatusDot({ skipped, complete, partial }) {
   if (skipped) {
-    return <span className="h-6 w-6 shrink-0 rounded-full border border-border flex items-center justify-center text-faint"><SkipForward size={12} /></span>
+    return (
+      <span className="h-6 w-6 shrink-0 rounded-full border border-border flex items-center justify-center text-faint">
+        <SkipForward size={12} />
+      </span>
+    )
   }
   if (complete) {
-    return <span className="h-6 w-6 shrink-0 rounded-full bg-accent text-accent-fg flex items-center justify-center"><Check size={14} strokeWidth={3} /></span>
+    return (
+      <span className="h-6 w-6 shrink-0 rounded-full bg-accent text-accent-fg flex items-center justify-center">
+        <Check size={14} strokeWidth={3} />
+      </span>
+    )
   }
   return (
     <span className={cn(
       'h-6 w-6 shrink-0 rounded-full border-2',
       partial ? 'border-accent border-dashed' : 'border-border-strong',
     )} />
-  )
-}
-
-function SetRow({ index, row, previous, onChange, onCommit }) {
-  return (
-    <div>
-      <div className="flex items-center gap-2">
-        <span className="w-6 shrink-0 text-xs font-semibold text-faint tabular">{index + 1}</span>
-        <NumField
-          value={row.weight}
-          onChange={(v) => onChange('weight', v)}
-          onCommit={onCommit}
-          suffix="kg"
-          ariaLabel={`Charge série ${index + 1}`}
-        />
-        <span className="text-faint text-sm">×</span>
-        <NumField
-          value={row.reps}
-          onChange={(v) => onChange('reps', v)}
-          onCommit={onCommit}
-          suffix="reps"
-          integer
-          ariaLabel={`Répétitions série ${index + 1}`}
-        />
-      </div>
-      {previous && (
-        <p className="pl-8 mt-1 text-[11px] text-faint tabular">
-          Dernière fois : {previous.weight} kg × {previous.reps}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function NumField({ value, onChange, onCommit, suffix, integer = false, ariaLabel }) {
-  return (
-    <label className="flex-1 min-w-0 relative">
-      <input
-        type="text"
-        inputMode={integer ? 'numeric' : 'decimal'}
-        pattern={integer ? '[0-9]*' : '[0-9.,]*'}
-        value={value}
-        aria-label={ariaLabel}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onCommit}
-        onFocus={(e) => e.target.select()}
-        className="w-full h-14 pl-3 pr-11 rounded-xl bg-surface-2 border border-border text-lg font-semibold text-fg tabular
-                   focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus:border-transparent transition"
-      />
-      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-faint pointer-events-none">{suffix}</span>
-    </label>
   )
 }

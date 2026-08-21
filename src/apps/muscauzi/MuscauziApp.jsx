@@ -9,7 +9,7 @@ import SessionView from './views/SessionView.jsx'
 // Les écrans hors salle sont chargés à la demande : la séance du jour doit
 // s'afficher le plus vite possible, téléphone en main.
 const ProgressView = lazy(() => import('./views/ProgressView.jsx'))
-const WeightView = lazy(() => import('./views/WeightView.jsx'))
+const TrackingView = lazy(() => import('./views/TrackingView.jsx'))
 const ProgramView = lazy(() => import('./views/ProgramView.jsx'))
 const CatalogueView = lazy(() => import('./views/CatalogueView.jsx'))
 
@@ -65,7 +65,7 @@ export default function MuscauziApp() {
                 onFocusExercise={setFocusedExerciseId}
               />
             )}
-            {tab === 'poids' && <WeightView />}
+            {tab === 'poids' && <TrackingView />}
             {tab === 'programme' && <ProgramView />}
             {tab === 'catalogue' && <CatalogueView />}
           </Suspense>

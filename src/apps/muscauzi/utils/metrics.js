@@ -1,18 +1,22 @@
-// Métriques de progression calculées à partir des séries d'une séance.
+import { completedSets } from '../services/sessionsService.js'
+
+// Métriques de progression. Une série qui n'est pas validée (`completed`) ou
+// qui n'a pas de reps n'entre dans AUCUNE métrique — le filtrage est fait en
+// amont par `completedSets`.
 
 export function volume(sets) {
-  return (sets || []).reduce((acc, s) => acc + (Number(s.weight) || 0) * (Number(s.reps) || 0), 0)
+  return (sets || []).reduce((acc, s) => acc + (Number(s.weightKg) || 0) * (Number(s.reps) || 0), 0)
 }
 
 export function totalReps(sets) {
   return (sets || []).reduce((acc, s) => acc + (Number(s.reps) || 0), 0)
 }
 
-// 1RM estimé (Epley) sur la MEILLEURE série de la séance.
+// 1RM estimé (Epley) sur la MEILLEURE série — jamais une somme ni une moyenne.
 export function epley(sets) {
   let best = 0
   for (const s of sets || []) {
-    const w = Number(s.weight) || 0
+    const w = Number(s.weightKg) || 0
     const r = Number(s.reps) || 0
     if (w <= 0 || r <= 0) continue
     best = Math.max(best, w * (1 + r / 30))
@@ -46,6 +50,34 @@ export function formatMetric(value, metricId) {
 export function formatSets(sets, { unit = 'kg' } = {}) {
   if (!sets || sets.length === 0) return null
   return sets
-    .map((s, i) => (i === 0 ? `${s.weight} ${unit} × ${s.reps}` : `${s.weight} × ${s.reps}`))
+    .map((s, i) => (i === 0 ? `${s.weightKg} ${unit} × ${s.reps}` : `${s.weightKg} × ${s.reps}`))
     .join(' · ')
+}
+
+/**
+ * Historique d'un MOUVEMENT : un point par date, jamais deux.
+ *
+ * Si le mouvement figure plusieurs fois dans la même séance, les séries
+ * validées de toutes ses occurrences sont concaténées en une seule liste. Les
+ * trois métriques se comportent alors correctement d'elles-mêmes : volume et
+ * reps somment, Epley prend le maximum.
+ *
+ * Le nom vient du `programSnapshot` de la séance, pas du catalogue : renommer
+ * un exercice ne doit pas réécrire l'historique déjà affiché.
+ */
+export function historyForExercise(sessions, exerciseId) {
+  const out = []
+  for (const session of sessions) {
+    const instances = session.programSnapshot.filter((l) => l.exerciseId === exerciseId)
+    if (instances.length === 0) continue
+
+    const sets = []
+    for (const line of instances) {
+      sets.push(...completedSets(session.entries?.[line.instanceId]))
+    }
+    if (sets.length === 0) continue
+
+    out.push({ date: session.date, sets, occurrences: instances.length })
+  }
+  return out
 }

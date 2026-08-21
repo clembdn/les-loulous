@@ -1,31 +1,22 @@
 import { useState, useMemo } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import LineChart from '@/shared/ui/LineChart.jsx'
-import { formatDateFr, formatDateShortFr, fromDateId } from '@/shared/lib/dates.js'
+import { formatDateFr, formatDateShortFr, fromLocalDateKey } from '@/shared/lib/dates.js'
 import { cn } from '@/shared/lib/utils.js'
-import { METRICS, metricsFor, defaultMetricId, formatMetric, formatSets } from '../utils/metrics.js'
+import {
+  METRICS, metricsFor, defaultMetricId, formatMetric, formatSets, historyForExercise,
+} from '../utils/metrics.js'
 import { getExerciseType, weightHint } from '../config/exercises.js'
+import ExerciseNote from '../components/session/ExerciseNote.jsx'
 
-// Une séance ne compte dans la courbe que si l'exercice y a été réellement
-// fait : les « non fait » et les séries à zéro rep sont ignorés.
-function historyFor(sessions, exerciseId) {
-  const out = []
-  for (const s of sessions) {
-    const entry = s.entries?.[exerciseId]
-    if (!entry || entry.skipped) continue
-    const sets = (entry.sets || []).filter((x) => x.reps > 0)
-    if (sets.length === 0) continue
-    out.push({ date: s.date, sets })
-  }
-  return out
-}
-
-export default function ExerciseDetailView({ exercise, sessions, isLoading, onBack }) {
+export default function ExerciseDetailView({ exercise, sessions, isLoading, note, onSaveNote, onBack }) {
   const available = metricsFor(exercise)
   const [metricId, setMetricId] = useState(() => defaultMetricId(exercise))
   const metric = METRICS[metricId] || available[0]
 
-  const history = useMemo(() => historyFor(sessions, exercise.id), [sessions, exercise.id])
+  // Un point par date : si le mouvement figure plusieurs fois dans la séance,
+  // toutes ses occurrences sont agrégées — jamais deux points le même jour.
+  const history = useMemo(() => historyForExercise(sessions, exercise.id), [sessions, exercise.id])
   const series = useMemo(
     () => history.map((h) => ({ date: h.date, value: metric.compute(h.sets) })),
     [history, metric],
@@ -40,10 +31,12 @@ export default function ExerciseDetailView({ exercise, sessions, isLoading, onBa
         <ArrowLeft size={16} /> Tous les exercices
       </button>
 
-      <header className="mb-5">
+      <header className="mb-4">
         <h1 className="text-2xl font-semibold tracking-[-0.02em] text-fg">{exercise.name}</h1>
         <p className="text-xs text-muted mt-1">{getExerciseType(exercise.type).label}</p>
       </header>
+
+      <ExerciseNote note={note} onSave={(text) => onSaveNote(exercise.id, text)} />
 
       {available.length > 1 && (
         <div className="inline-flex p-1 rounded-xl bg-surface-2 border border-border mb-4">
@@ -67,13 +60,13 @@ export default function ExerciseDetailView({ exercise, sessions, isLoading, onBa
           <div className="h-[220px] animate-pulse rounded-xl bg-surface-2" />
         ) : series.length === 0 ? (
           <p className="py-16 text-center text-sm text-muted">
-            Pas encore de séance enregistrée pour cet exercice.
+            Pas encore de série validée pour cet exercice.
           </p>
         ) : (
           <LineChart
             data={series}
             formatValue={(v) => formatMetric(v, metric.id)}
-            formatLabel={(d) => formatDateShortFr(fromDateId(d.date))}
+            formatLabel={(d) => formatDateShortFr(fromLocalDateKey(d.date))}
           />
         )}
         <p className="text-[11px] text-faint mt-3 leading-relaxed">{weightHint(exercise)}</p>
@@ -89,7 +82,10 @@ export default function ExerciseDetailView({ exercise, sessions, isLoading, onBa
                 className="flex items-baseline justify-between gap-3 px-4 py-3 rounded-xl border border-border bg-surface"
               >
                 <span className="text-sm text-fg shrink-0">
-                  {formatDateFr(fromDateId(h.date), { withYear: true })}
+                  {formatDateFr(fromLocalDateKey(h.date), { withYear: true })}
+                  {h.occurrences > 1 && (
+                    <span className="block text-[11px] text-faint">{h.occurrences} passages</span>
+                  )}
                 </span>
                 <span className="text-xs text-muted tabular text-right">{formatSets(h.sets)}</span>
               </div>

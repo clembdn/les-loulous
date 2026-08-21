@@ -1,28 +1,35 @@
 import { useMemo } from 'react'
 import { ChevronRight, LineChart as LineChartIcon } from 'lucide-react'
-import { fromDateId, formatDateFr } from '@/shared/lib/dates.js'
-import { useExercises, useSessions, useLastPerf } from '../hooks/useMuscData.js'
+import { fromLocalDateKey, formatDateFr } from '@/shared/lib/dates.js'
+import { useExercises, useSessions, useLastPerf, useNotes } from '../hooks/useMuscData.js'
 import { formatSets } from '../utils/metrics.js'
 import { getExerciseType } from '../config/exercises.js'
+import { saveNote } from '../services/notesService.js'
+import { useAuth } from '@/shared/context/AuthContext.jsx'
 import ExerciseDetailView from './ExerciseDetailView.jsx'
 
 export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
   const { exercises, exerciseById, isLoading: exercisesLoading } = useExercises()
   const { sessions, isLoading: sessionsLoading } = useSessions()
   const { lastPerf } = useLastPerf()
+  const { notes } = useNotes()
+  const { currentUid } = useAuth()
+  // Aperçu du MOUVEMENT : la dernière fois qu'il a été fait, toutes
+  // occurrences confondues.
+  const byExercise = lastPerf.byExercise
 
   // Ceux qu'on a déjà faits d'abord, du plus récent au plus ancien : c'est là
   // qu'on va regarder en pratique.
   const ordered = useMemo(() => {
     return [...exercises].sort((a, b) => {
-      const da = lastPerf[a.id]?.date || ''
-      const db = lastPerf[b.id]?.date || ''
+      const da = byExercise[a.id]?.date || ''
+      const db = byExercise[b.id]?.date || ''
       if (da && db) return db.localeCompare(da)
       if (da) return -1
       if (db) return 1
       return a.name.localeCompare(b.name, 'fr')
     })
-  }, [exercises, lastPerf])
+  }, [exercises, byExercise])
 
   const focused = focusedExerciseId ? exerciseById[focusedExerciseId] : null
   if (focused) {
@@ -31,6 +38,8 @@ export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
         exercise={focused}
         sessions={sessions}
         isLoading={sessionsLoading}
+        note={notes[focused.id] || ''}
+        onSaveNote={(exerciseId, text) => saveNote(currentUid, exerciseId, text, currentUid)}
         onBack={() => onFocusExercise(null)}
       />
     )
@@ -58,7 +67,7 @@ export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
       ) : (
         <div className="space-y-1.5">
           {ordered.map((ex) => {
-            const last = lastPerf[ex.id]
+            const last = byExercise[ex.id]
             return (
               <button
                 key={ex.id}
@@ -69,7 +78,7 @@ export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
                   <span className="block text-[15px] font-medium text-fg truncate">{ex.name}</span>
                   <span className="block text-xs text-muted mt-0.5 truncate tabular">
                     {last
-                      ? `${formatDateFr(fromDateId(last.date))} · ${formatSets(last.sets)}`
+                      ? `${formatDateFr(fromLocalDateKey(last.date))} · ${formatSets(last.sets)}`
                       : getExerciseType(ex.type).label}
                   </span>
                 </span>

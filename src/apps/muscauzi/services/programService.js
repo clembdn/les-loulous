@@ -1,12 +1,15 @@
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
+import { newInstanceId } from '../utils/ids.js'
 
 // Programme d'un profil, une semaine paire et une semaine impaire.
 //
-// Un document par parité, contenant les sept jours — et non un document par
-// jour : ouvrir la séance du jour ne doit coûter qu'une lecture, et le
-// programme entier tient largement dans un document.
-//   users/{uid}/program/{parity} → { days: { "1": [prescription], … "7": [] } }
+// Un document par parité contenant les sept jours — et non un document par
+// jour : ouvrir la séance du jour ne doit coûter qu'une lecture.
+//   users/{uid}/program/{parity} → { days: { "1": [ligne], … "7": [] } }
+//
+// Chaque ligne porte un `instanceId` STABLE d'une semaine à l'autre, généré
+// ici (dans l'écran Programme) et jamais au démarrage d'une séance.
 const PARITIES = ['even', 'odd']
 const DOWS = [1, 2, 3, 4, 5, 6, 7]
 
@@ -18,9 +21,11 @@ export function isParity(value) {
   return PARITIES.includes(value)
 }
 
-// Une ligne de prescription : quel exercice, combien de séries, combien de reps.
 function normalizeLine(raw, index) {
   return {
+    // Une ligne sans instanceId ne devrait pas exister ; on en fabrique un
+    // plutôt que de laisser deux occurrences partager une clé d'entrées.
+    instanceId: raw?.instanceId || newInstanceId(),
     exerciseId: raw?.exerciseId || '',
     order: Number.isFinite(raw?.order) ? raw.order : index,
     sets: Math.max(1, Number(raw?.sets) || 1),
@@ -31,7 +36,8 @@ function normalizeLine(raw, index) {
 function normalizeDays(raw) {
   const days = {}
   for (const dow of DOWS) {
-    const list = Array.isArray(raw?.[dow]) ? raw[dow] : Array.isArray(raw?.[String(dow)]) ? raw[String(dow)] : []
+    const stored = raw?.[dow] ?? raw?.[String(dow)]
+    const list = Array.isArray(stored) ? stored : []
     days[dow] = list
       .map(normalizeLine)
       .filter((l) => l.exerciseId)
@@ -55,8 +61,19 @@ export function subscribeToProgram(uid, parity, callback, onError) {
   })
 }
 
-// Réécrit la prescription d'un jour. Les séances déjà enregistrées ne bougent
-// pas : elles portent leur propre `programSnapshot`.
+/**
+ * Réécrit la prescription d'un jour.
+ *
+ * Les `instanceId` déjà présents dans `lines` sont conservés tels quels :
+ * réordonner, changer les séries/reps ou déplacer une occurrence ne doit pas
+ * en générer un nouveau. À l'inverse, l'appelant fabrique un nouvel
+ * `instanceId` pour un ajout, une duplication ou un remplacement — y compris
+ * quand on supprime puis rajoute le même mouvement, sinon la nouvelle
+ * occurrence hériterait du pré-remplissage de l'ancienne.
+ *
+ * Les séances déjà enregistrées ne bougent pas : chacune porte son propre
+ * `programSnapshot`.
+ */
 export function saveProgramDay(uid, parity, dayOfWeek, lines, currentUid) {
   const cleaned = lines
     .map(normalizeLine)

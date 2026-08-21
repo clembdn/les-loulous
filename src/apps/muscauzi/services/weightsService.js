@@ -1,6 +1,6 @@
 import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
-import { toDateId } from '@/shared/lib/dates.js'
+import { toLocalDateKey } from '@/shared/lib/dates.js'
 
 // Pesées d'un profil : `users/{uid}/weights/{yyyy-mm-dd}`, une par jour.
 // L'id étant la date, se peser deux fois le même jour écrase — c'est voulu.
@@ -22,7 +22,7 @@ export function subscribeToWeights(uid, callback, onError) {
 
 // La date est toujours celle du jour : on se pèse au moment où on saisit.
 export function recordWeight(uid, value, currentUid) {
-  const dateId = toDateId(new Date())
+  const dateId = toLocalDateKey(new Date())
   setDoc(weightDoc(uid, dateId), {
     value: Number(value),
     updatedAt: new Date().toISOString(),

@@ -1,22 +1,29 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Dumbbell, Scale, ArrowRight } from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
-import { toDateId, weekParity, isoDayOfWeek, formatDayFr } from '@/shared/lib/dates.js'
-import { useExercises, useProgram, useSession, useLastPerf, useWeights } from '../hooks/useMuscData.js'
-import { upsertEntry, clearEntry, updateSessionPlan } from '../services/sessionsService.js'
+import Modal from '@/shared/ui/Modal.jsx'
+import { Button } from '@/shared/ui/Button.jsx'
+import { toLocalDateKey, weekParity, isoDayOfWeek, formatDayFr } from '@/shared/lib/dates.js'
+import {
+  useExercises, useProgram, useSession, useLastPerf, useWeights, useNotes,
+} from '../hooks/useMuscData.js'
+import {
+  upsertEntry, clearEntry, resetSessionPlan, completedSets, hasAnyInput,
+} from '../services/sessionsService.js'
+import { saveNote } from '../services/notesService.js'
 import SessionPlanControl from '../components/session/SessionPlanControl.jsx'
 import ExerciseAccordion from '../components/session/ExerciseAccordion.jsx'
 
 // La parité/le jour forcés valent pour la journée en cours seulement : on
-// rouvre l'appli entre deux séries, le choix doit tenir, mais pas déborder
+// rouvre l'appli entre deux séries, le choix doit tenir — mais pas déborder
 // sur demain.
-function planStorageKey(dateId) {
-  return `muscauzi:plan:${dateId}`
+function planStorageKey(dateKey) {
+  return `muscauzi:plan:${dateKey}`
 }
 
-function readStoredPlan(dateId) {
+function readStoredPlan(dateKey) {
   try {
-    const raw = localStorage.getItem(planStorageKey(dateId))
+    const raw = localStorage.getItem(planStorageKey(dateKey))
     if (!raw) return null
     const parsed = JSON.parse(raw)
     if (parsed?.parity !== 'even' && parsed?.parity !== 'odd') return null
@@ -30,18 +37,21 @@ function readStoredPlan(dateId) {
 export default function SessionView({ onOpenExercise, onOpenWeight }) {
   const { currentUid } = useAuth()
   const today = useMemo(() => new Date(), [])
-  const dateId = toDateId(today)
+  const dateKey = toLocalDateKey(today)
   const natural = useMemo(
     () => ({ parity: weekParity(today), dayOfWeek: isoDayOfWeek(today) }),
     [today],
   )
 
-  const [override, setOverride] = useState(() => readStoredPlan(dateId))
+  const [override, setOverride] = useState(() => readStoredPlan(dateKey))
   const [openId, setOpenId] = useState(null)
+  // Changement de séance en attente de confirmation (des séries sont saisies).
+  const [pendingPlan, setPendingPlan] = useState(null)
 
   const { exerciseById, isLoading: exercisesLoading } = useExercises()
-  const { session, isLoading: sessionLoading } = useSession(dateId)
+  const { session, isLoading: sessionLoading } = useSession(dateKey)
   const { lastPerf } = useLastPerf()
+  const { notes } = useNotes()
   // Les deux parités sont suivies en permanence : deux documents, et forcer la
   // semaine doit pouvoir re-photographier la séance sans attendre une lecture.
   const even = useProgram('even')
@@ -52,54 +62,73 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
     ? { parity: session.parity, dayOfWeek: session.dayOfWeek }
     : (override || natural)
 
-  const livePrescription = useMemo(() => {
+  // Le nom de l'exercice est recopié dans le snapshot : le renommer ensuite au
+  // catalogue ne doit pas réécrire les libellés des séances passées.
+  const snapshotFrom = useCallback((lines) => lines.map((l) => ({
+    instanceId: l.instanceId,
+    exerciseId: l.exerciseId,
+    name: exerciseById[l.exerciseId]?.name || '',
+    order: l.order,
+    sets: l.sets,
+    reps: l.reps,
+  })), [exerciseById])
+
+  const liveSnapshot = useMemo(() => {
     const days = plan.parity === 'even' ? even.days : odd.days
-    return days?.[plan.dayOfWeek] || []
-  }, [plan.parity, plan.dayOfWeek, even.days, odd.days])
+    return snapshotFrom(days?.[plan.dayOfWeek] || [])
+  }, [plan.parity, plan.dayOfWeek, even.days, odd.days, snapshotFrom])
 
   // Une fois la séance créée, on affiche la copie figée : modifier le
-  // programme dans les réglages ne doit pas changer la séance en cours.
-  const prescription = session ? session.programSnapshot : livePrescription
+  // programme dans les réglages ne change pas la séance en cours.
+  const prescription = session ? session.programSnapshot : liveSnapshot
 
-  const isForced = !session
-    ? !!override && (override.parity !== natural.parity || override.dayOfWeek !== natural.dayOfWeek)
-    : plan.parity !== natural.parity || plan.dayOfWeek !== natural.dayOfWeek
+  const isForced = plan.parity !== natural.parity || plan.dayOfWeek !== natural.dayOfWeek
 
-  const applyPlan = useCallback((next) => {
+  const commitPlan = useCallback((next) => {
     setOverride(next)
-    try { localStorage.setItem(planStorageKey(dateId), JSON.stringify(next)) } catch { /* mode privé */ }
-    // La séance du jour existe déjà : on la re-photographie, c'est une
-    // correction du jour en cours et non une réécriture d'historique.
+    try { localStorage.setItem(planStorageKey(dateKey), JSON.stringify(next)) } catch { /* mode privé */ }
     if (session) {
       const days = next.parity === 'even' ? even.days : odd.days
-      updateSessionPlan(currentUid, dateId, {
+      resetSessionPlan(currentUid, dateKey, {
         parity: next.parity,
         dayOfWeek: next.dayOfWeek,
-        programSnapshot: days?.[next.dayOfWeek] || [],
+        programSnapshot: snapshotFrom(days?.[next.dayOfWeek] || []),
       }, currentUid)
     }
-  }, [dateId, session, even.days, odd.days, currentUid])
+    setOpenId(null)
+  }, [dateKey, session, even.days, odd.days, currentUid, snapshotFrom])
+
+  // Rien de saisi → on change directement. Sinon, confirmation bloquante :
+  // le changement efface les séries du jour.
+  const requestPlan = useCallback((next) => {
+    if (session && hasAnyInput(session)) setPendingPlan(next)
+    else commitPlan(next)
+  }, [session, commitPlan])
 
   const resetPlan = useCallback(() => {
-    applyPlan(natural)
-    try { localStorage.removeItem(planStorageKey(dateId)) } catch { /* mode privé */ }
-    setOverride(null)
-  }, [applyPlan, natural, dateId])
+    requestPlan(natural)
+    try { localStorage.removeItem(planStorageKey(dateKey)) } catch { /* mode privé */ }
+  }, [requestPlan, natural, dateKey])
 
-  const saveEntry = useCallback((exerciseId, entry) => {
+  const saveEntry = useCallback((line, entry) => {
     // `meta` n'est transmis qu'à la création : le snapshot est figé ensuite.
     const meta = session ? null : {
       parity: plan.parity,
       dayOfWeek: plan.dayOfWeek,
-      programSnapshot: livePrescription,
+      programSnapshot: liveSnapshot,
     }
-    upsertEntry(currentUid, dateId, exerciseId, entry, currentUid, meta)
-  }, [currentUid, dateId, session, plan.parity, plan.dayOfWeek, livePrescription])
+    upsertEntry(
+      currentUid, dateKey,
+      { instanceId: line.instanceId, exerciseId: line.exerciseId },
+      entry, currentUid, meta,
+    )
+  }, [currentUid, dateKey, session, plan.parity, plan.dayOfWeek, liveSnapshot])
 
   const isLoading = exercisesLoading || sessionLoading || even.isLoading || odd.isLoading
   const doneCount = prescription.filter((l) => {
-    const e = session?.entries?.[l.exerciseId]
-    return e && (e.skipped || (e.sets?.filter((s) => s.reps > 0).length || 0) >= l.sets)
+    const e = session?.entries?.[l.instanceId]
+    if (!e) return false
+    return e.skipped || completedSets(e).length >= l.sets
   }).length
 
   return (
@@ -120,11 +149,11 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
         parity={plan.parity}
         dayOfWeek={plan.dayOfWeek}
         isForced={isForced}
-        onChange={applyPlan}
+        onChange={requestPlan}
         onReset={resetPlan}
       />
 
-      {plan.dayOfWeek === 1 && <WeighInNudge dateId={dateId} onGo={onOpenWeight} />}
+      {plan.dayOfWeek === 1 && <WeighInNudge dateKey={dateKey} onGo={onOpenWeight} />}
 
       {isLoading && prescription.length === 0 ? (
         <SkeletonList />
@@ -132,38 +161,57 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
         <EmptyDay />
       ) : (
         <div className="space-y-2.5">
-          {prescription.map((line) => {
-            const exercise = exerciseById[line.exerciseId]
-            if (!exercise) return null
-            return (
-              <ExerciseAccordion
-                key={line.exerciseId}
-                exercise={exercise}
-                line={line}
-                entry={session?.entries?.[line.exerciseId] || null}
-                lastPerf={lastPerf[line.exerciseId] || null}
-                expanded={openId === line.exerciseId}
-                onToggle={() => setOpenId((id) => (id === line.exerciseId ? null : line.exerciseId))}
-                onSave={(entry) => saveEntry(line.exerciseId, entry)}
-                onClear={() => clearEntry(currentUid, dateId, line.exerciseId, currentUid)}
-                onOpenDetail={onOpenExercise}
-              />
-            )
-          })}
+          {prescription.map((line) => (
+            <ExerciseAccordion
+              key={line.instanceId}
+              line={line}
+              exercise={exerciseById[line.exerciseId] || null}
+              entry={session?.entries?.[line.instanceId] || null}
+              lastPerf={lastPerf.byInstance[line.instanceId] || null}
+              note={notes[line.exerciseId] || ''}
+              expanded={openId === line.instanceId}
+              onToggle={() => setOpenId((id) => (id === line.instanceId ? null : line.instanceId))}
+              onSave={(entry) => saveEntry(line, entry)}
+              onClear={() => clearEntry(currentUid, dateKey, line.instanceId, currentUid)}
+              onOpenDetail={onOpenExercise}
+              onSaveNote={(exerciseId, text) => saveNote(currentUid, exerciseId, text, currentUid)}
+            />
+          ))}
         </div>
       )}
+
+      <Modal
+        open={!!pendingPlan}
+        onClose={() => setPendingPlan(null)}
+        title="Changer la séance en cours ?"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPendingPlan(null)}>Annuler</Button>
+            <Button
+              onClick={() => { commitPlan(pendingPlan); setPendingPlan(null) }}
+            >
+              Changer et recommencer
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted leading-relaxed">
+          Le programme de la séance sera remplacé et les séries déjà saisies aujourd'hui
+          seront effacées. Votre programme permanent n'est pas modifié.
+        </p>
+      </Modal>
     </div>
   )
 }
 
 // Le lundi, la pesée se fait en début de séance. Simple rappel, pas un blocage.
-function WeighInNudge({ dateId, onGo }) {
+function WeighInNudge({ dateKey, onGo }) {
   const { weights } = useWeights()
   const [dismissed, setDismissed] = useState(false)
-  useEffect(() => { setDismissed(false) }, [dateId])
+  useEffect(() => { setDismissed(false) }, [dateKey])
 
   if (dismissed) return null
-  if (weights.some((w) => w.date === dateId)) return null
+  if (weights.some((w) => w.date === dateKey)) return null
 
   return (
     <button

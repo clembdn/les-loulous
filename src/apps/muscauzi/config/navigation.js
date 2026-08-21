@@ -9,7 +9,7 @@ export const SETTINGS_DEFAULT = 'programme'
 export const MUSC_TABS = [
   { id: 'seance',   label: 'Séance',   icon: Dumbbell },
   { id: 'progres',  label: 'Progrès',  icon: LineChart },
-  { id: 'poids',    label: 'Poids',    icon: Scale },
+  { id: 'poids',    label: 'Suivi',    icon: Scale },
   { id: 'reglages', label: 'Réglages', icon: Settings, activeFor: SETTINGS_IDS, route: SETTINGS_DEFAULT },
 ]
 
@@ -21,7 +21,7 @@ export const SIDEBAR_SECTIONS = [
     items: [
       { id: 'seance',  label: 'Séance du jour', icon: Dumbbell },
       { id: 'progres', label: 'Progrès',        icon: LineChart },
-      { id: 'poids',   label: 'Poids',          icon: Scale },
+      { id: 'poids',   label: 'Suivi',          icon: Scale },
     ],
   },
   {

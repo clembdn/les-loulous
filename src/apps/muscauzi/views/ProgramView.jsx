@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react'
-import { Plus, Trash2, ChevronUp, ChevronDown, X, Search, CalendarRange } from 'lucide-react'
+import { Plus, Trash2, ChevronUp, ChevronDown, X, Search, CalendarRange, Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { DAY_SHORT, DAY_LABELS, weekParity, isoDayOfWeek } from '@/shared/lib/dates.js'
 import { useExercises, useProgram } from '../hooks/useMuscData.js'
 import { saveProgramDay, DOWS } from '../services/programService.js'
+import { newInstanceId } from '../utils/ids.js'
 
 const PARITY_LABEL = { odd: 'Semaine impaire', even: 'Semaine paire' }
 
@@ -29,16 +30,24 @@ export default function ProgramView() {
       .catch(() => toast.error('Enregistrement impossible'))
   }
 
+  // Un ajout crée TOUJOURS une occurrence neuve — y compris pour un mouvement
+  // déjà présent. Sans ça, supprimer puis rajouter un exercice ferait hériter
+  // la nouvelle occurrence du pré-remplissage de l'ancienne.
   const addLine = (exerciseId) => {
-    if (lines.some((l) => l.exerciseId === exerciseId)) {
-      toast.error('Déjà dans la séance')
-      return
-    }
     // Valeurs de départ : 4 × 8, le plus courant — ça s'ajuste juste après.
-    commit([...lines, { exerciseId, sets: 4, reps: 8, order: lines.length }])
+    commit([...lines, { instanceId: newInstanceId(), exerciseId, sets: 4, reps: 8, order: lines.length }])
     setPicking(false)
   }
 
+  // Dupliquer = une nouvelle occurrence, insérée juste après l'originale.
+  const duplicateLine = (index) => {
+    const next = [...lines]
+    next.splice(index + 1, 0, { ...lines[index], instanceId: newInstanceId() })
+    commit(next)
+  }
+
+  // Modifier séries/reps ou déplacer une occurrence CONSERVE son instanceId :
+  // l'historique et le pré-remplissage doivent suivre d'une semaine à l'autre.
   const updateLine = (index, patch) => {
     commit(lines.map((l, i) => (i === index ? { ...l, ...patch } : l)))
   }
@@ -55,10 +64,9 @@ export default function ProgramView() {
     commit(next)
   }
 
-  const available = useMemo(
-    () => exercises.filter((e) => !lines.some((l) => l.exerciseId === e.id)),
-    [exercises, lines],
-  )
+  // Le catalogue reste entièrement proposé : un même mouvement peut légitimement
+  // figurer deux fois dans la même séance.
+  const available = exercises
 
   return (
     <div className="max-w-xl mx-auto px-4 pt-5 pb-28 lg:pb-10 lg:pt-8 lg:px-6">
@@ -124,7 +132,7 @@ export default function ProgramView() {
           {lines.map((line, i) => {
             const exercise = exerciseById[line.exerciseId]
             return (
-              <div key={line.exerciseId} className="px-4 py-3 rounded-xl border border-border bg-surface">
+              <div key={line.instanceId} className="px-4 py-3 rounded-xl border border-border bg-surface">
                 <div className="flex items-center gap-2">
                   <span className="flex-1 min-w-0 text-[15px] font-medium text-fg truncate">
                     {exercise?.name || <span className="text-faint italic">Exercice supprimé</span>}
@@ -144,6 +152,13 @@ export default function ProgramView() {
                     className="p-1.5 rounded-lg text-faint hover:text-fg hover:bg-surface-2 disabled:opacity-25 disabled:pointer-events-none transition"
                   >
                     <ChevronDown size={16} />
+                  </button>
+                  <button
+                    onClick={() => duplicateLine(i)}
+                    aria-label="Dupliquer"
+                    className="p-1.5 rounded-lg text-faint hover:text-fg hover:bg-surface-2 transition"
+                  >
+                    <Copy size={15} />
                   </button>
                   <button
                     onClick={() => removeLine(i)}
@@ -254,7 +269,7 @@ function ExercisePicker({ exercises, isLoading, onPick, onCancel }) {
         ) : filtered.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted">
             {exercises.length === 0
-              ? 'Tous les exercices du catalogue sont déjà dans cette séance.'
+              ? 'Catalogue vide — ajoute des exercices dans Réglages › Exercices.'
               : 'Aucun exercice ne correspond.'}
           </p>
         ) : (
