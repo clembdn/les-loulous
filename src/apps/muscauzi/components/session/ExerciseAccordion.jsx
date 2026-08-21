@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { ChevronDown, Check, SkipForward, LineChart, RotateCcw, Plus } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
+import { Button } from '@/shared/ui/Button.jsx'
 import { weightHint } from '../../config/exercises.js'
 import SetRow from './SetRow.jsx'
 import ExerciseNote from './ExerciseNote.jsx'
@@ -240,12 +241,9 @@ export default function ExerciseAccordion({
               )}
 
               {savedDone > 0 && (
-                <button
-                  onClick={onToggle}
-                  className="w-full mt-3 h-12 rounded-xl bg-accent text-accent-fg text-sm font-semibold active:scale-[0.98] transition inline-flex items-center justify-center gap-2"
-                >
+                <Button size="lg" className="w-full mt-3" onClick={onToggle}>
                   <Check size={16} strokeWidth={2.6} /> Replier
-                </button>
+                </Button>
               )}
             </>
           )}

@@ -2,19 +2,19 @@ import { useState } from 'react'
 import { CalendarClock, ChevronDown } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
-import { DAY_SHORT, DAY_LABELS } from '@/shared/lib/dates.js'
+import { DAY_LABELS } from '@/shared/lib/dates.js'
+import DayPicker from './DayPicker.jsx'
 
 const PARITY_LABEL = { even: 'Semaine paire', odd: 'Semaine impaire' }
 const PARITY_TABS = [
   { id: 'odd', label: 'Semaine impaire', short: 'Impaire' },
   { id: 'even', label: 'Semaine paire', short: 'Paire' },
 ]
-const DOWS = [1, 2, 3, 4, 5, 6, 7]
 
 // Contrôle discret : forcer la parité de semaine ET le jour de séance affiché.
 // Un seul contrôle pour les deux cas (vacances qui décalent le cycle, séance
 // du mardi faite le mercredi). Changer de jour ne perd aucune saisie.
-export default function SessionPlanControl({ parity, dayOfWeek, isForced, onChange, onReset }) {
+export default function SessionPlanControl({ parity, dayOfWeek, dayCounts, isForced, onChange, onReset }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -56,24 +56,11 @@ export default function SessionPlanControl({ parity, dayOfWeek, isForced, onChan
               className="mb-3"
             />
 
-            <div className="grid grid-cols-7 gap-1.5">
-              {DOWS.map((d) => (
-                <button
-                  key={d}
-                  onClick={() => onChange({ parity, dayOfWeek: d })}
-                  aria-label={DAY_LABELS[d % 7]}
-                  aria-pressed={d === dayOfWeek}
-                  className={cn(
-                    'h-11 rounded-xl text-xs font-semibold border transition-all duration-200 ease-ios active:scale-95',
-                    d === dayOfWeek
-                      ? 'bg-accent text-accent-fg border-accent'
-                      : 'bg-surface-2 text-muted border-border hover:text-fg',
-                  )}
-                >
-                  {DAY_SHORT[d % 7]}
-                </button>
-              ))}
-            </div>
+            <DayPicker
+              value={dayOfWeek}
+              onChange={(d) => onChange({ parity, dayOfWeek: d })}
+              counts={dayCounts}
+            />
 
             {isForced && (
               <button

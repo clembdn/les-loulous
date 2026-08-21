@@ -81,6 +81,13 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
 
   const isForced = plan.parity !== natural.parity || plan.dayOfWeek !== natural.dayOfWeek
 
+  // Charge de chaque jour pour la parité affichée : le sélecteur montre où sont
+  // les séances au lieu de sept cases identiques.
+  const dayCounts = useMemo(() => {
+    const days = plan.parity === 'even' ? even.days : odd.days
+    return Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map((d) => [d, (days?.[d] || []).length]))
+  }, [plan.parity, even.days, odd.days])
+
   // Changer de jour ou de parité ne coûte JAMAIS le travail déjà fait : les
   // séries saisies restent, et les exercices sur lesquels on a déjà travaillé
   // restent visibles à la suite du nouveau programme.
@@ -144,6 +151,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
       <SessionPlanControl
         parity={plan.parity}
         dayOfWeek={plan.dayOfWeek}
+        dayCounts={dayCounts}
         isForced={isForced}
         onChange={applyPlan}
         onReset={resetPlan}

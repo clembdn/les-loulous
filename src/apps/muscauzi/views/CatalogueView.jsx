@@ -3,6 +3,8 @@ import { Plus, Trash2, Pencil, Check, X, ListChecks } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
+import { Button } from '@/shared/ui/Button.jsx'
+import { Input } from '@/shared/ui/Input.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { EXERCISE_TYPES, DEFAULT_TYPE, getExerciseType } from '../config/exercises.js'
 import { useExercises } from '../hooks/useMuscData.js'
@@ -122,14 +124,13 @@ function ExerciseForm({ initial, onCancel, onSubmit }) {
 
   return (
     <div className="p-4 mb-4 rounded-2xl border border-accent/30 bg-surface slide-up">
-      <input
+      <Input
         autoFocus
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
         placeholder="Nom de l'exercice"
-        className="w-full h-12 px-4 rounded-xl bg-surface-2 border border-border text-[15px] text-fg placeholder:text-faint
-                   focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus:border-transparent transition"
+        className="h-12 text-[15px]"
       />
 
       <div className="grid grid-cols-2 gap-2 mt-3">
@@ -171,19 +172,12 @@ function ExerciseForm({ initial, onCancel, onSubmit }) {
       )}
 
       <div className="flex gap-2 mt-4">
-        <button
-          onClick={onCancel}
-          className="flex-1 h-11 rounded-xl border border-border text-sm font-medium text-muted hover:text-fg transition inline-flex items-center justify-center gap-2"
-        >
+        <Button variant="outline" className="flex-1" onClick={onCancel}>
           <X size={15} /> Annuler
-        </button>
-        <button
-          onClick={submit}
-          disabled={!name.trim()}
-          className="flex-1 h-11 rounded-xl bg-accent text-accent-fg text-sm font-semibold disabled:opacity-40 active:scale-[0.98] transition inline-flex items-center justify-center gap-2"
-        >
+        </Button>
+        <Button className="flex-1" onClick={submit} disabled={!name.trim()}>
           <Check size={15} strokeWidth={2.6} /> Enregistrer
-        </button>
+        </Button>
       </div>
     </div>
   )

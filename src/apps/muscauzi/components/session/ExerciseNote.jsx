@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Pencil, Check, X } from 'lucide-react'
+import { Button } from '@/shared/ui/Button.jsx'
 
 // Note de réglages du mouvement (« siège 4, dossier 2, prise neutre »).
 // Lue debout devant la machine : elle passe avant les séries, en petit, et les
@@ -26,18 +27,12 @@ export default function ExerciseNote({ note, onSave }) {
                      focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus:border-transparent transition resize-y"
         />
         <div className="flex gap-2 mt-2">
-          <button
-            onClick={() => { setEditing(false); setDraft(note || '') }}
-            className="flex-1 h-10 rounded-lg border border-border text-xs font-medium text-muted hover:text-fg transition inline-flex items-center justify-center gap-1.5"
-          >
+          <Button variant="outline" size="sm" className="flex-1" onClick={() => { setEditing(false); setDraft(note || '') }}>
             <X size={14} /> Annuler
-          </button>
-          <button
-            onClick={() => { onSave(draft); setEditing(false) }}
-            className="flex-1 h-10 rounded-lg bg-surface-2 border border-accent/40 text-xs font-semibold text-accent transition inline-flex items-center justify-center gap-1.5"
-          >
+          </Button>
+          <Button size="sm" className="flex-1" onClick={() => { onSave(draft); setEditing(false) }}>
             <Check size={14} strokeWidth={2.6} /> Enregistrer
-          </button>
+          </Button>
         </div>
       </div>
     )

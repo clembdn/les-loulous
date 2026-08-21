@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Check, Scale } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
+import { Button } from '@/shared/ui/Button.jsx'
 import LineChart from '@/shared/ui/LineChart.jsx'
 import { toLocalDateKey, fromLocalDateKey, formatDayFr, formatDateShortFr, formatDateFr } from '@/shared/lib/dates.js'
 import { useWeights } from '../hooks/useMuscData.js'
@@ -62,21 +63,17 @@ export default function TrackingView() {
         )}
       </div>
 
-      <div className="mb-6">
-        <ConsistencyCalendar />
-      </div>
-
       <section className="rounded-2xl border border-border bg-surface p-5">
         <div className="flex items-baseline justify-between mb-1">
           <h2 className="text-sm font-semibold text-fg inline-flex items-center gap-2">
-            <Scale size={16} className="text-accent" /> Nouvelle pesée
+            Nouvelle pesée
           </h2>
           {/* La date n'est pas modifiable : on enregistre la pesée du jour. */}
           <span className="text-xs text-muted first-letter:uppercase">{formatDayFr(new Date())}</span>
         </div>
         {alreadyToday && (
           <p className="text-[11px] text-faint mb-2">
-            Déjà pesé aujourd'hui — enregistrer à nouveau remplace la valeur.
+            Déjà pesé aujourd'hui : enregistrer à nouveau remplace la valeur.
           </p>
         )}
 
@@ -96,13 +93,15 @@ export default function TrackingView() {
           <WeightScale value={value} onChange={(v) => { setTouched(true); setValue(v) }} />
         </div>
 
-        <button
-          onClick={save}
-          className="w-full mt-4 h-12 rounded-xl bg-accent text-accent-fg text-sm font-semibold active:scale-[0.98] transition inline-flex items-center justify-center gap-2"
-        >
+        <Button size="lg" className="w-full mt-4" onClick={save}>
           <Check size={16} strokeWidth={2.6} /> Enregistrer
-        </button>
+        </Button>
       </section>
+
+      <div className="mb-6">
+        <ConsistencyCalendar />
+      </div>
+
     </div>
   )
 }

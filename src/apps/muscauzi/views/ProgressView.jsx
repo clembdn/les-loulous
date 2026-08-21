@@ -3,7 +3,6 @@ import { ChevronRight, LineChart as LineChartIcon } from 'lucide-react'
 import { fromLocalDateKey, formatDateFr } from '@/shared/lib/dates.js'
 import { useExercises, useSessions, useLastPerf, useNotes } from '../hooks/useMuscData.js'
 import { formatSets } from '../utils/metrics.js'
-import { getExerciseType } from '../config/exercises.js'
 import { saveNote } from '../services/notesService.js'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import ExerciseDetailView from './ExerciseDetailView.jsx'
@@ -18,17 +17,16 @@ export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
   // occurrences confondues.
   const byExercise = lastPerf.byExercise
 
-  // Ceux qu'on a déjà faits d'abord, du plus récent au plus ancien : c'est là
-  // qu'on va regarder en pratique.
+  // UNIQUEMENT les exercices que CE profil a réellement travaillés.
+  //
+  // Le catalogue est commun aux deux comptes : lister tout le catalogue ici
+  // faisait apparaître les exercices de l'autre, sans courbe, et donnait
+  // l'impression d'un historique partagé. Les données, elles, n'ont jamais été
+  // partagées — chaque séance vit sous users/{uid}.
   const ordered = useMemo(() => {
-    return [...exercises].sort((a, b) => {
-      const da = byExercise[a.id]?.date || ''
-      const db = byExercise[b.id]?.date || ''
-      if (da && db) return db.localeCompare(da)
-      if (da) return -1
-      if (db) return 1
-      return a.name.localeCompare(b.name, 'fr')
-    })
+    return exercises
+      .filter((e) => byExercise[e.id])
+      .sort((a, b) => byExercise[b.id].date.localeCompare(byExercise[a.id].date))
   }, [exercises, byExercise])
 
   const focused = focusedExerciseId ? exerciseById[focusedExerciseId] : null
@@ -50,6 +48,7 @@ export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
       <header className="mb-5">
         <p className="text-xs uppercase tracking-[0.18em] text-faint">Progression</p>
         <h1 className="text-2xl font-semibold tracking-[-0.02em] text-fg mt-1">Mes exercices</h1>
+        <p className="text-sm text-muted mt-1">Ceux que tu as déjà travaillés, toi seul.</p>
       </header>
 
       {exercisesLoading && ordered.length === 0 ? (
@@ -61,8 +60,10 @@ export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
       ) : ordered.length === 0 ? (
         <div className="text-center py-14 px-6 rounded-2xl border border-dashed border-border">
           <LineChartIcon size={28} className="mx-auto text-faint" />
-          <p className="text-base font-medium text-fg mt-3">Aucun exercice</p>
-          <p className="text-sm text-muted mt-1">Ajoute-les depuis les réglages.</p>
+          <p className="text-base font-medium text-fg mt-3">Aucune courbe pour l'instant</p>
+          <p className="text-sm text-muted mt-1">
+            Valide tes premières séries : chaque exercice apparaîtra ici.
+          </p>
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -77,9 +78,7 @@ export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
                 <span className="flex-1 min-w-0">
                   <span className="block text-[15px] font-medium text-fg truncate">{ex.name}</span>
                   <span className="block text-xs text-muted mt-0.5 truncate tabular">
-                    {last
-                      ? `${formatDateFr(fromLocalDateKey(last.date))} · ${formatSets(last.sets)}`
-                      : getExerciseType(ex.type).label}
+                    {formatDateFr(fromLocalDateKey(last.date))} · {formatSets(last.sets)}
                   </span>
                 </span>
                 <ChevronRight size={16} className="shrink-0 text-faint" />

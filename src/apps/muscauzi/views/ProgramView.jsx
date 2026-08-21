@@ -3,11 +3,13 @@ import { Plus, Trash2, ChevronUp, ChevronDown, X, Search, CalendarRange, Copy } 
 import { toast } from 'sonner'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
+import { Input } from '@/shared/ui/Input.jsx'
 import { cn } from '@/shared/lib/utils.js'
-import { DAY_SHORT, DAY_LABELS, weekParity, isoDayOfWeek } from '@/shared/lib/dates.js'
+import { weekParity, isoDayOfWeek } from '@/shared/lib/dates.js'
 import { useExercises, useProgram } from '../hooks/useMuscData.js'
 import { saveProgramDay, DOWS } from '../services/programService.js'
 import { SETTINGS_SUBS } from '../config/navigation.js'
+import DayPicker from '../components/session/DayPicker.jsx'
 import { newInstanceId } from '../utils/ids.js'
 
 const PARITY_LABEL = { odd: 'Semaine impaire', even: 'Semaine paire' }
@@ -24,6 +26,10 @@ export default function ProgramView({ onNavigate }) {
   const { exercises, exerciseById, isLoading: exercisesLoading } = useExercises()
   const { days, isLoading } = useProgram(parity)
   const lines = days[dayOfWeek] || []
+  const dayCounts = useMemo(
+    () => Object.fromEntries(DOWS.map((d) => [d, (days[d] || []).length])),
+    [days],
+  )
 
   // Firestore renvoie l'écriture depuis son cache local : pas d'état de
   // brouillon à maintenir, on repart toujours de `lines`.
@@ -99,31 +105,12 @@ export default function ProgramView({ onNavigate }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1.5 mb-5">
-        {DOWS.map((d) => {
-          const count = (days[d] || []).length
-          const isActive = d === dayOfWeek
-          return (
-            <button
-              key={d}
-              onClick={() => setDayOfWeek(d)}
-              aria-label={DAY_LABELS[d % 7]}
-              className={cn(
-                'h-14 rounded-xl text-xs font-semibold border transition flex flex-col items-center justify-center gap-1',
-                isActive
-                  ? 'bg-accent text-accent-fg border-accent'
-                  : 'bg-surface-2 text-muted border-border hover:text-fg',
-              )}
-            >
-              {DAY_SHORT[d % 7]}
-              <span className={cn(
-                'h-1.5 w-1.5 rounded-full',
-                count === 0 ? 'opacity-0' : isActive ? 'bg-accent-fg' : 'bg-accent',
-              )} />
-            </button>
-          )
-        })}
-      </div>
+      <DayPicker
+        value={dayOfWeek}
+        onChange={setDayOfWeek}
+        counts={dayCounts}
+        className="mb-5"
+      />
 
       {isLoading && lines.length === 0 ? (
         <div className="space-y-2">
@@ -249,13 +236,12 @@ function ExercisePicker({ exercises, isLoading, onPick, onCancel }) {
       <div className="flex items-center gap-2 mb-2">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
-          <input
+          <Input
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Chercher un exercice"
-            className="w-full h-11 pl-9 pr-3 rounded-xl bg-surface-2 border border-border text-sm text-fg placeholder:text-faint
-                       focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus:border-transparent transition"
+            className="pl-9 pr-3"
           />
         </div>
         <button
