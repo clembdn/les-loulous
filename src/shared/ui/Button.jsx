@@ -10,8 +10,19 @@ const button = cva(
         secondary: 'bg-surface-2 text-fg border border-border hover:border-border-strong',
         ghost: 'text-muted hover:text-fg hover:bg-surface-2',
         outline: 'border border-border text-fg hover:bg-surface-2',
+        // Bouton d'ajout : le pointillé dit « il n'y a rien ici pour l'instant ».
+        dashed: 'border border-dashed border-border-strong text-muted hover:text-fg hover:border-accent',
+        // Action destructive, discrète tant qu'on ne la survole pas.
+        danger: 'text-faint hover:text-danger hover:bg-surface-2',
       },
-      size: { sm: 'h-9 px-3 text-sm', md: 'h-11 px-4 text-sm', lg: 'h-12 px-5 text-base' },
+      size: {
+        sm: 'h-9 px-3 text-sm',
+        md: 'h-11 px-4 text-sm',
+        lg: 'h-12 px-5 text-base',
+        // Boutons à icône seule : carrés, sans padding horizontal.
+        icon: 'h-9 w-9 rounded-lg',
+        iconSm: 'h-8 w-8 rounded-lg',
+      },
     },
     defaultVariants: { variant: 'accent', size: 'md' },
   },

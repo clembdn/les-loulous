@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Pencil, Check, X } from 'lucide-react'
 import { Button } from '@/shared/ui/Button.jsx'
+import { Textarea } from '@/shared/ui/Textarea.jsx'
 
 // Note de réglages du mouvement (« siège 4, dossier 2, prise neutre »).
 // Lue debout devant la machine : elle passe avant les séries, en petit, et les
@@ -17,14 +18,12 @@ export default function ExerciseNote({ note, onSave }) {
   if (editing) {
     return (
       <div className="mb-3">
-        <textarea
+        <Textarea
           autoFocus
           rows={3}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Siège 4, dossier 2, prise neutre…"
-          className="w-full px-3 py-2.5 rounded-xl bg-surface-2 border border-border text-sm text-fg placeholder:text-faint
-                     focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus:border-transparent transition resize-y"
         />
         <div className="flex gap-2 mt-2">
           <Button variant="outline" size="sm" className="flex-1" onClick={() => { setEditing(false); setDraft(note || '') }}>
@@ -52,13 +51,9 @@ export default function ExerciseNote({ note, onSave }) {
   return (
     <div className="mb-3 flex items-start gap-2">
       <p className="flex-1 min-w-0 text-[12px] leading-relaxed text-muted whitespace-pre-line">{note}</p>
-      <button
-        onClick={() => setEditing(true)}
-        aria-label="Modifier la note"
-        className="shrink-0 p-1.5 -mt-1 rounded-lg text-faint hover:text-fg hover:bg-surface-2 transition"
-      >
+      <Button variant="ghost" size="iconSm" className="shrink-0 -mt-1" aria-label="Modifier la note" onClick={() => setEditing(true)}>
         <Pencil size={13} />
-      </button>
+      </Button>
     </div>
   )
 }

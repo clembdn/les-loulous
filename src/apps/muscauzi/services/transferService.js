@@ -13,7 +13,7 @@ export const TRANSFER_VERSION = 1
 
 const PARITIES = ['even', 'odd']
 
-function exercisesCol() { return collection(db, 'exercises') }
+function exercisesCol(uid) { return collection(db, 'users', uid, 'exercises') }
 function programDoc(uid, parity) { return doc(db, 'users', uid, 'program', parity) }
 function notesCol(uid) { return collection(db, 'users', uid, 'exerciseNotes') }
 function sessionsCol(uid) { return collection(db, 'users', uid, 'sessions') }
@@ -22,7 +22,7 @@ function weightsCol(uid) { return collection(db, 'users', uid, 'weights') }
 /** Rassemble tout ce qu'un profil possède, en lectures ponctuelles. */
 export async function buildExport(uid) {
   const [catalogSnap, notesSnap, sessionsSnap, weightsSnap, ...programSnaps] = await Promise.all([
-    getDocs(exercisesCol()),
+    getDocs(exercisesCol(uid)),
     getDocs(notesCol(uid)),
     getDocs(sessionsCol(uid)),
     getDocs(weightsCol(uid)),
@@ -38,8 +38,8 @@ export async function buildExport(uid) {
     .map((d) => normalizeSession(d.id, d.data()))
     .filter(Boolean)
 
-  // Le catalogue est commun aux deux comptes : on n'embarque que les
-  // mouvements réellement référencés, pour que le texte reste copiable.
+  // On n'embarque que les mouvements réellement référencés : le texte doit
+  // rester assez court pour passer par le presse-papier.
   const referenced = new Set()
   for (const parity of PARITIES) {
     for (const lines of Object.values(program[parity])) {
@@ -128,7 +128,7 @@ async function commit(ops) {
  */
 export async function applyImport(uid, payload, currentUid) {
   const [catalogSnap, sessionsSnap, weightsSnap, notesSnap] = await Promise.all([
-    getDocs(exercisesCol()),
+    getDocs(exercisesCol(uid)),
     getDocs(sessionsCol(uid)),
     getDocs(weightsCol(uid)),
     getDocs(notesCol(uid)),
@@ -148,7 +148,7 @@ export async function applyImport(uid, payload, currentUid) {
     // Un nom vide serait refusé par les règles et ferait échouer tout le lot.
     if (!ex?.id || !String(ex.name || '').trim() || existingExercises.has(ex.id)) continue
     applied.exercises++
-    ops.push((b) => b.set(doc(db, 'exercises', ex.id), {
+    ops.push((b) => b.set(doc(db, 'users', uid, 'exercises', ex.id), {
       name: ex.name, type: ex.type, bodyweight: ex.bodyweight === true,
       createdAt: now, createdBy: currentUid, ...meta,
     }))
@@ -190,4 +190,60 @@ export async function applyImport(uid, payload, currentUid) {
 
   await commit(ops)
   return { applied, skipped }
+}
+
+
+/**
+ * Reconstruit le catalogue personnel à partir de ce que le profil possède
+ * encore : les noms recopiés dans le programme et dans les `programSnapshot`
+ * des séances passées.
+ *
+ * Filet de sécurité pour les catalogues vidés à l'époque où ils étaient
+ * communs aux deux comptes : le programme garde ses exerciceId, ses séries et
+ * son ordre, seuls les mouvements ont disparu. Ceux dont aucun nom n'est
+ * retrouvable sont recréés sous un libellé provisoire, à renommer.
+ */
+export async function rebuildCatalogue(uid, currentUid) {
+  const [catalogSnap, sessionsSnap, ...programSnaps] = await Promise.all([
+    getDocs(exercisesCol(uid)),
+    getDocs(sessionsCol(uid)),
+    ...PARITIES.map((p) => getDoc(programDoc(uid, p))),
+  ])
+
+  const existing = new Set(catalogSnap.docs.map((d) => d.id))
+  const names = new Map()   // exerciseId → nom retrouvé
+  const referenced = new Set()
+
+  const note = (line) => {
+    if (!line?.exerciseId) return
+    referenced.add(line.exerciseId)
+    if (line.name && !names.has(line.exerciseId)) names.set(line.exerciseId, line.name)
+  }
+
+  for (const snap of programSnaps) {
+    if (!snap.exists()) continue
+    for (const lines of Object.values(snap.data()?.days || {})) {
+      for (const l of lines || []) note(l)
+    }
+  }
+  // Les séances sont parcourues ensuite : leur snapshot porte toujours un nom.
+  for (const d of sessionsSnap.docs) {
+    for (const l of normalizeSession(d.id, d.data())?.programSnapshot || []) note(l)
+  }
+
+  const now = new Date().toISOString()
+  const missing = [...referenced].filter((id) => !existing.has(id))
+  const ops = missing.map((id) => (b) => b.set(doc(db, 'users', uid, 'exercises', id), {
+    name: names.get(id) || `Exercice ${id.slice(0, 4)}`,
+    type: 'barbell',
+    bodyweight: false,
+    createdAt: now, createdBy: currentUid, updatedAt: now, updatedBy: currentUid,
+  }))
+  await commit(ops)
+
+  return {
+    recreated: missing.length,
+    named: missing.filter((id) => names.has(id)).length,
+    unnamed: missing.filter((id) => !names.has(id)).length,
+  }
 }

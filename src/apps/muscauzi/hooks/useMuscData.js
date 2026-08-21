@@ -8,18 +8,21 @@ import {
 import { subscribeToWeights } from '../services/weightsService.js'
 import { subscribeToNotes } from '../services/notesService.js'
 
-// Catalogue d'exercices — commun aux deux profils, donc hors du cloisonnement.
+// Catalogue d'exercices du profil connecté — cloisonné comme le reste.
 export function useExercises() {
+  const { currentUid } = useAuth()
   const [exercises, setExercises] = useState([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    if (!currentUid) return undefined
     const unsub = subscribeToExercises(
+      currentUid,
       (x) => { setExercises(x); setIsLoading(false) },
       () => setIsLoading(false),
     )
     return () => unsub()
-  }, [])
+  }, [currentUid])
 
   const byId = Object.fromEntries(exercises.map((e) => [e.id, e]))
   return { exercises, exerciseById: byId, isLoading }

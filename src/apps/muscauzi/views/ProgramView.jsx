@@ -1,13 +1,14 @@
 import { useState, useMemo } from 'react'
-import { Plus, Trash2, ChevronUp, ChevronDown, X, Search, CalendarRange, Copy } from 'lucide-react'
+import { Plus, Minus, Trash2, ChevronUp, ChevronDown, X, Search, CalendarRange, Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
 import { Input } from '@/shared/ui/Input.jsx'
+import { Button } from '@/shared/ui/Button.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { weekParity, isoDayOfWeek } from '@/shared/lib/dates.js'
 import { useExercises, useProgram } from '../hooks/useMuscData.js'
-import { saveProgramDay, DOWS } from '../services/programService.js'
+import { saveProgramDay, resolveLineName, DOWS } from '../services/programService.js'
 import { SETTINGS_SUBS } from '../config/navigation.js'
 import DayPicker from '../components/session/DayPicker.jsx'
 import { newInstanceId } from '../utils/ids.js'
@@ -43,7 +44,12 @@ export default function ProgramView({ onNavigate }) {
   // la nouvelle occurrence du pré-remplissage de l'ancienne.
   const addLine = (exerciseId) => {
     // Valeurs de départ : 4 × 8, le plus courant — ça s'ajuste juste après.
-    commit([...lines, { instanceId: newInstanceId(), exerciseId, sets: 4, reps: 8, order: lines.length }])
+    commit([...lines, {
+      instanceId: newInstanceId(),
+      exerciseId,
+      name: exerciseById[exerciseId]?.name || '',
+      sets: 4, reps: 8, order: lines.length,
+    }])
     setPicking(false)
   }
 
@@ -121,43 +127,36 @@ export default function ProgramView({ onNavigate }) {
       ) : (
         <div className="space-y-2">
           {lines.map((line, i) => {
-            const exercise = exerciseById[line.exerciseId]
             return (
               <div key={line.instanceId} className="px-4 py-3 rounded-xl border border-border bg-surface">
                 <div className="flex items-center gap-2">
                   <span className="flex-1 min-w-0 text-[15px] font-medium text-fg truncate">
-                    {exercise?.name || <span className="text-faint italic">Exercice supprimé</span>}
+                    {resolveLineName(line, exerciseById)}
                   </span>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="iconSm"
                     onClick={() => move(i, -1)}
                     disabled={i === 0}
                     aria-label="Monter"
-                    className="p-1.5 rounded-lg text-faint hover:text-fg hover:bg-surface-2 disabled:opacity-25 disabled:pointer-events-none transition"
                   >
                     <ChevronUp size={16} />
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="iconSm"
                     onClick={() => move(i, 1)}
                     disabled={i === lines.length - 1}
                     aria-label="Descendre"
-                    className="p-1.5 rounded-lg text-faint hover:text-fg hover:bg-surface-2 disabled:opacity-25 disabled:pointer-events-none transition"
                   >
                     <ChevronDown size={16} />
-                  </button>
-                  <button
-                    onClick={() => duplicateLine(i)}
-                    aria-label="Dupliquer"
-                    className="p-1.5 rounded-lg text-faint hover:text-fg hover:bg-surface-2 transition"
-                  >
+                  </Button>
+                  <Button variant="ghost" size="iconSm" aria-label="Dupliquer" onClick={() => duplicateLine(i)}>
                     <Copy size={15} />
-                  </button>
-                  <button
-                    onClick={() => removeLine(i)}
-                    aria-label="Retirer"
-                    className="p-1.5 rounded-lg text-faint hover:text-danger hover:bg-surface-2 transition"
-                  >
+                  </Button>
+                  <Button variant="danger" size="iconSm" aria-label="Retirer" onClick={() => removeLine(i)}>
                     <Trash2 size={15} />
-                  </button>
+                  </Button>
                 </div>
                 <div className="flex items-center gap-3 mt-2.5">
                   <Stepper label="séries" value={line.sets} min={1} max={12} onChange={(v) => updateLine(i, { sets: v })} />
@@ -185,12 +184,9 @@ export default function ProgramView({ onNavigate }) {
               onCancel={() => setPicking(false)}
             />
           ) : (
-            <button
-              onClick={() => setPicking(true)}
-              className="w-full h-12 rounded-xl border border-dashed border-border-strong text-sm font-medium text-muted hover:text-fg hover:border-accent transition inline-flex items-center justify-center gap-2"
-            >
+            <Button variant="dashed" size="lg" className="w-full text-sm" onClick={() => setPicking(true)}>
               <Plus size={16} /> Ajouter un exercice
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -201,24 +197,16 @@ export default function ProgramView({ onNavigate }) {
 function Stepper({ label, value, min, max, onChange }) {
   return (
     <div className="flex items-center gap-1.5">
-      <button
-        onClick={() => onChange(Math.max(min, value - 1))}
-        aria-label={`Moins de ${label}`}
-        className="h-9 w-9 rounded-lg bg-surface-2 border border-border text-muted hover:text-fg transition text-lg leading-none"
-      >
-        −
-      </button>
+      <Button variant="secondary" size="icon" aria-label={`Moins de ${label}`} onClick={() => onChange(Math.max(min, value - 1))}>
+        <Minus size={15} />
+      </Button>
       <span className="w-12 text-center text-sm font-semibold text-fg tabular">
         {value}
         <span className="block text-[10px] font-normal text-faint leading-none">{label}</span>
       </span>
-      <button
-        onClick={() => onChange(Math.min(max, value + 1))}
-        aria-label={`Plus de ${label}`}
-        className="h-9 w-9 rounded-lg bg-surface-2 border border-border text-muted hover:text-fg transition text-lg leading-none"
-      >
-        +
-      </button>
+      <Button variant="secondary" size="icon" aria-label={`Plus de ${label}`} onClick={() => onChange(Math.min(max, value + 1))}>
+        <Plus size={15} />
+      </Button>
     </div>
   )
 }
@@ -244,13 +232,9 @@ function ExercisePicker({ exercises, isLoading, onPick, onCancel }) {
             className="pl-9 pr-3"
           />
         </div>
-        <button
-          onClick={onCancel}
-          aria-label="Fermer"
-          className="h-11 w-11 shrink-0 rounded-xl border border-border text-muted hover:text-fg transition inline-flex items-center justify-center"
-        >
+        <Button variant="outline" size="icon" className="h-11 w-11 shrink-0" aria-label="Fermer" onClick={onCancel}>
           <X size={16} />
-        </button>
+        </Button>
       </div>
 
       <div className="max-h-64 overflow-y-auto space-y-1">

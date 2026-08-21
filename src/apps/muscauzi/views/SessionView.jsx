@@ -64,7 +64,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
   const snapshotFrom = useCallback((lines) => lines.map((l) => ({
     instanceId: l.instanceId,
     exerciseId: l.exerciseId,
-    name: exerciseById[l.exerciseId]?.name || '',
+    name: exerciseById[l.exerciseId]?.name || l.name || '',
     order: l.order,
     sets: l.sets,
     reps: l.reps,

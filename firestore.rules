@@ -321,11 +321,15 @@ service cloud.firestore {
         || value == "machine" || value == "bodyweight";
     }
 
-    // Catalogue d'exercices — COMMUN aux deux profils, contrairement au reste.
-    match /exercises/{exerciseId} {
-      allow read: if isAuthorizedUser();
+    // Catalogue d'exercices — PERSONNEL, comme le reste des données.
+    //
+    // Il a été commun aux deux profils au départ : supprimer un exercice
+    // depuis un compte le supprimait chez l'autre et laissait son programme
+    // pointer dans le vide. Chacun a désormais le sien.
+    match /users/{uid}/exercises/{exerciseId} {
+      allow read: if isOwner(uid);
 
-      allow create, update: if isAuthorizedUser()
+      allow create, update: if isOwner(uid)
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 80
@@ -333,7 +337,7 @@ service cloud.firestore {
         && request.resource.data.bodyweight is bool
         && hasValidMetadata(request.resource.data);
 
-      allow delete: if isAuthorizedUser();
+      allow delete: if isOwner(uid);
     }
 
     // Programme : un document par parité de semaine, contenant les sept jours.

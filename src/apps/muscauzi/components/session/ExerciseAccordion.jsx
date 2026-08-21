@@ -229,12 +229,9 @@ export default function ExerciseAccordion({
                 ))}
               </div>
 
-              <button
-                onClick={addRow}
-                className="w-full mt-3 h-11 rounded-xl border border-dashed border-border-strong text-xs font-medium text-muted hover:text-fg hover:border-accent transition inline-flex items-center justify-center gap-1.5"
-              >
+              <Button variant="dashed" className="w-full mt-3 text-xs" onClick={addRow}>
                 <Plus size={14} /> série
-              </button>
+              </Button>
 
               {weightHint(exercise) && (
                 <p className="text-[11px] text-faint mt-3 leading-relaxed">{weightHint(exercise)}</p>

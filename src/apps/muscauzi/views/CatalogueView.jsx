@@ -5,14 +5,15 @@ import { useAuth } from '@/shared/context/AuthContext.jsx'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
 import { Input } from '@/shared/ui/Input.jsx'
+import { Checkbox } from '@/shared/ui/Checkbox.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { EXERCISE_TYPES, DEFAULT_TYPE, getExerciseType } from '../config/exercises.js'
 import { useExercises } from '../hooks/useMuscData.js'
 import { SETTINGS_SUBS } from '../config/navigation.js'
 import { addExercise, updateExercise, deleteExercise } from '../services/exercisesService.js'
 
-// Catalogue commun aux deux profils : y ajouter un exercice le rend disponible
-// dans les deux programmes. Seuls les historiques sont cloisonnés.
+// Catalogue personnel : chaque profil a ses propres exercices, comme il a ses
+// propres séances. Supprimer ici n'affecte que ce compte.
 export default function CatalogueView({ onNavigate }) {
   const { currentUid } = useAuth()
   const { exercises, isLoading } = useExercises()
@@ -24,7 +25,7 @@ export default function CatalogueView({ onNavigate }) {
       <header className="mb-5">
         <p className="text-xs uppercase tracking-[0.18em] text-faint">Réglages</p>
         <h1 className="text-2xl font-semibold tracking-[-0.02em] text-fg mt-1">Exercices</h1>
-        <p className="text-sm text-muted mt-1">Catalogue partagé entre les deux profils.</p>
+        <p className="text-sm text-muted mt-1">Ton catalogue à toi — l’autre profil a le sien.</p>
       </header>
 
       <SegmentedTabs items={SETTINGS_SUBS} active="catalogue" onChange={onNavigate} className="mb-5" />
@@ -33,17 +34,14 @@ export default function CatalogueView({ onNavigate }) {
         <ExerciseForm
           onCancel={() => setCreating(false)}
           onSubmit={(draft) => {
-            addExercise(draft, currentUid).catch(() => toast.error('Ajout impossible'))
+            addExercise(currentUid, draft, currentUid).catch(() => toast.error('Ajout impossible'))
             setCreating(false)
           }}
         />
       ) : (
-        <button
-          onClick={() => setCreating(true)}
-          className="w-full h-12 mb-4 rounded-xl border border-dashed border-border-strong text-sm font-medium text-muted hover:text-fg hover:border-accent transition inline-flex items-center justify-center gap-2"
-        >
+        <Button variant="dashed" size="lg" className="w-full mb-4 text-sm" onClick={() => setCreating(true)}>
           <Plus size={16} /> Nouvel exercice
-        </button>
+        </Button>
       )}
 
       {isLoading && exercises.length === 0 ? (
@@ -67,7 +65,7 @@ export default function CatalogueView({ onNavigate }) {
                 initial={ex}
                 onCancel={() => setEditingId(null)}
                 onSubmit={(draft) => {
-                  updateExercise(ex.id, draft, currentUid).catch(() => toast.error('Modification impossible'))
+                  updateExercise(currentUid, ex.id, draft, currentUid).catch(() => toast.error('Modification impossible'))
                   setEditingId(null)
                 }}
               />
@@ -83,25 +81,22 @@ export default function CatalogueView({ onNavigate }) {
                     {ex.bodyweight && ex.type !== 'bodyweight' && ' · poids du corps'}
                   </span>
                 </span>
-                <button
-                  onClick={() => setEditingId(ex.id)}
-                  aria-label={`Modifier ${ex.name}`}
-                  className="p-2 rounded-lg text-faint hover:text-fg hover:bg-surface-2 transition"
-                >
+                <Button variant="ghost" size="icon" aria-label={`Modifier ${ex.name}`} onClick={() => setEditingId(ex.id)}>
                   <Pencil size={15} />
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="danger"
+                  size="icon"
+                  aria-label={`Supprimer ${ex.name}`}
                   onClick={() => {
-                    // L'historique reste attaché à l'id : supprimer l'exercice
-                    // le retire du catalogue et des programmes à venir.
-                    deleteExercise(ex.id).catch(() => toast.error('Suppression impossible'))
+                    // Catalogue personnel : ne retire l'exercice que de CE
+                    // compte. Le programme garde son nom recopié.
+                    deleteExercise(currentUid, ex.id).catch(() => toast.error('Suppression impossible'))
                     toast.success(`${ex.name} supprimé`)
                   }}
-                  aria-label={`Supprimer ${ex.name}`}
-                  className="p-2 rounded-lg text-faint hover:text-danger hover:bg-surface-2 transition"
                 >
                   <Trash2 size={15} />
-                </button>
+                </Button>
               </div>
             )
           ))}
@@ -160,15 +155,12 @@ function ExerciseForm({ initial, onCancel, onSubmit }) {
       {/* Une machine à assistance ou des dips lestés restent « poids du corps »
           côté métrique : le volume vaut 0, seule la somme des reps progresse. */}
       {type !== 'bodyweight' && (
-        <label className="flex items-center gap-3 mt-3 px-1 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={bodyweight}
-            onChange={(e) => setBodyweight(e.target.checked)}
-            className="h-4 w-4 accent-[rgb(var(--accent))]"
-          />
-          <span className="text-sm text-muted">Compter en reps (poids du corps)</span>
-        </label>
+        <Checkbox
+          className="mt-3 px-1"
+          checked={bodyweight}
+          onCheckedChange={setBodyweight}
+          label="Compter en reps (poids du corps)"
+        />
       )}
 
       <div className="flex gap-2 mt-4">

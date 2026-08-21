@@ -27,10 +27,19 @@ function normalizeLine(raw, index) {
     // plutôt que de laisser deux occurrences partager une clé d'entrées.
     instanceId: raw?.instanceId || newInstanceId(),
     exerciseId: raw?.exerciseId || '',
+    // Nom recopié : supprimer l'exercice du catalogue ne doit pas rendre le
+    // programme illisible. L'affichage préfère le nom vivant du catalogue et
+    // ne retombe sur celui-ci que si le mouvement n'existe plus.
+    name: raw?.name || '',
     order: Number.isFinite(raw?.order) ? raw.order : index,
     sets: Math.max(1, Number(raw?.sets) || 1),
     reps: Math.max(1, Number(raw?.reps) || 1),
   }
+}
+
+// Nom à afficher pour une ligne de programme ou de snapshot.
+export function resolveLineName(line, exerciseById) {
+  return exerciseById?.[line?.exerciseId]?.name || line?.name || 'Exercice supprimé'
 }
 
 function normalizeDays(raw) {
