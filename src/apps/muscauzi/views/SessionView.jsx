@@ -11,31 +11,11 @@ import {
 import { saveEntry, clearEntry, hasWork, isEntryComplete } from '../services/sessionsService.js'
 import { withoutOrphans } from '../services/programService.js'
 import { saveNote } from '../services/notesService.js'
-import SessionPlanControl from '../components/session/SessionPlanControl.jsx'
 import ExerciseAccordion from '../components/session/ExerciseAccordion.jsx'
 
 // On peut rattraper une séance oubliée jusqu'à une semaine en arrière. Au-delà,
 // le programme a pu changer : ce qui s'est passé se lit dans Progrès.
 const BACKFILL_DAYS = 6
-
-// La parité/le jour forcés valent pour UNE date : on rouvre l'appli entre deux
-// séries, le choix doit tenir — mais pas déborder sur demain.
-function planStorageKey(dateKey) {
-  return `muscauzi:plan:${dateKey}`
-}
-
-function readStoredPlan(dateKey) {
-  try {
-    const raw = localStorage.getItem(planStorageKey(dateKey))
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    if (parsed?.parity !== 'even' && parsed?.parity !== 'odd') return null
-    if (!(parsed.dayOfWeek >= 1 && parsed.dayOfWeek <= 7)) return null
-    return { parity: parsed.parity, dayOfWeek: parsed.dayOfWeek }
-  } catch {
-    return null
-  }
-}
 
 export default function SessionView({ onOpenExercise, onOpenWeight }) {
   const { currentUid } = useAuth()
@@ -46,38 +26,23 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
   const isToday = dateKey === todayKey
   const oldestKey = useMemo(() => shiftDateKey(todayKey, -BACKFILL_DAYS), [todayKey])
 
-  // Le jour et la parité découlent de la DATE affichée. Le contrôle de plan ne
-  // fait que substituer une autre prescription — il n'écrit rien.
-  const natural = useMemo(() => {
+  // La date affichée détermine SEULE le jour et la parité — aucun forçage
+  // séparé : le programme se change dans Réglages, pas ici.
+  const { parity, dayOfWeek } = useMemo(() => {
     const date = fromLocalDateKey(dateKey)
     return { parity: weekParity(date), dayOfWeek: isoDayOfWeek(date) }
   }, [dateKey])
 
-  /**
-   * L'override est lu depuis localStorage EN DIRECT, pas recopié dans un state
-   * mis à jour par un effet. Un effet ne tourne qu'APRÈS le rendu qui a changé
-   * `dateKey` : entre les deux, l'écran affichait un instant la nouvelle date
-   * avec l'override de l'ANCIENNE — visible et déroutant en cliquant vite sur
-   * les flèches. `planVersion` ne sert qu'à forcer une relecture après une
-   * écriture (`applyPlan` / `resetPlan`), sans jamais désynchroniser de `dateKey`.
-   */
-  const [planVersion, setPlanVersion] = useState(0)
-  const override = useMemo(() => readStoredPlan(dateKey), [dateKey, planVersion])
   useEffect(() => { setOpenId(null) }, [dateKey])
-
-  const plan = override || natural
-  const isForced = plan.parity !== natural.parity || plan.dayOfWeek !== natural.dayOfWeek
 
   const { exerciseById, isLoading: exercisesLoading } = useExercises()
   const { session, isLoading: sessionLoading } = useSession(dateKey)
   const { lastPerf } = useLastPerf()
   const { notes } = useNotes()
-  // Les deux parités sont suivies en permanence : forcer la semaine doit
-  // basculer la prescription sans attendre une lecture.
   const even = useProgram('even')
   const odd = useProgram('odd')
 
-  const programDays = plan.parity === 'even' ? even.days : odd.days
+  const programDays = parity === 'even' ? even.days : odd.days
 
   // Un mouvement supprimé du catalogue n'a plus rien à faire dans la séance.
   const catalogueReady = !exercisesLoading
@@ -88,21 +53,15 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
 
   /**
    * Ce qui s'affiche : la prescription du jour, lue EN DIRECT dans le
-   * programme. Rien n'est figé dans la séance : changer de jour ou de parité
-   * change simplement la liste, sans jamais rien écrire.
+   * programme. Rien n'est figé dans la séance : changer de programme dans
+   * Réglages change simplement la liste, sans jamais rien écrire ici.
    *
-   * « Hors programme » retrouve ce qui a été saisi sous une AUTRE prescription
-   * ce jour-là (rattrapage forcé, ou programme changé depuis) — mais
-   * UNIQUEMENT sur la vue naturelle. Le document de séance ne change pas
-   * quand on force un jour : deux clics différents dans le sélecteur de jour
-   * donnaient donc accès au MÊME `session.entries`, et cette section
-   * réaffichait alors le même contenu pour chaque jour cliqué — d'où
-   * l'impression d'« une seule séance recopiée partout ». En vue forcée, on
-   * ne montre plus que la prescription forcée elle-même : ce qu'on y a saisi
-   * réapparaît ici, en une fois, dès qu'on revient à la vue naturelle.
+   * « Hors programme » retrouve ce qui a été saisi sous une prescription qui
+   * ne correspond plus à celle d'aujourd'hui (programme changé en cours de
+   * séance) — pour ne jamais perdre de vue un travail déjà fait.
    */
   const { lines, extras } = useMemo(() => {
-    const prescribed = visible(programDays?.[plan.dayOfWeek] || []).map((l, i) => ({
+    const prescribed = visible(programDays?.[dayOfWeek] || []).map((l, i) => ({
       instanceId: l.instanceId,
       exerciseId: l.exerciseId,
       name: exerciseById[l.exerciseId]?.name || l.name || '',
@@ -110,8 +69,6 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
       prescribedSets: l.sets,
       prescribedReps: l.reps,
     }))
-    if (isForced) return { lines: prescribed, extras: [] }
-
     const known = new Set(prescribed.map((l) => l.instanceId))
     const off = Object.values(session?.entries || {})
       .filter((e) => !known.has(e.instanceId) && hasWork(e))
@@ -125,32 +82,15 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
         prescribedReps: e.prescribedReps,
       }))
     return { lines: prescribed, extras: off }
-  }, [programDays, plan.dayOfWeek, exerciseById, session, visible, isForced])
-
-  const dayCounts = useMemo(
-    () => Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map((d) => [d, visible(programDays?.[d] || []).length])),
-    [programDays, visible],
-  )
-
-  const applyPlan = useCallback((next) => {
-    try { localStorage.setItem(planStorageKey(dateKey), JSON.stringify(next)) } catch { /* mode privé */ }
-    setPlanVersion((v) => v + 1)
-    setOpenId(null)
-  }, [dateKey])
-
-  const resetPlan = useCallback(() => {
-    try { localStorage.removeItem(planStorageKey(dateKey)) } catch { /* mode privé */ }
-    setPlanVersion((v) => v + 1)
-    setOpenId(null)
-  }, [dateKey])
+  }, [programDays, dayOfWeek, exerciseById, session, visible])
 
   const save = useCallback((line, { sets, skipped }) => {
     saveEntry(
       currentUid, dateKey,
       { ...line, sets, skipped },
-      plan, currentUid, lastPerf,
+      { parity, dayOfWeek }, currentUid, lastPerf,
     )
-  }, [currentUid, dateKey, plan, lastPerf])
+  }, [currentUid, dateKey, parity, dayOfWeek, lastPerf])
 
   const isLoading = exercisesLoading || sessionLoading || even.isLoading || odd.isLoading
   const total = lines.length
@@ -221,17 +161,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
         </div>
       </header>
 
-      <SessionPlanControl
-        parity={plan.parity}
-        dayOfWeek={plan.dayOfWeek}
-        naturalDayOfWeek={natural.dayOfWeek}
-        dayCounts={dayCounts}
-        isForced={isForced}
-        onChange={applyPlan}
-        onReset={resetPlan}
-      />
-
-      {isToday && plan.dayOfWeek === 1 && <WeighInNudge dateKey={dateKey} onGo={onOpenWeight} />}
+      {isToday && dayOfWeek === 1 && <WeighInNudge dateKey={dateKey} onGo={onOpenWeight} />}
 
       {isLoading && total === 0 ? (
         <SkeletonList />
