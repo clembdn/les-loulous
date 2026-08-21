@@ -26,20 +26,15 @@ function resolveType(raw) {
   return EXERCISE_TYPE_BY_ID[raw] ? raw : DEFAULT_TYPE
 }
 
-// « Compter en reps » n'est pas un réglage à part : un exercice se compte en
-// reps exactement quand il est au poids du corps. Une case à cocher de plus
-// n'aurait fait qu'ouvrir la porte à des exercices incohérents.
-function isBodyweight(type) {
-  return type === 'bodyweight'
-}
-
+// Le TYPE porte tout : « compter en reps » découle de « poids du corps »
+// (cf. `isBodyweight`). Aucun champ `bodyweight` n'est stocké ni dérivé ici —
+// il dupliquait le type et pouvait le contredire. Les anciens documents en
+// portent encore un : il est simplement ignoré.
 function normalize(raw) {
-  const type = resolveType(raw.type)
   return {
     id: raw.id,
     name: raw.name || '',
-    type,
-    bodyweight: isBodyweight(type),
+    type: resolveType(raw.type),
   }
 }
 
@@ -58,7 +53,6 @@ export function addExercise(uid, input, currentUid) {
   return addDoc(exercisesCol(uid), {
     name: String(input.name || '').trim(),
     type,
-    bodyweight: isBodyweight(type),
     createdAt: now,
     createdBy: currentUid,
     updatedAt: now,
@@ -69,10 +63,7 @@ export function addExercise(uid, input, currentUid) {
 export function updateExercise(uid, id, updates, currentUid) {
   const payload = { updatedAt: new Date().toISOString(), updatedBy: currentUid }
   if (updates.name != null) payload.name = String(updates.name).trim()
-  if (updates.type != null) {
-    payload.type = resolveType(updates.type)
-    payload.bodyweight = isBodyweight(payload.type)
-  }
+  if (updates.type != null) payload.type = resolveType(updates.type)
   return updateDoc(exerciseDoc(uid, id), payload)
 }
 

@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { ChevronRight, LineChart as LineChartIcon } from 'lucide-react'
 import { fromLocalDateKey, formatDateFr } from '@/shared/lib/dates.js'
-import { useExercises, useSessions, useLastPerf, useNotes } from '../hooks/useMuscData.js'
-import { formatSets } from '../utils/metrics.js'
+import { useExercises, useSessions, useNotes } from '../hooks/useMuscData.js'
+import { formatSets, latestByExercise } from '../utils/metrics.js'
 import { saveNote } from '../services/notesService.js'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import ExerciseDetailView from './ExerciseDetailView.jsx'
@@ -10,17 +10,17 @@ import ExerciseDetailView from './ExerciseDetailView.jsx'
 export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
   const { exercises, exerciseById, isLoading: exercisesLoading } = useExercises()
   const { sessions, isLoading: sessionsLoading } = useSessions()
-  const { lastPerf } = useLastPerf()
   const { notes } = useNotes()
   const { currentUid } = useAuth()
-  // Aperçu du MOUVEMENT : la dernière fois qu'il a été fait, toutes
-  // occurrences confondues.
-  const byExercise = lastPerf.byExercise
 
   // UNIQUEMENT les exercices que CE profil a réellement travaillés.
   //
-  // Lister tout le catalogue ferait apparaître des entrées sans courbe : un
-  // exercice programmé mais jamais validé n'a rien à montrer ici.
+  // Calculé depuis l'historique des séances lui-même, PAS depuis le cache
+  // `lastPerf` : ce cache ne sert qu'à pré-remplir la saisie du jour et peut
+  // se désynchroniser (par ex. un exercice supprimé puis recréé en base) —
+  // l'écran Progrès ne doit jamais en dépendre pour savoir ce qui a été fait.
+  const byExercise = useMemo(() => latestByExercise(sessions), [sessions])
+
   const ordered = useMemo(() => {
     return exercises
       .filter((e) => byExercise[e.id])
@@ -49,7 +49,7 @@ export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
         <p className="text-sm text-muted mt-1">Ceux que tu as déjà travaillés, toi seul.</p>
       </header>
 
-      {exercisesLoading && ordered.length === 0 ? (
+      {(exercisesLoading || sessionsLoading) && ordered.length === 0 ? (
         <div className="space-y-2">
           {[0, 1, 2, 3, 4].map((i) => (
             <div key={i} className="h-[62px] rounded-xl border border-border bg-surface animate-pulse" />

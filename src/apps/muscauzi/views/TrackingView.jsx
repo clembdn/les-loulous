@@ -63,7 +63,7 @@ export default function TrackingView() {
         )}
       </div>
 
-      <section className="rounded-2xl border border-border bg-surface p-5">
+      <section className="rounded-2xl border border-border bg-surface p-5 mb-6">
         <div className="flex items-baseline justify-between mb-1">
           <h2 className="text-sm font-semibold text-fg inline-flex items-center gap-2">
             Nouvelle pesée

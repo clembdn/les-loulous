@@ -17,10 +17,21 @@ export function getExerciseType(id) {
   return EXERCISE_TYPE_BY_ID[id] || EXERCISE_TYPE_BY_ID[DEFAULT_TYPE]
 }
 
+/**
+ * Se compte-t-il en répétitions plutôt qu'en charge ?
+ *
+ * C'est EXACTEMENT « son type est poids du corps » — d'où l'absence de champ
+ * `bodyweight` stocké à côté du type. Il a existé, dupliquait l'information et
+ * ne pouvait que diverger : deux sources pour un seul fait, dont l'une
+ * silencieusement fausse le jour où elles ne s'accordent plus.
+ */
+export function isBodyweight(exercise) {
+  return exercise?.type === 'bodyweight'
+}
+
 // Rappel de convention affiché sous la saisie. Rend `null` quand il n'y a rien
 // d'utile à dire — l'accordéon n'affiche alors aucune ligne.
 export function weightHint(exercise) {
   if (!exercise) return null
-  if (exercise.bodyweight) return EXERCISE_TYPE_BY_ID.bodyweight.hint
   return getExerciseType(exercise.type).hint
 }

@@ -326,6 +326,11 @@ service cloud.firestore {
     // Il a été commun aux deux profils au départ : supprimer un exercice
     // depuis un compte le supprimait chez l'autre et laissait son programme
     // pointer dans le vide. Chacun a désormais le sien.
+    //
+    // Le TYPE porte tout : « se compte en reps » découle de
+    // `type == "bodyweight"`. Un champ `bodyweight` a existé à côté, dupliquant
+    // le type et pouvant le contredire ; il n'est plus ni écrit ni exigé. Les
+    // documents qui en portent encore un restent valides, il est ignoré.
     match /users/{uid}/exercises/{exerciseId} {
       allow read: if isOwner(uid);
 
@@ -334,7 +339,6 @@ service cloud.firestore {
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 80
         && isExerciseType(request.resource.data.type)
-        && request.resource.data.bodyweight is bool
         && hasValidMetadata(request.resource.data);
 
       allow delete: if isOwner(uid);
