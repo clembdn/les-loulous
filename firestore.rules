@@ -348,8 +348,11 @@ service cloud.firestore {
         && request.resource.data.days is map;
     }
 
-    // Séances. `programSnapshot` est la copie figée de la prescription,
-    // `entries` une map indexée par exerciceId.
+    // Séances. `entries` est une map indexée par instanceId (l'occurrence de
+    // l'exercice dans le programme) ; chaque entrée porte son exerciceId, son
+    // libellé et sa prescription figés. `parity` et `dayOfWeek` décrivent la
+    // séance affichée au moment de la saisie — l'ancienne copie du programme
+    // (`programSnapshot`) n'est plus écrite, seulement relue.
     match /users/{uid}/sessions/{dateId} {
       allow read: if isOwner(uid);
       allow write: if isOwner(uid)
@@ -358,8 +361,7 @@ service cloud.firestore {
         && (request.resource.data.parity == "even" || request.resource.data.parity == "odd")
         && request.resource.data.dayOfWeek is int
         && request.resource.data.dayOfWeek >= 1
-        && request.resource.data.dayOfWeek <= 7
-        && request.resource.data.programSnapshot is list;
+        && request.resource.data.dayOfWeek <= 7;
     }
 
     // Cache de la dernière perf, dénormalisé dans un seul document : ouvrir la

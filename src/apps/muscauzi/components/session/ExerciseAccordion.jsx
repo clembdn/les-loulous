@@ -1,77 +1,57 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { ChevronDown, Check, SkipForward, LineChart, RotateCcw, Plus } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { ChevronDown, Check, SkipForward, LineChart, RotateCcw, Plus, Trash2 } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { Button } from '@/shared/ui/Button.jsx'
 import { weightHint } from '../../config/exercises.js'
+import { doneSets, isEntryComplete } from '../../services/sessionsService.js'
 import SetRow from './SetRow.jsx'
 import ExerciseNote from './ExerciseNote.jsx'
 
 function toField(value) {
-  return value === null || value === undefined || value === '' ? '' : String(value)
-}
-
-/**
- * Construit les lignes affichées à partir de la prescription figée et de ce
- * qui est déjà enregistré.
- *
- * Les rangs 0…N-1 sont les séries prescrites : elles existent toujours, même
- * vides, et ne se suppriment pas. Tout rang ≥ N est une série ajoutée à la
- * main. Les clés ne sont jamais renumérotées — seule la numérotation affichée
- * reste continue.
- */
-function buildRows(prescribed, entry, lastSets) {
-  const stored = entry?.sets || {}
-  const keys = new Set()
-  for (let i = 0; i < prescribed; i++) keys.add(String(i))
-  for (const k of Object.keys(stored)) keys.add(k)
-
-  return [...keys]
-    .sort((a, b) => Number(a) - Number(b))
-    .map((key) => {
-      const rank = Number(key)
-      const saved = stored[key]
-      const extra = rank >= prescribed
-      if (saved) {
-        return {
-          key, extra, dirty: false,
-          weightKg: toField(saved.weightKg),
-          reps: toField(saved.reps),
-          completed: saved.completed === true,
-        }
-      }
-      // Pré-remplissage depuis la même série la dernière fois. Purement
-      // visuel : tant que la série n'est pas validée, elle ne compte pas.
-      const previous = lastSets?.[rank] || lastSets?.[lastSets.length - 1]
-      return {
-        key, extra, dirty: false,
-        weightKg: previous ? toField(previous.weightKg) : '',
-        reps: previous ? toField(previous.reps) : '',
-        completed: false,
-      }
-    })
+  return value > 0 ? String(value) : ''
 }
 
 function parseNumber(value) {
-  return Number(String(value).replace(',', '.')) || 0
+  const n = Number(String(value).replace(',', '.'))
+  return Number.isFinite(n) && n > 0 ? n : 0
 }
 
-// N'est persisté que ce qui a été touché ou validé : une ligne pré-remplie et
-// laissée telle quelle reste absente du document.
-function toSetsMap(rows) {
-  const out = {}
-  for (const r of rows) {
-    if (!r.completed && !r.dirty && !r.extra) continue
-    out[r.key] = {
-      weightKg: parseNumber(r.weightKg),
-      reps: Math.max(0, Math.round(parseNumber(r.reps))),
-      completed: r.completed === true,
+/**
+ * Les lignes affichées : une par série prescrite, plus les séries ajoutées à la
+ * main. Une série enregistrée à 0 revient comme un champ vide — un 0 stocké
+ * veut dire « rien saisi », jamais « zéro kilo validé ».
+ */
+function buildRows(prescribedSets, entry) {
+  const stored = new Map((entry?.sets || []).map((s) => [s.rank, s]))
+  const lastRank = stored.size > 0 ? Math.max(...stored.keys()) : -1
+  const count = Math.max(prescribedSets, lastRank + 1)
+
+  return Array.from({ length: count }, (_, rank) => {
+    const saved = stored.get(rank)
+    return {
+      rank,
+      extra: rank >= prescribedSets,
+      weightKg: saved ? toField(saved.weightKg) : '',
+      reps: saved ? toField(saved.reps) : '',
     }
-  }
-  return out
+  })
 }
+
+function toSets(rows) {
+  return rows
+    .map((r) => ({ rank: r.rank, weightKg: parseNumber(r.weightKg), reps: Math.round(parseNumber(r.reps)) }))
+    .filter((s) => s.weightKg > 0 || s.reps > 0)
+}
+
+// Délai avant enregistrement automatique : on tape trois chiffres d'affilée,
+// on n'écrit qu'une fois. Le départ du champ et le repli écrivent tout de suite.
+const AUTOSAVE_MS = 700
 
 export default function ExerciseAccordion({
   line,
+  // Entrée saisie hors de la prescription du jour : elle se retire d'un geste
+  // au lieu de se marquer « non fait », qui la laisserait traîner.
+  extra = false,
   exercise,
   entry,
   lastPerf,
@@ -84,72 +64,92 @@ export default function ExerciseAccordion({
   onSaveNote,
 }) {
   const lastSets = lastPerf?.sets || null
-  const [rows, setRows] = useState(() => buildRows(line.sets, entry, lastSets))
 
-  // Resynchronisation (autre onglet, retour du réseau, changement de séance).
-  // On ne dépend pas du contenu de `entry` pour ne pas écraser une saisie en
-  // cours à chaque écho du cache Firestore.
-  const storedSignature = Object.keys(entry?.sets || {}).sort().join(',')
+  /**
+   * L'état de saisie est LOCAL et fait foi tant que l'accordéon est ouvert.
+   *
+   * Il se reconstruisait à chaque écho du cache Firestore : enregistrer la
+   * série 1 réécrivait les champs des séries 2 à 4 en pleine frappe, et un 0
+   * apparaissait tout seul dans les répétitions. Il ne se reconstruit plus
+   * qu'à l'ouverture — le seul moment où l'écran peut être en retard.
+   */
+  const [rows, setRows] = useState(() => buildRows(line.prescribedSets, entry))
+  const wasExpanded = useRef(expanded)
+
   useEffect(() => {
-    setRows(buildRows(line.sets, entry, lastSets))
+    if (expanded && !wasExpanded.current) setRows(buildRows(line.prescribedSets, entry))
+    wasExpanded.current = expanded
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [line.instanceId, line.sets, entry?.skipped, storedSignature, lastPerf?.date])
+  }, [expanded])
 
-  const commit = useCallback((next) => {
-    onSave({ sets: toSetsMap(next), skipped: false })
-  }, [onSave])
+  // `flush` change à chaque rendu (les callbacks du parent aussi) : on le lit
+  // par référence pour que l'enregistrement différé ne se rejoue pas en boucle.
+  const dirty = useRef(false)
+  const flush = useCallback(() => {
+    if (!dirty.current) return
+    dirty.current = false
+    onSave({ sets: toSets(rows), skipped: false })
+  }, [rows, onSave])
+  const flushRef = useRef(flush)
+  flushRef.current = flush
 
-  const setField = (key, field, value) => {
-    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, [field]: value, dirty: true } : r)))
+  useEffect(() => {
+    if (!dirty.current) return undefined
+    const timer = setTimeout(() => flushRef.current(), AUTOSAVE_MS)
+    return () => clearTimeout(timer)
+  }, [rows])
+
+  // Quitter l'écran ou replier ne doit rien coûter : on écrit au démontage.
+  useEffect(() => () => flushRef.current(), [])
+
+  const setField = (rank, field, value) => {
+    dirty.current = true
+    setRows((prev) => prev.map((r) => (r.rank === rank ? { ...r, [field]: value } : r)))
   }
 
-  const toggleComplete = (key) => {
-    setRows((prev) => {
-      const next = prev.map((r) => (r.key === key ? { ...r, completed: !r.completed } : r))
-      commit(next)
-      return next
-    })
+  // Ce qui avait été fait sur CE rang la dernière fois — placeholder du champ.
+  const previousFor = (rank, extra) => {
+    if (!lastSets || lastSets.length === 0) return null
+    return lastSets[rank] || (extra ? lastSets[lastSets.length - 1] : null)
   }
 
-  const removeRow = (key) => {
-    setRows((prev) => {
-      const next = prev.filter((r) => r.key !== key)
-      commit(next)
-      return next
-    })
+  const commitNow = (next) => {
+    dirty.current = false
+    setRows(next)
+    onSave({ sets: toSets(next), skipped: false })
   }
 
-  // La série ajoutée recopie la dernière série RÉELLEMENT renseignée — pas la
-  // dernière ligne affichée si celle-ci est restée vide.
   const addRow = () => {
-    setRows((prev) => {
-      const source = [...prev].reverse().find((r) => (r.completed || r.dirty) && parseNumber(r.reps) > 0)
-      const nextRank = prev.reduce((max, r) => Math.max(max, Number(r.key)), line.sets - 1) + 1
-      const next = [...prev, {
-        key: String(nextRank),
-        extra: true,
-        dirty: false,
-        weightKg: source ? source.weightKg : '',
-        reps: source ? source.reps : '',
-        completed: false,
-      }]
-      commit(next)
-      return next
-    })
+    commitNow([...rows, { rank: rows.length, extra: true, weightKg: '', reps: '' }])
+  }
+
+  // Les rangs sont renumérotés : retirer la 5e série ne doit pas laisser un
+  // trou que la reconstruction rouvrirait à la ligne suivante.
+  const removeRow = (rank) => {
+    commitNow(rows
+      .filter((r) => r.rank !== rank)
+      .map((r, i) => ({ ...r, rank: i, extra: i >= line.prescribedSets })))
+  }
+
+  const skip = () => {
+    dirty.current = false
+    onSave({ sets: [], skipped: true })
+  }
+
+  // Retirer l'entrée vide aussi les champs : sans ça l'écran continuerait
+  // d'afficher des chiffres que le document ne contient plus.
+  const clear = () => {
+    dirty.current = false
+    setRows(buildRows(line.prescribedSets, null))
+    onClear()
   }
 
   const skipped = entry?.skipped === true
-  const savedDone = useMemo(
-    () => Object.values(entry?.sets || {}).filter((s) => s.completed && s.reps > 0).length,
-    [entry],
-  )
-  const isComplete = !skipped && savedDone >= line.sets
-  const isPartial = !skipped && savedDone > 0 && savedDone < line.sets
-  const extraCount = Math.max(0, savedDone - line.sets)
-
-  // Le nom vient du snapshot de la séance : renommer l'exercice au catalogue
-  // ne doit pas réécrire ce qui a été fait.
-  const displayName = line.name || exercise?.name || 'Exercice supprimé'
+  const savedDone = doneSets(entry).length
+  const isComplete = isEntryComplete(entry)
+  const isPartial = !skipped && savedDone > 0 && savedDone < line.prescribedSets
+  const extraCount = Math.max(0, savedDone - line.prescribedSets)
+  const hint = weightHint(exercise)
 
   return (
     <div
@@ -164,11 +164,11 @@ export default function ExerciseAccordion({
       >
         <StatusDot skipped={skipped} complete={isComplete} partial={isPartial} />
         <span className="flex-1 min-w-0">
-          <span className="block text-[15px] font-semibold text-fg truncate">{displayName}</span>
+          <span className="block text-[15px] font-semibold text-fg truncate">{line.name}</span>
           <span className="block text-xs text-muted mt-0.5">
-            {line.sets} × {line.reps}
+            {line.prescribedSets} × {line.prescribedReps}
             {skipped && ' · non fait'}
-            {isPartial && ` · ${savedDone}/${line.sets}`}
+            {isPartial && ` · ${savedDone}/${line.prescribedSets}`}
             {extraCount > 0 && ` · +${extraCount}`}
           </span>
         </span>
@@ -185,66 +185,68 @@ export default function ExerciseAccordion({
         )}
       >
         <div className="overflow-hidden" {...(expanded ? {} : { inert: '' })}>
-        <div className="px-4 pb-4 border-t border-border pt-3">
-          <div className="flex items-center justify-between mb-3">
-            <button
-              onClick={() => onOpenDetail(line.exerciseId)}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:opacity-80 transition"
-            >
-              <LineChart size={13} /> Voir la progression
-            </button>
-            {skipped ? (
+          <div className="px-4 pb-4 border-t border-border pt-3">
+            <div className="flex items-center justify-between mb-3">
               <button
-                onClick={onClear}
-                className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-fg transition"
+                onClick={() => onOpenDetail(line.exerciseId)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:opacity-80 transition"
               >
-                <RotateCcw size={13} /> Reprendre
+                <LineChart size={13} /> Voir la progression
               </button>
-            ) : (
-              <button
-                onClick={() => onSave({ sets: {}, skipped: true })}
-                className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-fg transition"
-              >
-                <SkipForward size={13} /> Non fait
-              </button>
-            )}
-          </div>
-
-          {!skipped && (
-            <>
-              <ExerciseNote note={note} onSave={(text) => onSaveNote(line.exerciseId, text)} />
-
-              <div className="space-y-3">
-                {rows.map((row, i) => (
-                  <SetRow
-                    key={row.key}
-                    row={row}
-                    label={row.extra ? 'Série supplémentaire' : `Série ${Number(row.key) + 1}`}
-                    previous={lastSets?.[Number(row.key)] || (row.extra ? lastSets?.[lastSets.length - 1] : null)}
-                    onChange={(field, value) => setField(row.key, field, value)}
-                    onCommit={() => commit(rows)}
-                    onToggleComplete={() => toggleComplete(row.key)}
-                    onRemove={row.extra ? () => removeRow(row.key) : null}
-                  />
-                ))}
-              </div>
-
-              <Button variant="dashed" className="w-full mt-3 text-xs" onClick={addRow}>
-                <Plus size={14} /> série
-              </Button>
-
-              {weightHint(exercise) && (
-                <p className="text-[11px] text-faint mt-3 leading-relaxed">{weightHint(exercise)}</p>
+              {skipped ? (
+                <button
+                  onClick={clear}
+                  className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-fg transition"
+                >
+                  <RotateCcw size={13} /> Reprendre
+                </button>
+              ) : extra ? (
+                <button
+                  onClick={clear}
+                  className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-danger transition"
+                >
+                  <Trash2 size={13} /> Retirer
+                </button>
+              ) : (
+                <button
+                  onClick={skip}
+                  className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-fg transition"
+                >
+                  <SkipForward size={13} /> Non fait
+                </button>
               )}
+            </div>
 
-              {savedDone > 0 && (
+            {!skipped && (
+              <>
+                <ExerciseNote note={note} onSave={(text) => onSaveNote(line.exerciseId, text)} />
+
+                <div className="space-y-3">
+                  {rows.map((row) => (
+                    <SetRow
+                      key={row.rank}
+                      row={row}
+                      label={row.extra ? `Série ${row.rank + 1} (en plus)` : `Série ${row.rank + 1}`}
+                      previous={previousFor(row.rank, row.extra)}
+                      onChange={(field, value) => setField(row.rank, field, value)}
+                      onCommit={() => flushRef.current()}
+                      onRemove={row.extra ? () => removeRow(row.rank) : null}
+                    />
+                  ))}
+                </div>
+
+                <Button variant="dashed" className="w-full mt-3 text-xs" onClick={addRow}>
+                  <Plus size={14} /> série
+                </Button>
+
+                {hint && <p className="text-[11px] text-faint mt-3 leading-relaxed">{hint}</p>}
+
                 <Button size="lg" className="w-full mt-3" onClick={onToggle}>
                   <Check size={16} strokeWidth={2.6} /> Replier
                 </Button>
-              )}
-            </>
-          )}
-        </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

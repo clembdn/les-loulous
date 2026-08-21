@@ -1,9 +1,9 @@
-import { Dumbbell, LineChart, Scale, Settings, CalendarRange, ListChecks, ArrowLeftRight } from 'lucide-react'
+import { Dumbbell, LineChart, Scale, Settings, CalendarRange, ListChecks } from 'lucide-react'
 
 // La séance du jour est à zéro clic ; le reste à un clic.
 // Les deux écrans de réglages ont chacun leur entrée dans la sidebar desktop,
 // et partagent un seul onglet sur mobile.
-export const SETTINGS_IDS = ['programme', 'catalogue', 'transfert']
+export const SETTINGS_IDS = ['programme', 'catalogue']
 export const SETTINGS_DEFAULT = 'programme'
 
 // Sur mobile la barre du bas n'a qu'un onglet « Réglages » : sans ce contrôle
@@ -12,7 +12,6 @@ export const SETTINGS_DEFAULT = 'programme'
 export const SETTINGS_SUBS = [
   { id: 'programme', label: 'Programme', short: 'Programme', icon: CalendarRange },
   { id: 'catalogue', label: 'Exercices', short: 'Exercices', icon: ListChecks },
-  { id: 'transfert', label: 'Transfert', short: 'Transfert', icon: ArrowLeftRight },
 ]
 
 export const MUSC_TABS = [
@@ -41,7 +40,6 @@ export const SIDEBAR_SECTIONS = [
     items: [
       { id: 'programme', label: 'Programme', icon: CalendarRange },
       { id: 'catalogue', label: 'Exercices', icon: ListChecks },
-      { id: 'transfert', label: 'Transfert', icon: ArrowLeftRight },
     ],
   },
 ]

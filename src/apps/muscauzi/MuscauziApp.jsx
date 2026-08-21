@@ -12,7 +12,6 @@ const ProgressView = lazy(() => import('./views/ProgressView.jsx'))
 const TrackingView = lazy(() => import('./views/TrackingView.jsx'))
 const ProgramView = lazy(() => import('./views/ProgramView.jsx'))
 const CatalogueView = lazy(() => import('./views/CatalogueView.jsx'))
-const TransferView = lazy(() => import('./views/TransferView.jsx'))
 
 function Loader() {
   return (
@@ -69,7 +68,6 @@ export default function MuscauziApp() {
             {tab === 'poids' && <TrackingView />}
             {tab === 'programme' && <ProgramView onNavigate={changeTab} />}
             {tab === 'catalogue' && <CatalogueView onNavigate={changeTab} />}
-            {tab === 'transfert' && <TransferView onNavigate={changeTab} />}
           </Suspense>
         )}
       </AppShell>

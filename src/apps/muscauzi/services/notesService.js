@@ -2,7 +2,7 @@ import { collection, doc, onSnapshot, setDoc, deleteDoc } from 'firebase/firesto
 import { db } from '@/shared/lib/firebase.js'
 
 // Notes de réglages, PAR UTILISATEUR : la hauteur de siège de l'un n'est pas
-// celle de l'autre. Surtout pas dans le catalogue commun `exercises/`.
+// celle de l'autre.
 //
 // La note est attachée au MOUVEMENT, pas à l'occurrence : elle vaut quel que
 // soit le jour où l'exercice apparaît.

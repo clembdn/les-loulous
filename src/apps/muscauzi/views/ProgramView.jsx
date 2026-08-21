@@ -8,7 +8,7 @@ import { Button } from '@/shared/ui/Button.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { weekParity, isoDayOfWeek } from '@/shared/lib/dates.js'
 import { useExercises, useProgram } from '../hooks/useMuscData.js'
-import { saveProgramDay, resolveLineName, DOWS } from '../services/programService.js'
+import { saveProgramDay, resolveLineName, withoutOrphans, DOWS } from '../services/programService.js'
 import { SETTINGS_SUBS } from '../config/navigation.js'
 import DayPicker from '../components/session/DayPicker.jsx'
 import { newInstanceId } from '../utils/ids.js'
@@ -26,10 +26,20 @@ export default function ProgramView({ onNavigate }) {
 
   const { exercises, exerciseById, isLoading: exercisesLoading } = useExercises()
   const { days, isLoading } = useProgram(parity)
-  const lines = days[dayOfWeek] || []
+
+  // Le catalogue fait foi : une ligne qui ne pointe sur aucun exercice n'est
+  // pas affichée, et la première modification du jour la fait disparaître du
+  // document.
+  const ready = !exercisesLoading
+  const lines = useMemo(
+    () => withoutOrphans(days[dayOfWeek] || [], exerciseById, ready),
+    [days, dayOfWeek, exerciseById, ready],
+  )
   const dayCounts = useMemo(
-    () => Object.fromEntries(DOWS.map((d) => [d, (days[d] || []).length])),
-    [days],
+    () => Object.fromEntries(
+      DOWS.map((d) => [d, withoutOrphans(days[d] || [], exerciseById, ready).length]),
+    ),
+    [days, exerciseById, ready],
   )
 
   // Firestore renvoie l'écriture depuis son cache local : pas d'état de

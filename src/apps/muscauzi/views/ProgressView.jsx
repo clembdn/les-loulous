@@ -19,10 +19,8 @@ export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
 
   // UNIQUEMENT les exercices que CE profil a réellement travaillés.
   //
-  // Le catalogue est commun aux deux comptes : lister tout le catalogue ici
-  // faisait apparaître les exercices de l'autre, sans courbe, et donnait
-  // l'impression d'un historique partagé. Les données, elles, n'ont jamais été
-  // partagées — chaque séance vit sous users/{uid}.
+  // Lister tout le catalogue ferait apparaître des entrées sans courbe : un
+  // exercice programmé mais jamais validé n'a rien à montrer ici.
   const ordered = useMemo(() => {
     return exercises
       .filter((e) => byExercise[e.id])

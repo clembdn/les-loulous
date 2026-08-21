@@ -1,105 +1,148 @@
 import {
-  collection, doc, onSnapshot, setDoc, updateDoc, deleteField, query, where, documentId,
+  collection, doc, onSnapshot, setDoc, deleteField, query, where, documentId,
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
 
-// Séances d'un profil : un document par jour, `users/{uid}/sessions/{yyyy-mm-dd}`.
-// La clé est une date LOCALE (cf. @/shared/lib/dates.js).
-//
-// MuscAuzi ne gère qu'UNE séance par utilisateur et par jour. Rouvrir l'appli
-// le même jour reprend la séance existante : jamais de fusion, jamais
-// d'écrasement, jamais de seconde séance. Le chemin du document suffit à
-// garantir la règle.
-//
-// `entries` est indexée par `instanceId` (l'occurrence dans le programme), et
-// non par `exerciseId` : un même mouvement peut figurer deux fois dans la
-// séance sans que les deux jeux de séries se recouvrent.
+/**
+ * Séances : un document par jour et par profil, `users/{uid}/sessions/{date}`.
+ * La clé est une date LOCALE (cf. @/shared/lib/dates.js).
+ *
+ * ── Le document ne contient QUE ce qui a été fait. ───────────────────────────
+ *
+ * Il portait aussi une copie figée du programme du jour (`programSnapshot`),
+ * re-fusionnée à chaque changement de jour ou de parité. Cette copie ne faisait
+ * que grossir : changer de jour y ajoutait la prescription du nouveau jour sans
+ * jamais retirer l'ancienne, si bien qu'un même exercice finissait affiché deux
+ * fois — et pour tous les jours, puisque la copie figée l'emportait ensuite sur
+ * le programme réel. Elle est supprimée.
+ *
+ * La prescription se lit désormais EN DIRECT dans le programme. Chaque entrée
+ * emporte en revanche son propre libellé et sa propre prescription : renommer
+ * un exercice ou passer de 4×8 à 5×5 ne réécrit pas ce qui est déjà enregistré.
+ *
+ *   entries[instanceId] = {
+ *     exerciseId, name, order,        ← identité figée au moment de la saisie
+ *     prescribedSets, prescribedReps, ← ce qui était prescrit ce jour-là
+ *     sets: [{ rank, weightKg, reps }],
+ *     skipped,
+ *   }
+ *
+ * `sets` est un TABLEAU, jamais une map. Firestore fusionne les maps clé par
+ * clé : effacer une série d'une map laissait son ancienne clé dans le document,
+ * qui revenait à l'affichage. Un tableau est remplacé en bloc.
+ *
+ * Les valeurs stockées sont des nombres ; un 0 vaut « rien saisi » et se
+ * réaffiche comme un champ vide. Une série ne compte que si `reps > 0` — il n'y
+ * a pas de drapeau « validée » à maintenir en plus.
+ */
 function sessionsCol(uid) { return collection(db, 'users', uid, 'sessions') }
 function sessionDoc(uid, dateKey) { return doc(db, 'users', uid, 'sessions', dateKey) }
 
 // Cache de la DERNIÈRE performance, dénormalisé dans UN document : ouvrir la
-// séance du jour coûte une seule lecture pour tous les rappels. Ce n'est
-// jamais la source des courbes — elles se calculent sur l'historique.
+// séance du jour coûte une seule lecture pour tous les rappels. Ce n'est jamais
+// la source des courbes — elles se calculent sur l'historique.
 function lastPerfDoc(uid) { return doc(db, 'users', uid, 'meta', 'lastPerf') }
 
-function normalizeSet(raw) {
+function toNumber(value) {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+function toCount(value) {
+  return Math.max(0, Math.round(toNumber(value)))
+}
+
+function normalizeSet(raw, fallbackRank) {
   return {
-    weightKg: Number.isFinite(Number(raw?.weightKg)) ? Number(raw.weightKg) : 0,
-    reps: Math.max(0, Math.round(Number(raw?.reps) || 0)),
-    // Une série pré-remplie mais jamais validée ne compte dans aucune métrique.
-    completed: raw?.completed === true,
+    rank: Number.isFinite(Number(raw?.rank)) ? Math.max(0, Math.round(Number(raw.rank))) : fallbackRank,
+    weightKg: toNumber(raw?.weightKg),
+    reps: toCount(raw?.reps),
   }
 }
 
-// `sets` est une MAP indexée par un rang numérique en chaîne ("0", "1", …).
-// Les clés ne sont PAS renumérotées après suppression d'une série ajoutée :
-// seule la numérotation affichée reste continue.
+// Accepte le tableau actuel comme l'ancienne map indexée par rang : les
+// documents écrits avant ce nettoyage restent lisibles.
 function normalizeSets(raw) {
-  const out = {}
-  if (!raw || typeof raw !== 'object') return out
-  for (const [key, value] of Object.entries(raw)) {
-    if (!/^\d+$/.test(key)) continue
-    out[key] = normalizeSet(value)
+  const list = Array.isArray(raw)
+    ? raw.map((s, i) => normalizeSet(s, i))
+    : Object.entries(raw || {})
+      .filter(([key]) => /^\d+$/.test(key))
+      .map(([key, s]) => normalizeSet({ ...s, rank: Number(key) }, Number(key)))
+
+  // Un rang par série : en cas de doublon, la dernière écriture gagne.
+  const byRank = new Map()
+  for (const s of list) {
+    if (s.weightKg === 0 && s.reps === 0) continue
+    byRank.set(s.rank, s)
   }
-  return out
+  return [...byRank.values()].sort((a, b) => a.rank - b.rank)
 }
 
-function normalizeEntry(raw) {
+function normalizeEntry(instanceId, raw, fallback) {
   return {
+    instanceId,
+    exerciseId: raw?.exerciseId || fallback?.exerciseId || '',
+    name: raw?.name || fallback?.name || '',
+    order: Number.isFinite(Number(raw?.order)) ? Number(raw.order) : (fallback?.order ?? 0),
+    prescribedSets: Math.max(1, toCount(raw?.prescribedSets) || toCount(fallback?.sets) || 1),
+    prescribedReps: Math.max(1, toCount(raw?.prescribedReps) || toCount(fallback?.reps) || 1),
     sets: normalizeSets(raw?.sets),
     skipped: raw?.skipped === true,
   }
 }
 
-// Ligne de prescription figée dans la séance. Le NOM y est recopié pour que
-// renommer un exercice plus tard ne réécrive pas les libellés du passé.
-function normalizeSnapshotLine(raw, index) {
-  return {
-    instanceId: raw?.instanceId || `legacy-${index}`,
-    exerciseId: raw?.exerciseId || '',
-    name: raw?.name || '',
-    order: Number.isFinite(raw?.order) ? raw.order : index,
-    sets: Math.max(1, Number(raw?.sets) || 1),
-    reps: Math.max(1, Number(raw?.reps) || 1),
-  }
-}
-
 export function normalizeSession(id, raw) {
   if (!raw) return null
+
+  // Les séances écrites avant ce nettoyage n'ont pas d'identité dans leurs
+  // entrées : elle se retrouve dans l'ancien `programSnapshot`, qui n'est plus
+  // écrit mais reste lu ici pour ne pas perdre l'historique.
+  const legacy = {}
+  if (Array.isArray(raw.programSnapshot)) {
+    raw.programSnapshot.forEach((line, i) => {
+      if (line?.instanceId) legacy[line.instanceId] = { ...line, order: line.order ?? i }
+    })
+  }
+
   const entries = {}
   for (const [instanceId, value] of Object.entries(raw.entries || {})) {
-    entries[instanceId] = normalizeEntry(value)
+    entries[instanceId] = normalizeEntry(instanceId, value, legacy[instanceId])
   }
+
   return {
     id,
     date: id,
     parity: raw.parity === 'even' || raw.parity === 'odd' ? raw.parity : null,
     dayOfWeek: Number(raw.dayOfWeek) || null,
-    programSnapshot: (Array.isArray(raw.programSnapshot) ? raw.programSnapshot : [])
-      .map(normalizeSnapshotLine)
-      .sort((a, b) => a.order - b.order),
     entries,
   }
 }
 
-// Séries réellement validées d'une entrée, dans l'ordre des rangs.
-export function completedSets(entry) {
+/** Les séries qui comptent : celles où des répétitions ont été faites. */
+export function doneSets(entry) {
   if (!entry || entry.skipped) return []
-  return Object.entries(entry.sets || {})
-    .sort((a, b) => Number(a[0]) - Number(b[0]))
-    .map(([, s]) => s)
-    .filter((s) => s.completed && s.reps > 0)
+  return entry.sets.filter((s) => s.reps > 0)
+}
+
+/** L'entrée porte-t-elle quelque chose qu'on ne doit pas perdre de vue ? */
+export function hasWork(entry) {
+  if (!entry) return false
+  return entry.skipped || entry.sets.length > 0
+}
+
+export function isEntryComplete(entry) {
+  if (!entry) return false
+  return entry.skipped || doneSets(entry).length >= entry.prescribedSets
 }
 
 export function hasCompletedWork(session) {
   if (!session) return false
-  return Object.values(session.entries || {}).some((e) => completedSets(e).length > 0)
+  return Object.values(session.entries || {}).some((e) => doneSets(e).length > 0)
 }
 
-// L'occurrence porte-t-elle quelque chose qu'on ne doit pas perdre ?
-export function entryHasData(entry) {
-  if (!entry) return false
-  return entry.skipped || Object.keys(entry.sets || {}).length > 0
+/** Les entrées d'une séance, dans l'ordre où elles ont été faites. */
+export function sessionLineup(session) {
+  return Object.values(session?.entries || {}).sort((a, b) => a.order - b.order)
 }
 
 export function subscribeToSession(uid, dateKey, callback, onError) {
@@ -156,50 +199,68 @@ export function subscribeToLastPerf(uid, callback, onError) {
   })
 }
 
+function isAtLeastAsRecent(dateKey, previous) {
+  return !previous?.date || dateKey >= previous.date
+}
+
 /**
- * Écrit une entrée d'exercice dans la séance du jour.
+ * Rafraîchit le cache de dernière perf — jamais avec une séance plus ancienne
+ * que ce qu'il contient déjà, sinon rattraper la séance d'hier ferait reculer
+ * les rappels de toute l'appli.
+ */
+function refreshLastPerf(uid, dateKey, entry, done, lastPerf) {
+  const perf = { date: dateKey, sets: done.map((s) => ({ weightKg: s.weightKg, reps: s.reps })) }
+  const payload = {}
+  if (isAtLeastAsRecent(dateKey, lastPerf?.byInstance?.[entry.instanceId])) {
+    payload.byInstance = { [entry.instanceId]: perf }
+  }
+  if (entry.exerciseId && isAtLeastAsRecent(dateKey, lastPerf?.byExercise?.[entry.exerciseId])) {
+    payload.byExercise = { [entry.exerciseId]: perf }
+  }
+  if (Object.keys(payload).length === 0) return
+  setDoc(lastPerfDoc(uid), { ...payload, updatedAt: new Date().toISOString() }, { merge: true })
+    .catch((err) => console.error('[MuscAuzi] lastPerf write failed:', err))
+}
+
+/**
+ * Écrit une entrée dans la séance d'une date.
  *
- * `meta` ({ parity, dayOfWeek, programSnapshot }) n'est transmis QUE si la
- * séance n'existe pas encore : le snapshot est figé à la création et n'est
- * réécrit que par un changement explicite de séance. Modifier son programme
- * dans les réglages ne réécrit jamais l'historique.
+ * `plan` ({ parity, dayOfWeek }) décrit la séance affichée au moment de la
+ * saisie. Il est réécrit à chaque fois — c'est une métadonnée, plus une copie
+ * dont dépend l'affichage.
  *
  * Aucun `await` côté UI : le cache Firestore encaisse l'écriture et la
  * synchronise au retour du réseau — la salle capte mal.
  */
-export function upsertEntry(uid, dateKey, target, entry, currentUid, meta) {
-  const { instanceId, exerciseId } = target
+export function saveEntry(uid, dateKey, entry, plan, currentUid, lastPerf) {
   const now = new Date().toISOString()
-  const clean = normalizeEntry(entry)
+  const clean = {
+    exerciseId: entry.exerciseId || '',
+    name: entry.name || '',
+    order: Number(entry.order) || 0,
+    prescribedSets: Math.max(1, toCount(entry.prescribedSets) || 1),
+    prescribedReps: Math.max(1, toCount(entry.prescribedReps) || 1),
+    sets: normalizeSets(entry.sets),
+    skipped: entry.skipped === true,
+  }
 
-  const payload = {
-    entries: { [instanceId]: clean },
+  setDoc(sessionDoc(uid, dateKey), {
+    parity: plan.parity,
+    dayOfWeek: plan.dayOfWeek,
+    entries: { [entry.instanceId]: clean },
     updatedAt: now,
     updatedBy: currentUid,
-  }
-  if (meta) {
-    payload.parity = meta.parity
-    payload.dayOfWeek = meta.dayOfWeek
-    payload.programSnapshot = meta.programSnapshot
-    payload.createdAt = now
-    payload.createdBy = currentUid
-  }
-  setDoc(sessionDoc(uid, dateKey), payload, { merge: true }).catch((err) => {
-    console.error('[MuscAuzi] upsertEntry failed:', err)
+  }, { merge: true }).catch((err) => {
+    console.error('[MuscAuzi] saveEntry failed:', err)
   })
 
-  // Le cache ne retient que du travail réellement validé.
-  const done = completedSets(clean)
-  if (done.length === 0) return
-  const perf = { date: dateKey, sets: done.map((s) => ({ weightKg: s.weightKg, reps: s.reps })) }
-  const cache = { byInstance: { [instanceId]: perf }, updatedAt: now }
-  if (exerciseId) cache.byExercise = { [exerciseId]: perf }
-  setDoc(lastPerfDoc(uid), cache, { merge: true }).catch((err) => {
-    console.error('[MuscAuzi] lastPerf write failed:', err)
-  })
+  // Le cache ne retient que du travail réel. S'il n'y en a plus, on le laisse
+  // tel quel : rendre le rappel précédent demanderait de relire l'historique.
+  const done = clean.sets.filter((s) => s.reps > 0)
+  if (done.length > 0) refreshLastPerf(uid, dateKey, { ...clean, instanceId: entry.instanceId }, done, lastPerf)
 }
 
-// Retire une occurrence de la séance (annule un « non fait » ou une saisie).
+/** Retire une occurrence de la séance (annule un « non fait » ou une saisie). */
 export function clearEntry(uid, dateKey, instanceId, currentUid) {
   setDoc(sessionDoc(uid, dateKey), {
     entries: { [instanceId]: deleteField() },
@@ -208,43 +269,4 @@ export function clearEntry(uid, dateKey, instanceId, currentUid) {
   }, { merge: true }).catch((err) => {
     console.error('[MuscAuzi] clearEntry failed:', err)
   })
-}
-
-/**
- * Re-photographie la séance du JOUR sans rien effacer.
- *
- * Changer de jour ou de parité ne doit JAMAIS coûter le travail déjà fait. Les
- * `entries` sont laissées intactes ; c'est l'appelant qui construit le nouveau
- * `programSnapshot` en gardant les lignes qui portent des données (cf.
- * `mergeSnapshot`). Chaque entrée conserve donc sa ligne de prescription :
- * rien n'est orphelin, et revenir au jour précédent réaffiche tout.
- *
- * Les séances passées ne sont jamais touchées.
- */
-export function updateSessionPlan(uid, dateKey, meta, currentUid) {
-  updateDoc(sessionDoc(uid, dateKey), {
-    parity: meta.parity,
-    dayOfWeek: meta.dayOfWeek,
-    programSnapshot: meta.programSnapshot,
-    updatedAt: new Date().toISOString(),
-    updatedBy: currentUid,
-  }).catch((err) => {
-    console.error('[MuscAuzi] updateSessionPlan failed:', err)
-  })
-}
-
-/**
- * Prescription de la nouvelle séance + tout ce qui a déjà été saisi aujourd'hui.
- *
- * Les lignes de l'ancien jour qui portent des séries sont conservées à la
- * suite : sans elles, les entrées correspondantes deviendraient invisibles et
- * disparaîtraient des courbes, qui parcourent le snapshot.
- */
-export function mergeSnapshot(session, nextLines) {
-  if (!session) return nextLines.map((l, i) => ({ ...l, order: i }))
-  const nextIds = new Set(nextLines.map((l) => l.instanceId))
-  const preserved = session.programSnapshot.filter(
-    (l) => !nextIds.has(l.instanceId) && entryHasData(session.entries?.[l.instanceId]),
-  )
-  return [...nextLines, ...preserved].map((l, i) => ({ ...l, order: i }))
 }

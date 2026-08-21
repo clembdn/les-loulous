@@ -8,15 +8,17 @@ const DOWS = [1, 2, 3, 4, 5, 6, 7]
 // Sept cases identiques ne disent rien : on ne sait pas lesquelles portent une
 // séance, ni où on est dans la semaine. Chaque case annonce donc sa charge
 // (nombre d'exercices, ou « repos »), et aujourd'hui est repéré par un point.
-export default function DayPicker({ value, onChange, counts = {}, className }) {
-  const today = isoDayOfWeek(new Date())
+export default function DayPicker({ value, onChange, counts = {}, today, className }) {
+  // `today` : le jour réel de la date consultée, pas forcément celui du jour —
+  // on peut rattraper la séance d'hier.
+  const marked = today || isoDayOfWeek(new Date())
 
   return (
     <div className={cn('grid grid-cols-7 gap-1.5', className)}>
       {DOWS.map((dow) => {
         const count = counts[dow] || 0
         const isActive = dow === value
-        const isToday = dow === today
+        const isToday = dow === marked
         return (
           <button
             key={dow}

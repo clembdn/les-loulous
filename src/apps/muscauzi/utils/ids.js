@@ -1,9 +1,8 @@
 // Identifiant d'occurrence d'un exercice dans un programme.
 //
-// `exerciseId` porte l'identité du MOUVEMENT (catalogue commun aux deux
-// profils) ; `instanceId` porte l'identité de l'OCCURRENCE dans le programme
-// personnel. Sans lui, un exercice présent deux fois dans la même séance
-// écrirait deux fois sur la même clé d'`entries`.
+// `exerciseId` porte l'identité du MOUVEMENT ; `instanceId` porte celle de
+// l'OCCURRENCE dans le programme. Sans lui, un exercice présent deux fois dans
+// la même séance écrirait deux fois sur la même clé d'`entries`.
 export function newInstanceId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   // Contexte non sécurisé (rare) : suffisant pour distinguer des occurrences

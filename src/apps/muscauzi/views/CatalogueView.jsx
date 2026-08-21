@@ -5,12 +5,40 @@ import { useAuth } from '@/shared/context/AuthContext.jsx'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
 import { Input } from '@/shared/ui/Input.jsx'
-import { Checkbox } from '@/shared/ui/Checkbox.jsx'
+import ConfirmDialog from '@/shared/ui/ConfirmDialog.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { EXERCISE_TYPES, DEFAULT_TYPE, getExerciseType } from '../config/exercises.js'
 import { useExercises } from '../hooks/useMuscData.js'
 import { SETTINGS_SUBS } from '../config/navigation.js'
-import { addExercise, updateExercise, deleteExercise } from '../services/exercisesService.js'
+import {
+  addExercise, updateExercise, collectExerciseImpact, deleteExerciseCascade,
+} from '../services/exercisesService.js'
+
+const plural = (n) => (n > 1 ? 's' : '')
+
+// Ce que la suppression emporte, énuméré avant de la déclencher : on ne
+// découvre pas après coup qu'elle a emporté six mois de courbe.
+function impactDetails(impact) {
+  if (!impact) return []
+  const out = []
+  if (impact.programCount > 0) {
+    out.push(`${impact.programCount} ligne${plural(impact.programCount)} de ton programme`)
+  }
+  if (impact.sessionCount > 0) {
+    out.push(`l'historique et la courbe de ${impact.sessionCount} séance${plural(impact.sessionCount)}`)
+  }
+  if (impact.hasNote) out.push('ta note de réglages')
+  return out
+}
+
+function deleteMessage(pending) {
+  if (!pending) return null
+  if (!pending.impact) return 'Vérification de ce qui en dépend…'
+  if (impactDetails(pending.impact).length === 0) {
+    return 'Cet exercice n’est utilisé nulle part. La suppression est définitive.'
+  }
+  return 'La suppression est définitive et emporte tout ce qui en dépend :'
+}
 
 // Catalogue personnel : chaque profil a ses propres exercices, comme il a ses
 // propres séances. Supprimer ici n'affecte que ce compte.
@@ -19,6 +47,36 @@ export default function CatalogueView({ onNavigate }) {
   const { exercises, isLoading } = useExercises()
   const [editingId, setEditingId] = useState(null)
   const [creating, setCreating] = useState(false)
+  // { exercise, impact } — `impact` arrive après une lecture, la confirmation
+  // s'affiche sans l'attendre.
+  const [pending, setPending] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const askDelete = (exercise) => {
+    setPending({ exercise, impact: null })
+    collectExerciseImpact(currentUid, exercise.id)
+      .then((impact) => {
+        // L'utilisateur a pu fermer ou viser un autre exercice entre-temps.
+        setPending((p) => (p?.exercise.id === exercise.id ? { ...p, impact } : p))
+      })
+      .catch((err) => console.error('[MuscAuzi] impact error:', err))
+  }
+
+  const confirmDelete = async () => {
+    if (!pending) return
+    const { exercise, impact } = pending
+    setDeleting(true)
+    try {
+      await deleteExerciseCascade(currentUid, exercise.id, impact, currentUid)
+      toast.success(`${exercise.name} supprimé`)
+      setPending(null)
+    } catch (err) {
+      console.error('[MuscAuzi] delete failed:', err)
+      toast.error('Suppression impossible')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
     <div className="max-w-xl mx-auto px-4 pt-5 pb-28 lg:pb-10 lg:pt-8 lg:px-6">
@@ -78,7 +136,6 @@ export default function CatalogueView({ onNavigate }) {
                   <span className="block text-[15px] font-medium text-fg truncate">{ex.name}</span>
                   <span className="block text-xs text-muted mt-0.5">
                     {getExerciseType(ex.type).label}
-                    {ex.bodyweight && ex.type !== 'bodyweight' && ' · poids du corps'}
                   </span>
                 </span>
                 <Button variant="ghost" size="icon" aria-label={`Modifier ${ex.name}`} onClick={() => setEditingId(ex.id)}>
@@ -88,12 +145,7 @@ export default function CatalogueView({ onNavigate }) {
                   variant="danger"
                   size="icon"
                   aria-label={`Supprimer ${ex.name}`}
-                  onClick={() => {
-                    // Catalogue personnel : ne retire l'exercice que de CE
-                    // compte. Le programme garde son nom recopié.
-                    deleteExercise(currentUid, ex.id).catch(() => toast.error('Suppression impossible'))
-                    toast.success(`${ex.name} supprimé`)
-                  }}
+                  onClick={() => askDelete(ex)}
                 >
                   <Trash2 size={15} />
                 </Button>
@@ -102,6 +154,17 @@ export default function CatalogueView({ onNavigate }) {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!pending}
+        title={`Supprimer ${pending?.exercise.name} ?`}
+        message={deleteMessage(pending)}
+        details={impactDetails(pending?.impact)}
+        confirmLabel={deleting ? 'Suppression…' : 'Supprimer'}
+        busy={deleting}
+        onConfirm={confirmDelete}
+        onClose={() => { if (!deleting) setPending(null) }}
+      />
     </div>
   )
 }
@@ -109,12 +172,13 @@ export default function CatalogueView({ onNavigate }) {
 function ExerciseForm({ initial, onCancel, onSubmit }) {
   const [name, setName] = useState(initial?.name || '')
   const [type, setType] = useState(initial?.type || DEFAULT_TYPE)
-  const [bodyweight, setBodyweight] = useState(initial?.bodyweight || false)
 
+  // Le type suffit : « compter en reps » découle de « poids du corps », il n'y
+  // a rien de plus à cocher.
   const submit = () => {
     const trimmed = name.trim()
     if (!trimmed) return
-    onSubmit({ name: trimmed, type, bodyweight: bodyweight || type === 'bodyweight' })
+    onSubmit({ name: trimmed, type })
   }
 
   return (
@@ -135,10 +199,7 @@ function ExerciseForm({ initial, onCancel, onSubmit }) {
           return (
             <button
               key={t.id}
-              onClick={() => {
-                setType(t.id)
-                if (t.id === 'bodyweight') setBodyweight(true)
-              }}
+              onClick={() => setType(t.id)}
               className={cn(
                 'h-11 rounded-xl text-sm font-medium border transition inline-flex items-center justify-center gap-2',
                 isActive
@@ -151,17 +212,6 @@ function ExerciseForm({ initial, onCancel, onSubmit }) {
           )
         })}
       </div>
-
-      {/* Une machine à assistance ou des dips lestés restent « poids du corps »
-          côté métrique : le volume vaut 0, seule la somme des reps progresse. */}
-      {type !== 'bodyweight' && (
-        <Checkbox
-          className="mt-3 px-1"
-          checked={bodyweight}
-          onCheckedChange={setBodyweight}
-          label="Compter en reps (poids du corps)"
-        />
-      )}
 
       <div className="flex gap-2 mt-4">
         <Button variant="outline" className="flex-1" onClick={onCancel}>

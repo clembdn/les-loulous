@@ -1,6 +1,5 @@
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
-import { newInstanceId } from '../utils/ids.js'
 
 // Programme d'un profil, une semaine paire et une semaine impaire.
 //
@@ -23,9 +22,10 @@ export function isParity(value) {
 
 function normalizeLine(raw, index) {
   return {
-    // Une ligne sans instanceId ne devrait pas exister ; on en fabrique un
-    // plutôt que de laisser deux occurrences partager une clé d'entrées.
-    instanceId: raw?.instanceId || newInstanceId(),
+    // Une ligne sans instanceId ne devrait pas exister. On en fabrique un
+    // DÉTERMINISTE plutôt qu'un aléatoire : tiré au sort à chaque lecture, il
+    // changerait à chaque écho de Firestore et la séance perdrait ses saisies.
+    instanceId: raw?.instanceId || `legacy-${index}`,
     exerciseId: raw?.exerciseId || '',
     // Nom recopié : supprimer l'exercice du catalogue ne doit pas rendre le
     // programme illisible. L'affichage préfère le nom vivant du catalogue et
@@ -40,6 +40,22 @@ function normalizeLine(raw, index) {
 // Nom à afficher pour une ligne de programme ou de snapshot.
 export function resolveLineName(line, exerciseById) {
   return exerciseById?.[line?.exerciseId]?.name || line?.name || 'Exercice supprimé'
+}
+
+/**
+ * Écarte les lignes dont le mouvement n'existe plus au catalogue.
+ *
+ * Supprimer un exercice nettoie désormais le programme et les séances (cf.
+ * `deleteExerciseCascade`) : plus rien ne devrait devenir orphelin. Ce filtre
+ * couvre l'ancien monde — les lignes laissées derrière par les suppressions
+ * d'avant, qui s'affichaient « Exercice supprimé » et pointaient dans le vide.
+ * La première modification du jour concerné réécrit le document sans elles.
+ *
+ * `ready` évite de tout faire disparaître pendant le chargement du catalogue.
+ */
+export function withoutOrphans(lines, exerciseById, ready) {
+  if (!ready) return lines
+  return lines.filter((l) => exerciseById?.[l?.exerciseId])
 }
 
 function normalizeDays(raw) {
@@ -80,8 +96,8 @@ export function subscribeToProgram(uid, parity, callback, onError) {
  * quand on supprime puis rajoute le même mouvement, sinon la nouvelle
  * occurrence hériterait du pré-remplissage de l'ancienne.
  *
- * Les séances déjà enregistrées ne bougent pas : chacune porte son propre
- * `programSnapshot`.
+ * Les séances déjà enregistrées ne bougent pas : chaque entrée a figé le nom
+ * de l'exercice et la prescription du jour où elle a été saisie.
  */
 export function saveProgramDay(uid, parity, dayOfWeek, lines, currentUid) {
   const cleaned = lines

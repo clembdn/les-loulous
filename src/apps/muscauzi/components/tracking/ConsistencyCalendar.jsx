@@ -5,7 +5,7 @@ import {
 } from '@/shared/lib/dates.js'
 import { cn } from '@/shared/lib/utils.js'
 import { useSessionRange } from '../../hooks/useMuscData.js'
-import { hasCompletedWork } from '../../services/sessionsService.js'
+import { hasCompletedWork, doneSets, sessionLineup } from '../../services/sessionsService.js'
 
 const WINDOW_DAYS = 90
 const MONTHS_SHOWN = 3
@@ -17,7 +17,7 @@ const WEEKDAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 // les deux derniers lundis » d'un coup d'œil, les cases sont assez grandes
 // pour le doigt, et la forme est celle que tout le monde connaît déjà.
 //
-// Un jour n'est marqué QUE si la séance contient au moins une série validée :
+// Un jour n'est marqué QUE si la séance contient au moins une série faite :
 // une séance ouverte par curiosité ne compte pas dans la régularité.
 function monthGrid(year, month) {
   const first = new Date(year, month, 1)
@@ -131,8 +131,8 @@ export default function ConsistencyCalendar() {
             <p className="text-sm text-fg first-letter:uppercase">
               {selected && formatDayFr(fromLocalDateKey(selected), { withYear: true })}
             </p>
-            {/* Le libellé vient du programSnapshot : renommer un exercice plus
-                tard ne réécrit pas le calendrier passé. */}
+            {/* Le libellé vient des entrées, qui ont figé leur nom : renommer
+                un exercice plus tard ne réécrit pas le calendrier passé. */}
             <p className="text-xs text-muted mt-0.5">{describeSession(selectedSession)}</p>
           </div>
         </div>
@@ -157,7 +157,10 @@ function NavButton({ onClick, disabled, label, children }) {
 
 function describeSession(session) {
   if (!session) return 'Pas de séance'
-  if (!hasCompletedWork(session)) return 'Séance ouverte, aucune série validée'
-  const names = session.programSnapshot.map((l) => l.name).filter(Boolean)
+  if (!hasCompletedWork(session)) return 'Séance ouverte, aucune série enregistrée'
+  const names = sessionLineup(session)
+    .filter((e) => doneSets(e).length > 0)
+    .map((e) => e.name)
+    .filter(Boolean)
   return names.length > 0 ? names.join(' · ') : 'Séance enregistrée'
 }

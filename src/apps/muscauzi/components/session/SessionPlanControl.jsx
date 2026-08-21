@@ -12,9 +12,12 @@ const PARITY_TABS = [
 ]
 
 // Contrôle discret : forcer la parité de semaine ET le jour de séance affiché.
-// Un seul contrôle pour les deux cas (vacances qui décalent le cycle, séance
-// du mardi faite le mercredi). Changer de jour ne perd aucune saisie.
-export default function SessionPlanControl({ parity, dayOfWeek, dayCounts, isForced, onChange, onReset }) {
+// Un seul contrôle pour les deux cas (vacances qui décalent le cycle, séance du
+// mardi faite le mercredi).
+//
+// Il ne change QUE la prescription affichée : rien n'est écrit dans la séance,
+// donc rien ne s'y accumule et aucune saisie n'est perdue.
+export default function SessionPlanControl({ parity, dayOfWeek, naturalDayOfWeek, dayCounts, isForced, onChange, onReset }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -60,6 +63,7 @@ export default function SessionPlanControl({ parity, dayOfWeek, dayCounts, isFor
               value={dayOfWeek}
               onChange={(d) => onChange({ parity, dayOfWeek: d })}
               counts={dayCounts}
+              today={naturalDayOfWeek}
             />
 
             {isForced && (
