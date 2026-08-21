@@ -13,8 +13,11 @@ function StatCard({ icon: Icon, label, value, valueClass }) {
   )
 }
 
-export default function QuickStats({ summary }) {
-  const { format: formatEUR } = useCurrency()
+// `currency` : devise dans laquelle le résumé est déjà exprimé (vue d'un
+// compte). Omis, les montants sont en euros et suivent la devise d'affichage.
+export default function QuickStats({ summary, currency }) {
+  const { format, formatNative } = useCurrency()
+  const formatEUR = currency ? (v) => formatNative(v, currency) : format
   return (
     <div className="grid grid-cols-3 gap-2 sm:gap-3">
       <StatCard

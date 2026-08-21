@@ -1,14 +1,16 @@
 import {
   Home, ShoppingCart, Car, Utensils, PartyPopper, Plane, Heart,
-  Repeat, ShoppingBag, MoreHorizontal,
-  Briefcase, Gift, TrendingUp,
+  Repeat, ShoppingBag, MoreHorizontal, Zap, Wifi,
+  Briefcase, Gift, TrendingUp, ArrowLeftRight, HandCoins,
 } from 'lucide-react'
 
 // Each category exposes pre-baked Tailwind class strings so the bundler picks them up.
 // `hex` is used for inline SVG/chart usage where dynamic classes don't work.
 export const CATEGORIES = [
   // ─── Expenses ───────────────────────────────────────────────
-  { id: 'housing',       label: 'Logement',     type: 'expense', icon: Home,           hex: '#F59E0B', bgClass: 'bg-amber-500/15',   textClass: 'text-amber-400',   dotClass: 'bg-amber-400',   borderClass: 'border-amber-500/30',   ringClass: 'ring-amber-500/30' },
+  { id: 'housing',       label: 'Loyer',        type: 'expense', icon: Home,           hex: '#F59E0B', bgClass: 'bg-amber-500/15',   textClass: 'text-amber-400',   dotClass: 'bg-amber-400',   borderClass: 'border-amber-500/30',   ringClass: 'ring-amber-500/30' },
+  { id: 'utilities',     label: 'Électricité',  type: 'expense', icon: Zap,            hex: '#F97316', bgClass: 'bg-orange-500/15',  textClass: 'text-orange-400',  dotClass: 'bg-orange-400',  borderClass: 'border-orange-500/30',  ringClass: 'ring-orange-500/30' },
+  { id: 'internet',      label: 'Box / Tel',    type: 'expense', icon: Wifi,           hex: '#8B5CF6', bgClass: 'bg-violet-500/15',  textClass: 'text-violet-400',  dotClass: 'bg-violet-400',  borderClass: 'border-violet-500/30',  ringClass: 'ring-violet-500/30' },
   { id: 'groceries',     label: 'Courses',      type: 'expense', icon: ShoppingCart,   hex: '#84CC16', bgClass: 'bg-lime-500/15',    textClass: 'text-lime-400',    dotClass: 'bg-lime-400',    borderClass: 'border-lime-500/30',    ringClass: 'ring-lime-500/30' },
   { id: 'transport',     label: 'Transport',    type: 'expense', icon: Car,            hex: '#0EA5E9', bgClass: 'bg-sky-500/15',     textClass: 'text-sky-400',     dotClass: 'bg-sky-400',     borderClass: 'border-sky-500/30',     ringClass: 'ring-sky-500/30' },
   { id: 'restaurants',   label: 'Restaurants',  type: 'expense', icon: Utensils,       hex: '#EC4899', bgClass: 'bg-pink-500/15',    textClass: 'text-pink-400',    dotClass: 'bg-pink-400',    borderClass: 'border-pink-500/30',    ringClass: 'ring-pink-500/30' },
@@ -23,12 +25,22 @@ export const CATEGORIES = [
   { id: 'salary',        label: 'Salaire',      type: 'income',  icon: Briefcase,      hex: '#10B981', bgClass: 'bg-emerald-500/15', textClass: 'text-emerald-400', dotClass: 'bg-emerald-400', borderClass: 'border-emerald-500/30', ringClass: 'ring-emerald-500/30' },
   { id: 'bonus',         label: 'Aide',         type: 'income',  icon: Gift,           hex: '#14B8A6', bgClass: 'bg-teal-500/15',    textClass: 'text-teal-400',    dotClass: 'bg-teal-400',    borderClass: 'border-teal-500/30',    ringClass: 'ring-teal-500/30' },
   { id: 'other-income',  label: 'Autre',        type: 'income',  icon: TrendingUp,     hex: '#A8A29E', bgClass: 'bg-stone-500/15',   textClass: 'text-stone-400',   dotClass: 'bg-stone-400',   borderClass: 'border-stone-500/30',   ringClass: 'ring-stone-500/30' },
+
+  // ─── Virements ──────────────────────────────────────────────
+  // Ni dépense ni revenu : de l'argent qui change de compte.
+  { id: 'transfer',      label: 'Virement',      type: 'transfer', icon: ArrowLeftRight, hex: '#38BDF8', bgClass: 'bg-sky-500/15',  textClass: 'text-sky-400',  dotClass: 'bg-sky-400',  borderClass: 'border-sky-500/30',  ringClass: 'ring-sky-500/30' },
+  { id: 'settlement',    label: 'Remboursement', type: 'transfer', icon: HandCoins,      hex: '#2DD4BF', bgClass: 'bg-teal-500/15', textClass: 'text-teal-400', dotClass: 'bg-teal-400', borderClass: 'border-teal-500/30', ringClass: 'ring-teal-500/30' },
 ]
 
 export const CATEGORIES_BY_ID = Object.fromEntries(CATEGORIES.map((c) => [c.id, c]))
 
 export const EXPENSE_CATEGORIES = CATEGORIES.filter((c) => c.type === 'expense')
 export const INCOME_CATEGORIES = CATEGORIES.filter((c) => c.type === 'income')
+export const TRANSFER_CATEGORIES = CATEGORIES.filter((c) => c.type === 'transfer')
+
+// Les charges fixes du compte joint — loyer, élec, box. Sert à isoler
+// « ce qui tombe quoi qu'il arrive » du reste des dépenses.
+export const FIXED_CHARGE_CATEGORY_IDS = ['housing', 'utilities', 'internet', 'subscriptions']
 
 const FALLBACK = {
   id: 'unknown',
@@ -48,11 +60,15 @@ export function getCategory(id) {
 }
 
 export function getCategoriesByType(type) {
-  return type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
+  if (type === 'income') return INCOME_CATEGORIES
+  if (type === 'transfer') return TRANSFER_CATEGORIES
+  return EXPENSE_CATEGORIES
 }
 
 export function getDefaultCategoryId(type) {
-  return type === 'income' ? 'other-income' : 'other-expense'
+  if (type === 'income') return 'other-income'
+  if (type === 'transfer') return 'transfer'
+  return 'other-expense'
 }
 
 export function isValidCategoryId(id) {

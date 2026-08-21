@@ -21,9 +21,11 @@ export default function BudgetsView() {
   const [editing, setEditing] = useState(null)
 
   const budgets = settings.budgets || {}
+  // Les budgets sont posés en euros ; les dépenses du compte joint sont
+  // converties pour rester comparables.
   const spendingByCat = useMemo(
-    () => getMonthSpendingByCategory(transactions),
-    [transactions],
+    () => getMonthSpendingByCategory(transactions, { rate: settings.eurToAud, currency: 'EUR' }),
+    [transactions, settings.eurToAud],
   )
 
   const { withBudget, withoutBudget } = useMemo(() => {

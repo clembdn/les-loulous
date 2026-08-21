@@ -1,7 +1,7 @@
 import Checklist from '../components/voyage/Checklist.jsx'
 import Timeline from '../components/voyage/Timeline.jsx'
 import { VOYAGE_SUBS, getVoyageSub } from '../config/navigation.js'
-import { cn } from '@/shared/lib/utils.js'
+import MobileSubTabs from '../components/layout/MobileSubTabs.jsx'
 
 // Renders one of the Voyage sub-pages (Checklist or Timeline).
 // Each section is a top-level page on desktop (via the sidebar);
@@ -21,8 +21,7 @@ export default function VoyageView({ section = 'checklist', onNavigate }) {
         </div>
         <p className="text-xs text-white/40 mb-8 pl-12">{current.subtitle}</p>
 
-        {/* Mobile-only sub-tab switcher (desktop uses sidebar). */}
-        <MobileVoyageTabs active={section} onNavigate={onNavigate} />
+        <MobileSubTabs subs={VOYAGE_SUBS} active={section} onNavigate={onNavigate} className="mb-6" />
 
         <SectionContent section={section} />
       </div>
@@ -40,27 +39,3 @@ function SectionContent({ section }) {
   }
 }
 
-function MobileVoyageTabs({ active, onNavigate }) {
-  return (
-    <div className="lg:hidden flex items-center gap-1 p-1 bg-white/[0.03] rounded-xl mb-6">
-      {VOYAGE_SUBS.map((s) => {
-        const Icon = s.icon
-        const isActive = active === s.id
-        return (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => onNavigate?.(s.id)}
-            className={cn(
-              'flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition',
-              isActive ? 'bg-white text-black' : 'text-white/40 hover:text-white/70',
-            )}
-          >
-            <Icon size={12} strokeWidth={2.2} />
-            <span>{s.short}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
-}

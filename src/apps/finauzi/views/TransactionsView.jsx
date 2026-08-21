@@ -1,9 +1,11 @@
 import { useMemo, Fragment, useState } from 'react'
-import { Plus, Search, Users, User, Plane, SlidersHorizontal, X, Check } from 'lucide-react'
+import { Plus, Search, Plane, SlidersHorizontal, X, Check } from 'lucide-react'
 import { useAppData } from '../context/AppDataContext.jsx'
 import { useUI } from '../context/UIContext.jsx'
 import { AUTHORIZED_UIDS, getPerson } from '@/shared/config/people.js'
 import { CATEGORIES, getCategory } from '../config/categories.js'
+import { ACCOUNTS, SPLIT_COMMON, getAccount } from '../config/accounts.js'
+import { touchesAccount } from '../utils/ledger.js'
 import { formatDateShort } from '../utils/cashflow.js'
 import { DEPARTURE_DATE, DEPARTURE_TIMESTAMP } from '../config/journey.js'
 import TransactionRow from '../components/transactions/TransactionRow.jsx'
@@ -28,25 +30,32 @@ export default function TransactionsView() {
   const { transactions, settings, isLoading } = useAppData()
   const userColors = settings.userColors
   const { openForm } = useUI()
-  const [personFilter, setPersonFilter] = useState('all')
-  const [typeFilter, setTypeFilter] = useState('all')
+  const [splitFilter, setSplitFilter] = useState('all')
+  const [kindFilter, setKindFilter] = useState('all')
   const [accountFilter, setAccountFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
 
   function resetFilters() {
-    setPersonFilter('all')
-    setTypeFilter('all')
+    setSplitFilter('all')
+    setKindFilter('all')
     setAccountFilter('all')
     setCategoryFilter('all')
   }
 
+  // Le filtre par compte prend les deux sens : un virement apparaît aussi
+  // bien dans le compte qui l'envoie que dans celui qui le reçoit.
+  const applyBaseFilters = useMemo(() => (list) => {
+    let out = list
+    if (splitFilter !== 'all') out = out.filter((tx) => tx.split === splitFilter)
+    if (kindFilter !== 'all') out = out.filter((tx) => tx.kind === kindFilter)
+    if (accountFilter !== 'all') out = out.filter((tx) => touchesAccount(tx, accountFilter))
+    return out
+  }, [splitFilter, kindFilter, accountFilter])
+
   const filtered = useMemo(() => {
-    let list = transactions.filter((tx) => tx.isActive !== false)
-    if (personFilter !== 'all') list = list.filter((tx) => tx.personUid === personFilter)
-    if (typeFilter !== 'all') list = list.filter((tx) => tx.type === typeFilter)
-    if (accountFilter !== 'all') list = list.filter((tx) => (tx.account || 'personal') === accountFilter)
+    let list = applyBaseFilters(transactions.filter((tx) => tx.isActive !== false))
     if (categoryFilter !== 'all') list = list.filter((tx) => (tx.category || 'other-expense') === categoryFilter)
     if (search.trim()) {
       const q = search.trim().toLowerCase()
@@ -57,22 +66,19 @@ export default function TransactionsView() {
       )
     }
     return list.sort((a, b) => new Date(b.date) - new Date(a.date))
-  }, [transactions, personFilter, typeFilter, accountFilter, categoryFilter, search])
+  }, [transactions, applyBaseFilters, categoryFilter, search])
 
   const groups = useMemo(() => groupByMonth(filtered), [filtered])
 
   const visibleCategories = useMemo(() => {
-    let list = transactions.filter((tx) => tx.isActive !== false)
-    if (personFilter !== 'all') list = list.filter((tx) => tx.personUid === personFilter)
-    if (typeFilter !== 'all') list = list.filter((tx) => tx.type === typeFilter)
-    if (accountFilter !== 'all') list = list.filter((tx) => (tx.account || 'personal') === accountFilter)
+    const list = applyBaseFilters(transactions.filter((tx) => tx.isActive !== false))
     const ids = new Set(list.map((tx) => tx.category || 'other-expense'))
     return CATEGORIES.filter((c) => ids.has(c.id))
-  }, [transactions, personFilter, typeFilter, accountFilter])
+  }, [transactions, applyBaseFilters])
 
   const filtersProps = {
-    personFilter, setPersonFilter,
-    typeFilter, setTypeFilter,
+    splitFilter, setSplitFilter,
+    kindFilter, setKindFilter,
     accountFilter, setAccountFilter,
     categoryFilter, setCategoryFilter,
     visibleCategories,
@@ -80,8 +86,8 @@ export default function TransactionsView() {
   }
 
   const activeCount =
-    (personFilter !== 'all' ? 1 : 0) +
-    (typeFilter !== 'all' ? 1 : 0) +
+    (splitFilter !== 'all' ? 1 : 0) +
+    (kindFilter !== 'all' ? 1 : 0) +
     (accountFilter !== 'all' ? 1 : 0) +
     (categoryFilter !== 'all' ? 1 : 0)
 
@@ -216,39 +222,76 @@ export default function TransactionsView() {
   )
 }
 
+// ─── Options partagées entre les trois surfaces de filtre ────────────────
+
+const KIND_OPTIONS = [
+  { id: 'expense', label: 'Dépenses', accentClass: 'text-red-400', activeClass: 'bg-red-500/15 text-red-400 border-red-500/30' },
+  { id: 'income', label: 'Revenus', accentClass: 'text-emerald-400', activeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+  { id: 'transfer', label: 'Virements', accentClass: 'text-sky-400', activeClass: 'bg-sky-500/15 text-sky-400 border-sky-500/30' },
+]
+
+// « À la charge de » : la répartition, pas le payeur. Avec un compte joint,
+// savoir qui a sorti la carte n'apprend plus rien — savoir qui supporte
+// la dépense, si.
+function useSplitOptions(userColors) {
+  return useMemo(() => [
+    {
+      id: SPLIT_COMMON,
+      label: 'Commun',
+      dotClass: 'bg-sky-400',
+      accentClass: 'text-sky-400',
+      activeClass: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
+    },
+    ...AUTHORIZED_UIDS.map((uid) => {
+      const p = getPerson(uid, userColors)
+      return {
+        id: uid,
+        label: p.label,
+        dotClass: p.dotClass,
+        accentClass: p.textClass,
+        activeClass: `${p.bgClass} ${p.textClass} ${p.borderClass}`,
+      }
+    }),
+  ], [userColors])
+}
+
 // ─── Active filter chips ─────────────────────────────────────────────────
 
 function ActiveFilterChips({
-  personFilter, setPersonFilter,
-  typeFilter, setTypeFilter,
+  splitFilter, setSplitFilter,
+  kindFilter, setKindFilter,
   accountFilter, setAccountFilter,
   categoryFilter, setCategoryFilter,
   userColors,
   onReset,
 }) {
+  const splitOptions = useSplitOptions(userColors)
   const chips = []
-  if (personFilter !== 'all') {
-    const p = getPerson(personFilter, userColors)
+  if (splitFilter !== 'all') {
+    const option = splitOptions.find((o) => o.id === splitFilter)
     chips.push({
-      key: 'person',
-      label: p?.label || 'Personne',
-      onClear: () => setPersonFilter('all'),
-      dotClass: p?.dotClass,
+      key: 'split',
+      label: option?.label || 'Répartition',
+      accentClass: option?.accentClass,
+      dotClass: option?.dotClass,
+      onClear: () => setSplitFilter('all'),
     })
   }
-  if (typeFilter !== 'all') {
+  if (kindFilter !== 'all') {
+    const option = KIND_OPTIONS.find((o) => o.id === kindFilter)
     chips.push({
-      key: 'type',
-      label: typeFilter === 'income' ? 'Revenus' : 'Dépenses',
-      accentClass: typeFilter === 'income' ? 'text-emerald-400' : 'text-red-400',
-      onClear: () => setTypeFilter('all'),
+      key: 'kind',
+      label: option?.label || 'Type',
+      accentClass: option?.accentClass,
+      onClear: () => setKindFilter('all'),
     })
   }
   if (accountFilter !== 'all') {
+    const account = getAccount(accountFilter)
     chips.push({
       key: 'account',
-      label: accountFilter === 'common' ? 'Commun' : 'Personnel',
-      accentClass: accountFilter === 'common' ? 'text-sky-400' : 'text-white',
+      label: account.short,
+      accentClass: account.textClass,
       onClear: () => setAccountFilter('all'),
     })
   }
@@ -304,83 +347,74 @@ function MobileFiltersSheet({
   onClose,
   resultsCount,
   onReset,
-  personFilter, setPersonFilter,
-  typeFilter, setTypeFilter,
+  splitFilter, setSplitFilter,
+  kindFilter, setKindFilter,
   accountFilter, setAccountFilter,
   categoryFilter, setCategoryFilter,
   visibleCategories,
   userColors,
 }) {
+  const splitOptions = useSplitOptions(userColors)
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose() }}>
       <SheetContent side="bottom" desktopSide="bottom" title="Filtres" className="sm:max-w-md sm:left-1/2 sm:-translate-x-1/2">
         <SheetBody>
-          <SheetSection title="Personne">
+          <SheetSection title="Compte">
             <ChipGroup>
-              <Chip active={personFilter === 'all'} onClick={() => setPersonFilter('all')}>
+              <Chip active={accountFilter === 'all'} onClick={() => setAccountFilter('all')}>
                 Tous
               </Chip>
-              {AUTHORIZED_UIDS.map((uid) => {
-                const p = getPerson(uid, userColors)
-                const active = personFilter === uid
+              {ACCOUNTS.map((account) => {
+                const Icon = account.icon
                 return (
                   <Chip
-                    key={uid}
-                    active={active}
-                    onClick={() => setPersonFilter(uid)}
-                    activeClass={`${p.bgClass} ${p.textClass} ${p.borderClass}`}
+                    key={account.id}
+                    active={accountFilter === account.id}
+                    onClick={() => setAccountFilter(account.id)}
+                    activeClass={`${account.bgClass} ${account.textClass} ${account.borderClass}`}
                   >
-                    <span className={`h-1.5 w-1.5 rounded-full ${p.dotClass} mr-1.5`} />
-                    {p.label}
+                    <Icon size={11} strokeWidth={2.2} className="mr-1.5" />
+                    {account.short}
                   </Chip>
                 )
               })}
             </ChipGroup>
           </SheetSection>
 
-          <SheetSection title="Type">
+          <SheetSection title="À la charge de">
             <ChipGroup>
-              <Chip active={typeFilter === 'all'} onClick={() => { setTypeFilter('all'); setCategoryFilter('all') }}>
+              <Chip active={splitFilter === 'all'} onClick={() => setSplitFilter('all')}>
                 Tous
               </Chip>
-              <Chip
-                active={typeFilter === 'income'}
-                onClick={() => { setTypeFilter('income'); setCategoryFilter('all') }}
-                activeClass="bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-              >
-                Revenus
-              </Chip>
-              <Chip
-                active={typeFilter === 'expense'}
-                onClick={() => { setTypeFilter('expense'); setCategoryFilter('all') }}
-                activeClass="bg-red-500/15 text-red-400 border-red-500/30"
-              >
-                Dépenses
-              </Chip>
+              {splitOptions.map((option) => (
+                <Chip
+                  key={option.id}
+                  active={splitFilter === option.id}
+                  onClick={() => setSplitFilter(option.id)}
+                  activeClass={option.activeClass}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${option.dotClass} mr-1.5`} />
+                  {option.label}
+                </Chip>
+              ))}
             </ChipGroup>
           </SheetSection>
 
-          <SheetSection title="Compte">
+          <SheetSection title="Type">
             <ChipGroup>
-              <Chip active={accountFilter === 'all'} onClick={() => setAccountFilter('all')}>
+              <Chip active={kindFilter === 'all'} onClick={() => { setKindFilter('all'); setCategoryFilter('all') }}>
                 Tous
               </Chip>
-              <Chip
-                active={accountFilter === 'common'}
-                onClick={() => setAccountFilter('common')}
-                activeClass="bg-sky-500/15 text-sky-400 border-sky-500/30"
-              >
-                <Users size={11} strokeWidth={2.2} className="mr-1.5" />
-                Commun
-              </Chip>
-              <Chip
-                active={accountFilter === 'personal'}
-                onClick={() => setAccountFilter('personal')}
-                activeClass="bg-white/10 text-white border-white/20"
-              >
-                <User size={11} strokeWidth={2.2} className="mr-1.5" />
-                Personnel
-              </Chip>
+              {KIND_OPTIONS.map((option) => (
+                <Chip
+                  key={option.id}
+                  active={kindFilter === option.id}
+                  onClick={() => { setKindFilter(option.id); setCategoryFilter('all') }}
+                  activeClass={option.activeClass}
+                >
+                  {option.label}
+                </Chip>
+              ))}
             </ChipGroup>
           </SheetSection>
 
@@ -474,73 +508,67 @@ function Chip({ active, onClick, activeClass, fullWidth, children }) {
 // ─── Desktop sidebar filters ─────────────────────────────────────────────
 
 function DesktopFilters({
-  personFilter, setPersonFilter,
-  typeFilter, setTypeFilter,
+  splitFilter, setSplitFilter,
+  kindFilter, setKindFilter,
   accountFilter, setAccountFilter,
   categoryFilter, setCategoryFilter,
   visibleCategories,
   userColors,
 }) {
+  const splitOptions = useSplitOptions(userColors)
   return (
     <div className="sticky top-4 space-y-6">
-      <FilterGroup title="Personne">
-        <FilterRow active={personFilter === 'all'} onClick={() => setPersonFilter('all')}>
-          Tous
+      <FilterGroup title="Compte">
+        <FilterRow active={accountFilter === 'all'} onClick={() => setAccountFilter('all')}>
+          Tous comptes
         </FilterRow>
-        {AUTHORIZED_UIDS.map((uid) => {
-          const p = getPerson(uid, userColors)
+        {ACCOUNTS.map((account) => {
+          const Icon = account.icon
           return (
             <FilterRow
-              key={uid}
-              active={personFilter === uid}
-              onClick={() => setPersonFilter(uid)}
+              key={account.id}
+              active={accountFilter === account.id}
+              onClick={() => setAccountFilter(account.id)}
+              accentClass={account.textClass}
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${p.dotClass} mr-2`} />
-              {p.label}
+              <Icon size={12} strokeWidth={2.2} className="mr-2" />
+              {account.short}
             </FilterRow>
           )
         })}
       </FilterGroup>
 
-      <FilterGroup title="Type">
-        <FilterRow active={typeFilter === 'all'} onClick={() => { setTypeFilter('all'); setCategoryFilter('all') }}>
+      <FilterGroup title="À la charge de">
+        <FilterRow active={splitFilter === 'all'} onClick={() => setSplitFilter('all')}>
           Tous
         </FilterRow>
-        <FilterRow
-          active={typeFilter === 'income'}
-          onClick={() => { setTypeFilter('income'); setCategoryFilter('all') }}
-          accentClass="text-emerald-400"
-        >
-          Revenus
-        </FilterRow>
-        <FilterRow
-          active={typeFilter === 'expense'}
-          onClick={() => { setTypeFilter('expense'); setCategoryFilter('all') }}
-          accentClass="text-red-400"
-        >
-          Dépenses
-        </FilterRow>
+        {splitOptions.map((option) => (
+          <FilterRow
+            key={option.id}
+            active={splitFilter === option.id}
+            onClick={() => setSplitFilter(option.id)}
+            accentClass={option.accentClass}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${option.dotClass} mr-2`} />
+            {option.label}
+          </FilterRow>
+        ))}
       </FilterGroup>
 
-      <FilterGroup title="Compte">
-        <FilterRow active={accountFilter === 'all'} onClick={() => setAccountFilter('all')}>
-          Tous comptes
+      <FilterGroup title="Type">
+        <FilterRow active={kindFilter === 'all'} onClick={() => { setKindFilter('all'); setCategoryFilter('all') }}>
+          Tous
         </FilterRow>
-        <FilterRow
-          active={accountFilter === 'common'}
-          onClick={() => setAccountFilter('common')}
-          accentClass="text-sky-400"
-        >
-          <Users size={12} strokeWidth={2.2} className="mr-2" />
-          Commun
-        </FilterRow>
-        <FilterRow
-          active={accountFilter === 'personal'}
-          onClick={() => setAccountFilter('personal')}
-        >
-          <User size={12} strokeWidth={2.2} className="mr-2" />
-          Personnel
-        </FilterRow>
+        {KIND_OPTIONS.map((option) => (
+          <FilterRow
+            key={option.id}
+            active={kindFilter === option.id}
+            onClick={() => { setKindFilter(option.id); setCategoryFilter('all') }}
+            accentClass={option.accentClass}
+          >
+            {option.label}
+          </FilterRow>
+        ))}
       </FilterGroup>
 
       {visibleCategories.length > 0 && (

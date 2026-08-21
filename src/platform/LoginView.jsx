@@ -58,10 +58,6 @@ export default function LoginView() {
         <div className="absolute -top-32 left-1/2 -translate-x-1/2 h-[460px] w-[680px] rounded-full bg-accent/10 blur-[130px]" />
       </div>
       <div className="relative w-full max-w-sm fade-in">
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-semibold tracking-[-0.02em] text-fg">Clément &amp; Lise</h1>
-          <p className="text-sm text-muted mt-1.5">Notre espace à deux</p>
-        </div>
 
         {!person ? (
           <div className="slide-up">

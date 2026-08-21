@@ -8,10 +8,7 @@ import {
   updateTimelineItem,
   deleteTimelineItem,
 } from '../../services/timelineService.js'
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10)
-}
+import { todayISO } from '../../utils/dates.js'
 
 export default function TimelineAddModal({ open, onClose, existing, currentUid }) {
   const isEdit = !!existing

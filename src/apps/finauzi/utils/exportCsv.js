@@ -1,23 +1,36 @@
 import { getCategory } from '../config/categories.js'
-import { getPersonLabel } from '@/shared/config/people.js'
+import { getAccount, getSplitLabel } from '../config/accounts.js'
+import { RECURRENCES_BY_ID } from './recurrence.js'
+import { todayISO } from './dates.js'
 
 const HEADERS = [
   'Date',
   'Type',
-  'Compte',
+  'Compte débité',
+  'Compte crédité',
+  'À la charge de',
   'Catégorie',
   'Titre',
-  'Montant EUR',
+  'Montant',
+  'Devise',
+  'Montant reçu',
   'Récurrence',
   'Fin',
-  'Payé par',
+  'Remboursement',
   'Notes',
   'Actif',
 ]
 
-const TYPE_LABEL = { income: 'Revenu', expense: 'Dépense' }
-const ACCOUNT_LABEL = { common: 'Commun', personal: 'Personnel' }
-const RECURRENCE_LABEL = { 'one-off': 'Ponctuelle', monthly: 'Mensuelle', weekly: 'Hebdo' }
+const KIND_LABEL = { income: 'Revenu', expense: 'Dépense', transfer: 'Virement' }
+
+function accountLabel(id) {
+  return id ? getAccount(id).label : ''
+}
+
+function money(value) {
+  if (value == null) return ''
+  return Number(value).toFixed(2).replace('.', ',')
+}
 
 function escapeCsvCell(value) {
   if (value == null) return ''
@@ -40,14 +53,18 @@ export function buildTransactionsCsv(transactions) {
     lines.push(
       rowToCsv([
         tx.date ? tx.date.slice(0, 10) : '',
-        TYPE_LABEL[tx.type] || tx.type,
-        ACCOUNT_LABEL[tx.account] || 'Personnel',
+        KIND_LABEL[tx.kind] || tx.kind,
+        accountLabel(tx.fromAccount),
+        accountLabel(tx.toAccount),
+        tx.kind === 'transfer' ? '' : getSplitLabel(tx.split),
         cat.label,
         tx.title || '',
-        Number(tx.amountEUR || 0).toFixed(2).replace('.', ','),
-        RECURRENCE_LABEL[tx.recurrence] || tx.recurrence,
+        money(tx.amount),
+        tx.currency || 'EUR',
+        money(tx.amountReceived),
+        RECURRENCES_BY_ID[tx.recurrence]?.label || tx.recurrence,
         tx.endDate ? tx.endDate.slice(0, 10) : '',
-        getPersonLabel(tx.personUid),
+        tx.isSettlement ? 'Oui' : '',
         tx.notes || '',
         tx.isActive === false ? 'Non' : 'Oui',
       ]),
@@ -70,6 +87,6 @@ export function downloadCsv(filename, content) {
 
 export function downloadTransactionsCsv(transactions) {
   const csv = buildTransactionsCsv(transactions)
-  const date = new Date().toISOString().slice(0, 10)
+  const date = todayISO()
   downloadCsv(`finauzi-transactions-${date}.csv`, csv)
 }

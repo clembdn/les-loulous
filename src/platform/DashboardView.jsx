@@ -32,7 +32,6 @@ export default function DashboardView() {
             <h1 className="text-3xl font-semibold tracking-[-0.02em] text-fg mt-1">
               {greeting()}{me ? `, ${me.label}` : ''}
             </h1>
-            <p className="text-sm text-faint mt-1">Clément &amp; Lise — Notre espace à deux</p>
           </div>
           <button
             onClick={logout}

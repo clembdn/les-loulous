@@ -5,15 +5,14 @@ import {
 import { db } from '@/shared/lib/firebase.js'
 import { AUTHORIZED_UIDS, CLEMENT_UID } from '@/shared/config/people.js'
 import { isValidCategoryId, getDefaultCategoryId } from '../config/categories.js'
-
-function resolveCategory(raw, type) {
-  if (isValidCategoryId(raw)) return raw
-  return getDefaultCategoryId(type)
-}
-
-function resolveAccount(raw) {
-  return raw === 'common' ? 'common' : 'personal'
-}
+import {
+  JOINT_ACCOUNT_ID, SPLIT_COMMON,
+  getAccount, getAccountCurrency, getPersonalAccountId,
+  isValidAccountId, isValidSplit, getDefaultSplit,
+} from '../config/accounts.js'
+import { normalizeRecurrence } from '../utils/recurrence.js'
+import { normalizeKind, TX_KINDS } from '../utils/ledger.js'
+import { todayISO } from '../utils/dates.js'
 
 const TX_PATH = 'couples/main/transactions'
 
@@ -25,35 +24,85 @@ function txDoc(id) {
   return doc(db, TX_PATH, id)
 }
 
-function resolvePersonUid(raw) {
+function resolveCategory(raw, kind) {
+  if (isValidCategoryId(raw)) return raw
+  return getDefaultCategoryId(kind)
+}
+
+// ─── Lecture : compatibilité ascendante ───────────────────────────────────
+// Les documents écrits avant la refonte portaient { type, amountEUR, account,
+// personUid } avec account ∈ {personal, common}. On les relit dans le nouveau
+// modèle sans script de migration : les anciennes lignes restent justes, et
+// elles se convertissent définitivement à la première modification.
+
+function legacyPersonUid(raw) {
   if (AUTHORIZED_UIDS.includes(raw?.personUid)) return raw.personUid
-  if (Array.isArray(raw?.splits) && raw.splits.length > 0) {
-    const first = raw.splits.find((s) => AUTHORIZED_UIDS.includes(s?.personUid))
-    if (first) return first.personUid
-  }
   if (AUTHORIZED_UIDS.includes(raw?.createdBy)) return raw.createdBy
   return CLEMENT_UID
 }
 
+function legacyAccountId(raw) {
+  if (raw?.account === 'common') return JOINT_ACCOUNT_ID
+  return getPersonalAccountId(legacyPersonUid(raw)) || getPersonalAccountId(CLEMENT_UID)
+}
+
 function normalize(raw) {
-  const type = raw.type === 'income' ? 'income' : 'expense'
+  const kind = TX_KINDS.includes(raw.kind)
+    ? raw.kind
+    : (raw.type === 'income' ? 'income' : 'expense')
+
+  const isLegacy = !TX_KINDS.includes(raw.kind)
+  const legacyAccount = isLegacy ? legacyAccountId(raw) : null
+
+  let fromAccount = null
+  let toAccount = null
+  if (kind === 'expense') {
+    fromAccount = isValidAccountId(raw.fromAccount) ? raw.fromAccount : legacyAccount
+  } else if (kind === 'income') {
+    toAccount = isValidAccountId(raw.toAccount) ? raw.toAccount : legacyAccount
+  } else {
+    fromAccount = isValidAccountId(raw.fromAccount) ? raw.fromAccount : null
+    toAccount = isValidAccountId(raw.toAccount) ? raw.toAccount : null
+  }
+
+  // Répartition : ce qui sortait d'un compte perso était perso, ce qui
+  // sortait du compte commun était commun.
+  const anchorAccount = fromAccount || toAccount
+  const split = isValidSplit(raw.split)
+    ? raw.split
+    : (isLegacy
+      ? (raw.account === 'common' ? SPLIT_COMMON : legacyPersonUid(raw))
+      : getDefaultSplit(anchorAccount))
+
+  const amount = Number(raw.amount != null ? raw.amount : raw.amountEUR) || 0
+  // Les anciens montants étaient tous en euros, y compris ceux du compte
+  // commun — d'où la devise figée à EUR tant que la ligne n'est pas rouverte.
+  const currency = raw.currency === 'AUD' || raw.currency === 'EUR'
+    ? raw.currency
+    : (isLegacy ? 'EUR' : getAccountCurrency(anchorAccount))
+
   return {
     id: raw.id,
+    kind,
     title: raw.title || '',
-    amountEUR: Number(raw.amountEUR) || 0,
-    type,
-    recurrence: raw.recurrence === 'monthly' || raw.recurrence === 'weekly' ? raw.recurrence : 'one-off',
+    amount,
+    currency,
+    amountReceived: raw.amountReceived != null ? Number(raw.amountReceived) : null,
+    fromAccount,
+    toAccount,
+    split,
+    isSettlement: raw.isSettlement === true,
+    recurrence: normalizeRecurrence(raw.recurrence),
     date: raw.date,
     endDate: raw.endDate || null,
-    personUid: resolvePersonUid(raw),
-    category: resolveCategory(raw.category, type),
-    account: resolveAccount(raw.account),
+    category: resolveCategory(raw.category, kind),
     notes: raw.notes || null,
     isActive: raw.isActive !== false,
     createdAt: raw.createdAt,
     createdBy: raw.createdBy,
     updatedAt: raw.updatedAt,
     updatedBy: raw.updatedBy,
+    isLegacy,
   }
 }
 
@@ -67,45 +116,117 @@ export function subscribeToTransactions(callback, onError) {
   })
 }
 
+// ─── Écriture ─────────────────────────────────────────────────────────────
+
+// Construit un document propre à partir de la saisie du formulaire.
+// La devise n'est jamais choisie par l'utilisateur : elle découle du compte
+// qui bouge, ce qui rend impossible un solde en A$ nourri de montants en €.
+function buildPayload(input) {
+  const kind = normalizeKind(input.kind)
+
+  const fromAccount = kind === 'income'
+    ? null
+    : (isValidAccountId(input.fromAccount) ? input.fromAccount : JOINT_ACCOUNT_ID)
+  const toAccount = kind === 'expense'
+    ? null
+    : (isValidAccountId(input.toAccount) ? input.toAccount : JOINT_ACCOUNT_ID)
+
+  const sourceAccount = kind === 'income' ? toAccount : fromAccount
+  const currency = getAccountCurrency(sourceAccount)
+
+  // Sur un virement inter-devises, le montant crédité fait foi côté
+  // destination : il porte le vrai taux et les frais du transfert.
+  let amountReceived = null
+  if (kind === 'transfer' && toAccount && getAccountCurrency(toAccount) !== currency) {
+    const received = Number(input.amountReceived)
+    amountReceived = isFinite(received) && received > 0 ? Math.round(received * 100) / 100 : null
+  }
+
+  const split = isValidSplit(input.split) ? input.split : getDefaultSplit(sourceAccount)
+  const recurrence = normalizeRecurrence(input.recurrence)
+
+  return {
+    kind,
+    title: String(input.title || '').trim(),
+    amount: Math.round((Number(input.amount) || 0) * 100) / 100,
+    currency,
+    amountReceived,
+    fromAccount,
+    toAccount,
+    split: kind === 'transfer' ? SPLIT_COMMON : split,
+    isSettlement: kind === 'transfer' && input.isSettlement === true,
+    recurrence,
+    date: input.date,
+    endDate: recurrence !== 'one-off' && input.endDate ? input.endDate : null,
+    category: resolveCategory(input.category, kind),
+    notes: input.notes ? String(input.notes).trim() || null : null,
+    isActive: input.isActive !== false,
+  }
+}
+
 export async function createTransaction(input, currentUid) {
   const now = new Date().toISOString()
-  const personUid = AUTHORIZED_UIDS.includes(input.personUid) ? input.personUid : currentUid
-  const type = input.type === 'income' ? 'income' : 'expense'
-  const data = {
-    title: String(input.title || '').trim(),
-    amountEUR: Number(input.amountEUR),
-    type,
-    recurrence: ['monthly', 'weekly', 'one-off'].includes(input.recurrence) ? input.recurrence : 'one-off',
-    date: input.date,
-    endDate: input.endDate || null,
-    personUid,
-    category: resolveCategory(input.category, type),
-    account: resolveAccount(input.account),
-    notes: input.notes || null,
-    isActive: input.isActive !== false,
+  const ref = await addDoc(txCollection(), {
+    ...buildPayload(input),
     createdAt: now,
     createdBy: currentUid,
     updatedAt: now,
     updatedBy: currentUid,
-  }
-  const ref = await addDoc(txCollection(), data)
+  })
   return ref.id
 }
 
-export async function updateTransaction(id, updates, currentUid) {
-  const payload = { ...updates, updatedAt: new Date().toISOString(), updatedBy: currentUid }
-  if (updates.amountEUR != null) payload.amountEUR = Number(updates.amountEUR)
-  if (updates.category != null && updates.type != null) {
-    payload.category = resolveCategory(updates.category, updates.type)
-  }
-  if (updates.account != null) payload.account = resolveAccount(updates.account)
-  await updateDoc(txDoc(id), payload)
+export async function updateTransaction(id, input, currentUid) {
+  await updateDoc(txDoc(id), {
+    ...buildPayload(input),
+    updatedAt: new Date().toISOString(),
+    updatedBy: currentUid,
+  })
 }
 
 export async function deleteTransaction(id) {
   await deleteDoc(txDoc(id))
 }
 
+// On réécrit le document complet plutôt que le seul champ `isActive` :
+// les règles Firestore valident la forme entière, et un document d'avant
+// la refonte n'aurait pas passé la validation en écriture partielle.
 export async function toggleTransactionActive(tx, currentUid) {
-  await updateTransaction(tx.id, { isActive: !tx.isActive }, currentUid)
+  await updateTransaction(tx.id, { ...tx, isActive: !tx.isActive }, currentUid)
 }
+
+// ─── Raccourcis de règlement ──────────────────────────────────────────────
+
+// « Régler la dette » — un virement d'un perso à l'autre, marqué comme
+// règlement pour que le grand livre le voie et remette la balance à zéro.
+export async function createDebtSettlement({ fromUid, toUid, amountEUR, date }, currentUid) {
+  return createTransaction({
+    kind: 'transfer',
+    title: 'Remboursement',
+    amount: amountEUR,
+    fromAccount: getPersonalAccountId(fromUid),
+    toAccount: getPersonalAccountId(toUid),
+    isSettlement: true,
+    recurrence: 'one-off',
+    date: date || todayISO(),
+    category: 'transfer',
+  }, currentUid)
+}
+
+// « Remettre au pot » — l'apport qui rééquilibre les versements.
+export async function createContribution({ fromUid, amountEUR, amountReceivedAUD, date }, currentUid) {
+  return createTransaction({
+    kind: 'transfer',
+    title: 'Apport compte joint',
+    amount: amountEUR,
+    amountReceived: amountReceivedAUD,
+    fromAccount: getPersonalAccountId(fromUid),
+    toAccount: JOINT_ACCOUNT_ID,
+    isSettlement: false,
+    recurrence: 'one-off',
+    date: date || todayISO(),
+    category: 'transfer',
+  }, currentUid)
+}
+
+export { getAccount }

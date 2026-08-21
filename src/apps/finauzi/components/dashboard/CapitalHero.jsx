@@ -11,8 +11,13 @@ function departureBadge(departureDate) {
   return { text: `J+${-days} · Australie`, tone: 'australia' }
 }
 
-export default function CapitalHero({ label = 'Capital total', currentBalance, hoveredPoint, baselineBalance, rightSlot, departureDate }) {
-  const { format: formatEUR } = useCurrency()
+// `currency` : la devise dans laquelle `currentBalance` est DÉJÀ exprimé.
+// Passé, le montant s'affiche tel quel (solde d'un compte). Omis, le montant
+// est traité comme des euros et converti dans la devise d'affichage
+// (patrimoine consolidé).
+export default function CapitalHero({ label = 'Capital total', currentBalance, currency, hoveredPoint, baselineBalance, rightSlot, departureDate }) {
+  const { format, formatNative } = useCurrency()
+  const formatEUR = currency ? (v) => formatNative(v, currency) : format
   const displayBalance = hoveredPoint?.balance ?? currentBalance
   const reference = baselineBalance ?? currentBalance
 

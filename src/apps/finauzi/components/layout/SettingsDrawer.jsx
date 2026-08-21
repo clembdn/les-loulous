@@ -4,6 +4,7 @@ import { useAppData } from '../../context/AppDataContext.jsx'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { useCurrency } from '../../context/CurrencyContext.jsx'
 import { updateSettings } from '../../services/settingsService.js'
+import { ACCOUNTS, JOINT_ACCOUNT_ID, getAccount } from '../../config/accounts.js'
 import {
   getPerson,
   COLOR_PALETTE,
@@ -18,36 +19,34 @@ import { cn } from '@/shared/lib/utils.js'
 export default function SettingsDrawer({ open, onClose }) {
   const { transactions, settings, isLoading } = useAppData()
   const { currentUser, logout } = useAuth()
-  const { format: formatMoney, currency } = useCurrency()
+  const { formatNative, currency } = useCurrency()
   const me = getPerson(currentUser?.uid, settings.userColors)
 
-  const [initialCapital, setInitialCapital] = useState('')
-  const [commonInitial, setCommonInitial] = useState('')
-  const [safetyBuffer, setSafetyBuffer] = useState('')
+  // Un solde de départ par compte, dans la devise du compte.
+  const [openings, setOpenings] = useState({})
+  const [jointBuffer, setJointBuffer] = useState('')
+  const [contributionTarget, setContributionTarget] = useState('')
   const [eurToAud, setEurToAud] = useState('')
 
   useEffect(() => {
-    if (!isLoading) {
-      setInitialCapital(String(settings.initialCapitalEUR ?? 0))
-      setCommonInitial(String(settings.commonInitialCapitalEUR ?? 0))
-      setSafetyBuffer(String(settings.safetyBufferEUR ?? 0))
-      setEurToAud(String(settings.eurToAud ?? 1.65))
-    }
-  }, [isLoading, settings.initialCapitalEUR, settings.commonInitialCapitalEUR, settings.safetyBufferEUR, settings.eurToAud])
+    if (isLoading) return
+    setOpenings(Object.fromEntries(
+      ACCOUNTS.map((a) => [a.id, String(settings.openingBalances?.[a.id] ?? 0)]),
+    ))
+    setJointBuffer(String(settings.safetyBuffers?.[JOINT_ACCOUNT_ID] ?? 0))
+    setContributionTarget(String(settings.contributionTargetEUR ?? 0))
+    setEurToAud(String(settings.eurToAud ?? 1.65))
+  }, [isLoading, settings.openingBalances, settings.safetyBuffers, settings.contributionTargetEUR, settings.eurToAud])
+
+  const num = (value) => Number(String(value ?? '').replace(',', '.')) || 0
 
   // Écritures optimistes : l'UI est mise à jour par le cache local, fonctionne hors-ligne.
   function onSave(e) {
     e.preventDefault()
-    const total = Number(initialCapital.replace(',', '.')) || 0
-    const common = Number(commonInitial.replace(',', '.')) || 0
-    if (common > total) {
-      toast.error('Le capital commun ne peut pas dépasser le capital total.')
-      return
-    }
     updateSettings({
-      initialCapitalEUR: total,
-      commonInitialCapitalEUR: common,
-      safetyBufferEUR: Number(safetyBuffer.replace(',', '.')) || 0,
+      openingBalances: Object.fromEntries(ACCOUNTS.map((a) => [a.id, num(openings[a.id])])),
+      safetyBuffers: { ...settings.safetyBuffers, [JOINT_ACCOUNT_ID]: num(jointBuffer) },
+      contributionTargetEUR: num(contributionTarget),
     }, currentUser?.uid)
       .catch((err) => toast.error(err.message || 'Erreur de synchronisation'))
     toast.success('Réglages enregistrés')
@@ -198,49 +197,68 @@ export default function SettingsDrawer({ open, onClose }) {
                   </button>
                 </div>
                 <p className="text-[11px] text-white/30 mt-1.5">
-                  Les calculs internes restent en euros — la devise change seulement l'affichage.
+                  Chaque compte garde sa vraie devise. Ce taux ne sert qu'aux
+                  totaux consolidés et aux montants estimés.
                 </p>
               </div>
             </div>
           </Section>
 
-          {/* Capital */}
-          <Section title="Capital">
+          {/* Soldes de départ */}
+          <Section title="Comptes">
             <form onSubmit={onSave} className="space-y-4">
-              <Field label="Capital initial — Total">
+              {ACCOUNTS.map((account) => {
+                const Icon = account.icon
+                return (
+                  <Field
+                    key={account.id}
+                    label={
+                      <span className="inline-flex items-center gap-1.5">
+                        <Icon size={11} className={account.textClass} />
+                        {account.label} · {account.currency}
+                      </span>
+                    }
+                  >
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={openings[account.id] ?? ''}
+                      onChange={(e) => setOpenings((prev) => ({ ...prev, [account.id]: e.target.value }))}
+                      className={inputClass}
+                    />
+                    <p className="text-[11px] text-white/30 mt-1.5">
+                      Solde de départ, en {account.currency}. Actuel&nbsp;:{' '}
+                      {formatNative(settings.openingBalances?.[account.id] ?? 0, account.currency)}
+                    </p>
+                  </Field>
+                )
+              })}
+
+              <Field label="Seuil de sécurité du compte joint · AUD">
                 <input
                   type="text"
                   inputMode="decimal"
-                  value={initialCapital}
-                  onChange={(e) => setInitialCapital(e.target.value)}
+                  value={jointBuffer}
+                  onChange={(e) => setJointBuffer(e.target.value)}
                   className={inputClass}
                 />
                 <p className="text-[11px] text-white/30 mt-1.5">
-                  Solde global de départ (perso + commun). Actuel&nbsp;: {formatMoney(settings.initialCapitalEUR)}
+                  En dessous, l'app prévient qu'il faut réapprovisionner. Actuel&nbsp;:{' '}
+                  {formatNative(settings.safetyBuffers?.[JOINT_ACCOUNT_ID] ?? 0, getAccount(JOINT_ACCOUNT_ID).currency)}
                 </p>
               </Field>
-              <Field label="Dont compte commun">
+
+              <Field label="Apport mensuel convenu · EUR">
                 <input
                   type="text"
                   inputMode="decimal"
-                  value={commonInitial}
-                  onChange={(e) => setCommonInitial(e.target.value)}
+                  value={contributionTarget}
+                  onChange={(e) => setContributionTarget(e.target.value)}
                   className={inputClass}
                 />
                 <p className="text-[11px] text-white/30 mt-1.5">
-                  Part déjà sur le compte commun. Actuel&nbsp;: {formatMoney(settings.commonInitialCapitalEUR)}
-                </p>
-              </Field>
-              <Field label="Seuil de sécurité">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={safetyBuffer}
-                  onChange={(e) => setSafetyBuffer(e.target.value)}
-                  className={inputClass}
-                />
-                <p className="text-[11px] text-white/30 mt-1.5">
-                  Capital minimum souhaité. Actuel&nbsp;: {formatMoney(settings.safetyBufferEUR)}
+                  Ce que chacun s'engage à verser au pot chaque mois. Actuel&nbsp;:{' '}
+                  {formatNative(settings.contributionTargetEUR ?? 0, 'EUR')}
                 </p>
               </Field>
 

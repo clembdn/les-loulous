@@ -23,13 +23,45 @@ service cloud.firestore {
         && data.updatedBy == request.auth.uid;
     }
 
+    function isValidAccountId(id) {
+      return id == "joint" || id == "clement" || id == "lise";
+    }
+
+    // La répartition : "common" (50/50) ou l'uid de celui qui la supporte.
+    function isValidSplit(value) {
+      return value == "common" || isValidPersonUid(value);
+    }
+
+    function isValidRecurrence(value) {
+      return value == "one-off"
+        || value == "weekly"
+        || value == "fortnightly"
+        || value == "monthly";
+    }
+
+    // Une dépense sort d'un compte, un revenu entre sur un compte, un
+    // virement fait les deux — et jamais depuis et vers le même compte.
+    function hasValidAccountRouting(data) {
+      return (data.kind == "expense" && isValidAccountId(data.fromAccount))
+        || (data.kind == "income" && isValidAccountId(data.toAccount))
+        || (data.kind == "transfer"
+            && isValidAccountId(data.fromAccount)
+            && isValidAccountId(data.toAccount)
+            && data.fromAccount != data.toAccount);
+    }
+
     function hasValidTransactionShape(data) {
       return data.title is string
-        && data.amountEUR is number
-        && data.amountEUR >= 0
-        && (data.type == "income" || data.type == "expense")
-        && (data.recurrence == "one-off" || data.recurrence == "monthly" || data.recurrence == "weekly")
-        && isValidPersonUid(data.personUid);
+        && data.amount is number
+        && data.amount >= 0
+        && (data.currency == "EUR" || data.currency == "AUD")
+        && (data.kind == "income" || data.kind == "expense" || data.kind == "transfer")
+        && hasValidAccountRouting(data)
+        && isValidSplit(data.split)
+        && isValidRecurrence(data.recurrence)
+        && data.isSettlement is bool
+        && (data.amountReceived == null
+            || (data.amountReceived is number && data.amountReceived >= 0));
     }
 
     // Transactions
