@@ -1,4 +1,4 @@
-import { Wallet, ShoppingCart } from 'lucide-react'
+import { Wallet, ShoppingCart, Dumbbell } from 'lucide-react'
 
 // Registre des apps. Source unique de vérité pour les cards du dashboard.
 // Ajouter une app = (1) une entrée ici + (2) une <Route> dans src/App.jsx.
@@ -21,6 +21,16 @@ export const APPS = [
     icon: ShoppingCart,
     accent: 'emerald',
     theme: 'light',
+    status: 'live',
+  },
+  {
+    id: 'muscauzi',
+    name: 'MuscAuzi',
+    description: 'Nos séances et nos charges',
+    path: '/muscauzi',
+    icon: Dumbbell,
+    accent: 'red',
+    theme: 'dark',
     status: 'live',
   },
 ]

@@ -1,14 +1,7 @@
-import { startOfWeek, endOfWeek, addWeeks, eachDayOfInterval, format } from 'date-fns'
+import { startOfWeek, endOfWeek, addWeeks, eachDayOfInterval } from 'date-fns'
+import { toLocalDateKey, DAY_LABELS, MONTHS } from '@/shared/lib/dates.js'
 
-const DAY_LABELS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
-const MONTHS = [
-  'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-  'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
-]
-
-export function toDateId(date) {
-  return format(date, 'yyyy-MM-dd')
-}
+export { toLocalDateKey }
 
 function formatRange(start, end) {
   const sd = start.getDate()
@@ -23,13 +16,13 @@ export function getWeek(offset = 0) {
   const base = addWeeks(new Date(), offset)
   const start = startOfWeek(base, { weekStartsOn: 1 })
   const end = endOfWeek(base, { weekStartsOn: 1 })
-  const todayId = toDateId(new Date())
+  const todayId = toLocalDateKey(new Date())
   const days = eachDayOfInterval({ start, end }).map((d) => ({
     date: d,
-    id: toDateId(d),
+    id: toLocalDateKey(d),
     dayLabel: DAY_LABELS[d.getDay()],
     dayNum: d.getDate(),
-    isToday: toDateId(d) === todayId,
+    isToday: toLocalDateKey(d) === todayId,
   }))
-  return { startId: toDateId(start), endId: toDateId(end), days, label: formatRange(start, end) }
+  return { startId: toLocalDateKey(start), endId: toLocalDateKey(end), days, label: formatRange(start, end) }
 }
