@@ -27,6 +27,10 @@ export default {
         danger: '#EF4444',
         warning: '#F59E0B',
       },
+      transitionTimingFunction: {
+        // Courbe d'iOS : départ franc, arrivée très amortie.
+        ios: 'cubic-bezier(0.32, 0.72, 0, 1)',
+      },
       boxShadow: {
         card: '0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 28px -16px rgb(0 0 0 / 0.55)',
         lift: '0 16px 48px -20px rgb(0 0 0 / 0.55)',

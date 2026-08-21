@@ -1,11 +1,13 @@
 import { Dumbbell, Cog, PersonStanding, Layers } from 'lucide-react'
 
-// Types d'exercice — pilotent surtout le rappel de convention de saisie.
+// Types d'exercice. `hint` n'existe que là où la saisie est réellement
+// ambiguë — dire « charge affichée sur la machine » n'apprend rien à personne
+// et ne fait qu'ajouter du bruit sous les champs.
 export const EXERCISE_TYPES = [
-  { id: 'barbell',    label: 'Barre',        icon: Layers,          hint: 'charge totale, barre incluse' },
-  { id: 'dumbbell',   label: 'Haltères',     icon: Dumbbell,        hint: 'poids d’UN seul haltère' },
-  { id: 'machine',    label: 'Machine',      icon: Cog,             hint: 'charge affichée sur la machine' },
-  { id: 'bodyweight', label: 'Poids du corps', icon: PersonStanding, hint: '0 si non lesté, sinon le lest ajouté' },
+  { id: 'barbell',    label: 'Barre',          icon: Layers,         hint: 'Charge totale, barre incluse' },
+  { id: 'dumbbell',   label: 'Haltères',       icon: Dumbbell,       hint: 'Poids d’un seul haltère' },
+  { id: 'machine',    label: 'Machine',        icon: Cog,            hint: null },
+  { id: 'bodyweight', label: 'Poids du corps', icon: PersonStanding, hint: '0 si non lesté, sinon le lest' },
 ]
 
 export const EXERCISE_TYPE_BY_ID = Object.fromEntries(EXERCISE_TYPES.map((t) => [t.id, t]))
@@ -15,10 +17,10 @@ export function getExerciseType(id) {
   return EXERCISE_TYPE_BY_ID[id] || EXERCISE_TYPE_BY_ID[DEFAULT_TYPE]
 }
 
-// Rappel affiché en petit sous la saisie : dans six mois on ne doit pas avoir
-// à se demander si « 60 » voulait dire 60 kg par haltère ou 60 en tout.
+// Rappel de convention affiché sous la saisie. Rend `null` quand il n'y a rien
+// d'utile à dire — l'accordéon n'affiche alors aucune ligne.
 export function weightHint(exercise) {
   if (!exercise) return null
-  if (exercise.bodyweight) return 'Poids du corps : 0 si non lesté, sinon le lest (10, 20…)'
-  return `${getExerciseType(exercise.type).label} — ${getExerciseType(exercise.type).hint}`
+  if (exercise.bodyweight) return EXERCISE_TYPE_BY_ID.bodyweight.hint
+  return getExerciseType(exercise.type).hint
 }

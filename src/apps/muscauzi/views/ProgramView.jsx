@@ -2,10 +2,12 @@ import { useState, useMemo } from 'react'
 import { Plus, Trash2, ChevronUp, ChevronDown, X, Search, CalendarRange, Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
+import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { DAY_SHORT, DAY_LABELS, weekParity, isoDayOfWeek } from '@/shared/lib/dates.js'
 import { useExercises, useProgram } from '../hooks/useMuscData.js'
 import { saveProgramDay, DOWS } from '../services/programService.js'
+import { SETTINGS_SUBS } from '../config/navigation.js'
 import { newInstanceId } from '../utils/ids.js'
 
 const PARITY_LABEL = { odd: 'Semaine impaire', even: 'Semaine paire' }
@@ -13,7 +15,7 @@ const PARITY_LABEL = { odd: 'Semaine impaire', even: 'Semaine paire' }
 // Éditeur de programme : parité × jour de la semaine, indépendant par profil.
 // Toute modification ici est sans effet sur les séances déjà enregistrées —
 // chacune porte sa propre copie de la prescription.
-export default function ProgramView() {
+export default function ProgramView({ onNavigate }) {
   const { currentUid } = useAuth()
   const [parity, setParity] = useState(() => weekParity(new Date()))
   const [dayOfWeek, setDayOfWeek] = useState(() => isoDayOfWeek(new Date()))
@@ -77,6 +79,8 @@ export default function ProgramView() {
           Ton programme à toi. Les séances déjà enregistrées ne bougent pas.
         </p>
       </header>
+
+      <SegmentedTabs items={SETTINGS_SUBS} active="programme" onChange={onNavigate} className="mb-5" />
 
       <div className="grid grid-cols-2 gap-2 mb-3">
         {['odd', 'even'].map((p) => (

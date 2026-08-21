@@ -1,7 +1,7 @@
 import Checklist from '../components/voyage/Checklist.jsx'
 import Timeline from '../components/voyage/Timeline.jsx'
 import { VOYAGE_SUBS, getVoyageSub } from '../config/navigation.js'
-import MobileSubTabs from '../components/layout/MobileSubTabs.jsx'
+import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
 
 // Renders one of the Voyage sub-pages (Checklist or Timeline).
 // Each section is a top-level page on desktop (via the sidebar);
@@ -21,7 +21,7 @@ export default function VoyageView({ section = 'checklist', onNavigate }) {
         </div>
         <p className="text-xs text-white/40 mb-8 pl-12">{current.subtitle}</p>
 
-        <MobileSubTabs subs={VOYAGE_SUBS} active={section} onNavigate={onNavigate} className="mb-6" />
+        <SegmentedTabs items={VOYAGE_SUBS} active={section} onChange={onNavigate} className="mb-6" />
 
         <SectionContent section={section} />
       </div>

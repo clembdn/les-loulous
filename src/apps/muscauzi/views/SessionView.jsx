@@ -1,15 +1,14 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Dumbbell, Scale, ArrowRight } from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
-import Modal from '@/shared/ui/Modal.jsx'
-import { Button } from '@/shared/ui/Button.jsx'
 import { toLocalDateKey, weekParity, isoDayOfWeek, formatDayFr } from '@/shared/lib/dates.js'
 import {
   useExercises, useProgram, useSession, useLastPerf, useWeights, useNotes,
 } from '../hooks/useMuscData.js'
 import {
-  upsertEntry, clearEntry, resetSessionPlan, completedSets, hasAnyInput,
+  upsertEntry, clearEntry, updateSessionPlan, mergeSnapshot, completedSets, entryHasData,
 } from '../services/sessionsService.js'
+import { toast } from 'sonner'
 import { saveNote } from '../services/notesService.js'
 import SessionPlanControl from '../components/session/SessionPlanControl.jsx'
 import ExerciseAccordion from '../components/session/ExerciseAccordion.jsx'
@@ -45,8 +44,6 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
 
   const [override, setOverride] = useState(() => readStoredPlan(dateKey))
   const [openId, setOpenId] = useState(null)
-  // Changement de séance en attente de confirmation (des séries sont saisies).
-  const [pendingPlan, setPendingPlan] = useState(null)
 
   const { exerciseById, isLoading: exercisesLoading } = useExercises()
   const { session, isLoading: sessionLoading } = useSession(dateKey)
@@ -84,31 +81,30 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
 
   const isForced = plan.parity !== natural.parity || plan.dayOfWeek !== natural.dayOfWeek
 
-  const commitPlan = useCallback((next) => {
+  // Changer de jour ou de parité ne coûte JAMAIS le travail déjà fait : les
+  // séries saisies restent, et les exercices sur lesquels on a déjà travaillé
+  // restent visibles à la suite du nouveau programme.
+  const applyPlan = useCallback((next) => {
     setOverride(next)
     try { localStorage.setItem(planStorageKey(dateKey), JSON.stringify(next)) } catch { /* mode privé */ }
     if (session) {
       const days = next.parity === 'even' ? even.days : odd.days
-      resetSessionPlan(currentUid, dateKey, {
+      const nextLines = snapshotFrom(days?.[next.dayOfWeek] || [])
+      const kept = Object.values(session.entries || {}).filter(entryHasData).length
+      updateSessionPlan(currentUid, dateKey, {
         parity: next.parity,
         dayOfWeek: next.dayOfWeek,
-        programSnapshot: snapshotFrom(days?.[next.dayOfWeek] || []),
+        programSnapshot: mergeSnapshot(session, nextLines),
       }, currentUid)
+      if (kept > 0) toast.success('Séance changée — tes séries du jour sont conservées')
     }
     setOpenId(null)
   }, [dateKey, session, even.days, odd.days, currentUid, snapshotFrom])
 
-  // Rien de saisi → on change directement. Sinon, confirmation bloquante :
-  // le changement efface les séries du jour.
-  const requestPlan = useCallback((next) => {
-    if (session && hasAnyInput(session)) setPendingPlan(next)
-    else commitPlan(next)
-  }, [session, commitPlan])
-
   const resetPlan = useCallback(() => {
-    requestPlan(natural)
+    applyPlan(natural)
     try { localStorage.removeItem(planStorageKey(dateKey)) } catch { /* mode privé */ }
-  }, [requestPlan, natural, dateKey])
+  }, [applyPlan, natural, dateKey])
 
   const saveEntry = useCallback((line, entry) => {
     // `meta` n'est transmis qu'à la création : le snapshot est figé ensuite.
@@ -149,7 +145,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
         parity={plan.parity}
         dayOfWeek={plan.dayOfWeek}
         isForced={isForced}
-        onChange={requestPlan}
+        onChange={applyPlan}
         onReset={resetPlan}
       />
 
@@ -180,26 +176,6 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
         </div>
       )}
 
-      <Modal
-        open={!!pendingPlan}
-        onClose={() => setPendingPlan(null)}
-        title="Changer la séance en cours ?"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setPendingPlan(null)}>Annuler</Button>
-            <Button
-              onClick={() => { commitPlan(pendingPlan); setPendingPlan(null) }}
-            >
-              Changer et recommencer
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-muted leading-relaxed">
-          Le programme de la séance sera remplacé et les séries déjà saisies aujourd'hui
-          seront effacées. Votre programme permanent n'est pas modifié.
-        </p>
-      </Modal>
     </div>
   )
 }

@@ -6,7 +6,7 @@ import LineChart from '@/shared/ui/LineChart.jsx'
 import { toLocalDateKey, fromLocalDateKey, formatDayFr, formatDateShortFr, formatDateFr } from '@/shared/lib/dates.js'
 import { useWeights } from '../hooks/useMuscData.js'
 import { recordWeight } from '../services/weightsService.js'
-import WeightWheel from '../components/weight/WeightWheel.jsx'
+import WeightScale from '../components/weight/WeightScale.jsx'
 import ConsistencyCalendar from '../components/tracking/ConsistencyCalendar.jsx'
 
 const FALLBACK_KG = 70
@@ -80,21 +80,20 @@ export default function TrackingView() {
           </p>
         )}
 
-        <div className="flex items-center gap-4 mt-3">
-          <div className="shrink-0 w-32 text-right">
-            <span className="text-4xl font-semibold text-fg tabular tracking-[-0.03em]">
-              {value.toFixed(1)}
-            </span>
-            <span className="text-sm text-muted ml-1">kg</span>
-            {last && (
-              <p className="text-[11px] text-faint mt-1 tabular">
-                {formatDelta(value, last)}
-              </p>
-            )}
-          </div>
-          <div className="flex-1 min-w-0 max-w-[200px]">
-            <WeightWheel value={value} onChange={(v) => { setTouched(true); setValue(v) }} />
-          </div>
+        {/* La valeur au-dessus, la règle pleine largeur en dessous : on lit
+            le chiffre et on ajuste sans que l'un gêne l'autre. */}
+        <div className="mt-4 text-center">
+          <span className="text-5xl font-semibold text-fg tabular tracking-[-0.035em]">
+            {value.toFixed(1)}
+          </span>
+          <span className="text-base text-muted ml-1.5">kg</span>
+          {last && (
+            <p className="text-[11px] text-faint mt-1 tabular">{formatDelta(value, last)}</p>
+          )}
+        </div>
+
+        <div className="mt-3 -mx-5">
+          <WeightScale value={value} onChange={(v) => { setTouched(true); setValue(v) }} />
         </div>
 
         <button

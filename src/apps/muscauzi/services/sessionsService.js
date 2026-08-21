@@ -96,12 +96,10 @@ export function hasCompletedWork(session) {
   return Object.values(session.entries || {}).some((e) => completedSets(e).length > 0)
 }
 
-// Y a-t-il quelque chose à effacer avant de changer la séance en cours ?
-export function hasAnyInput(session) {
-  if (!session) return false
-  return Object.values(session.entries || {}).some(
-    (e) => e.skipped || Object.keys(e.sets || {}).length > 0,
-  )
+// L'occurrence porte-t-elle quelque chose qu'on ne doit pas perdre ?
+export function entryHasData(entry) {
+  if (!entry) return false
+  return entry.skipped || Object.keys(entry.sets || {}).length > 0
 }
 
 export function subscribeToSession(uid, dateKey, callback, onError) {
@@ -213,23 +211,40 @@ export function clearEntry(uid, dateKey, instanceId, currentUid) {
 }
 
 /**
- * Re-photographie la séance du JOUR et repart de zéro.
+ * Re-photographie la séance du JOUR sans rien effacer.
  *
- * Déclenché uniquement quand on force manuellement la parité ou le jour. Les
- * `entries` sont remplacées en bloc par une map vide : on ne tente pas de
- * conserver les exercices communs aux deux programmes — avec les doubles
- * occurrences le résultat serait imprévisible, et des entrées orphelines
- * pourraient survivre. Les séances passées ne sont jamais touchées.
+ * Changer de jour ou de parité ne doit JAMAIS coûter le travail déjà fait. Les
+ * `entries` sont laissées intactes ; c'est l'appelant qui construit le nouveau
+ * `programSnapshot` en gardant les lignes qui portent des données (cf.
+ * `mergeSnapshot`). Chaque entrée conserve donc sa ligne de prescription :
+ * rien n'est orphelin, et revenir au jour précédent réaffiche tout.
+ *
+ * Les séances passées ne sont jamais touchées.
  */
-export function resetSessionPlan(uid, dateKey, meta, currentUid) {
+export function updateSessionPlan(uid, dateKey, meta, currentUid) {
   updateDoc(sessionDoc(uid, dateKey), {
     parity: meta.parity,
     dayOfWeek: meta.dayOfWeek,
     programSnapshot: meta.programSnapshot,
-    entries: {},
     updatedAt: new Date().toISOString(),
     updatedBy: currentUid,
   }).catch((err) => {
-    console.error('[MuscAuzi] resetSessionPlan failed:', err)
+    console.error('[MuscAuzi] updateSessionPlan failed:', err)
   })
+}
+
+/**
+ * Prescription de la nouvelle séance + tout ce qui a déjà été saisi aujourd'hui.
+ *
+ * Les lignes de l'ancien jour qui portent des séries sont conservées à la
+ * suite : sans elles, les entrées correspondantes deviendraient invisibles et
+ * disparaîtraient des courbes, qui parcourent le snapshot.
+ */
+export function mergeSnapshot(session, nextLines) {
+  if (!session) return nextLines.map((l, i) => ({ ...l, order: i }))
+  const nextIds = new Set(nextLines.map((l) => l.instanceId))
+  const preserved = session.programSnapshot.filter(
+    (l) => !nextIds.has(l.instanceId) && entryHasData(session.entries?.[l.instanceId]),
+  )
+  return [...nextLines, ...preserved].map((l, i) => ({ ...l, order: i }))
 }

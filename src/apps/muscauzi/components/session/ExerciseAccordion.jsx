@@ -177,8 +177,14 @@ export default function ExerciseAccordion({
         />
       </button>
 
-      {expanded && (
-        <div className="px-4 pb-4 border-t border-border pt-3 slide-up">
+      <div
+        className={cn(
+          'grid transition-[grid-template-rows,opacity] duration-300 ease-ios',
+          expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+        )}
+      >
+        <div className="overflow-hidden" {...(expanded ? {} : { inert: '' })}>
+        <div className="px-4 pb-4 border-t border-border pt-3">
           <div className="flex items-center justify-between mb-3">
             <button
               onClick={() => onOpenDetail(line.exerciseId)}
@@ -229,7 +235,9 @@ export default function ExerciseAccordion({
                 <Plus size={14} /> série
               </button>
 
-              <p className="text-[11px] text-faint mt-3 leading-relaxed">{weightHint(exercise)}</p>
+              {weightHint(exercise) && (
+                <p className="text-[11px] text-faint mt-3 leading-relaxed">{weightHint(exercise)}</p>
+              )}
 
               {savedDone > 0 && (
                 <button
@@ -242,7 +250,8 @@ export default function ExerciseAccordion({
             </>
           )}
         </div>
-      )}
+        </div>
+      </div>
     </div>
   )
 }

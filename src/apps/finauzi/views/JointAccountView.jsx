@@ -11,7 +11,7 @@ import { getMonthlyEquivalent, isRecurring, getRecurrenceLabel } from '../utils/
 import { formatDateShort, formatMonthLong } from '../utils/cashflow.js'
 import { COMMON_SUBS } from '../config/navigation.js'
 import TradeChart from '../components/chart/TradeChart.jsx'
-import MobileSubTabs from '../components/layout/MobileSubTabs.jsx'
+import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
 
 const HORIZON_MONTHS = 6
 
@@ -73,7 +73,7 @@ export default function JointAccountView({ onNavigate }) {
   return (
     <div className="fade-in pb-32 lg:pb-12">
       <div className="max-w-3xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 xl:px-16 pt-8 lg:pt-10">
-        <MobileSubTabs subs={COMMON_SUBS} active="joint" onNavigate={onNavigate} className="mb-6" />
+        <SegmentedTabs items={COMMON_SUBS} active="joint" onChange={onNavigate} className="mb-6" />
 
         <header className="px-1">
           <p className="text-xs uppercase tracking-[0.18em] text-white/30 mb-2">

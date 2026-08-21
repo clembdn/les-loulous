@@ -2,14 +2,16 @@ import { useState } from 'react'
 import { Plus, Trash2, Pencil, Check, X, ListChecks } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
+import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { EXERCISE_TYPES, DEFAULT_TYPE, getExerciseType } from '../config/exercises.js'
 import { useExercises } from '../hooks/useMuscData.js'
+import { SETTINGS_SUBS } from '../config/navigation.js'
 import { addExercise, updateExercise, deleteExercise } from '../services/exercisesService.js'
 
 // Catalogue commun aux deux profils : y ajouter un exercice le rend disponible
 // dans les deux programmes. Seuls les historiques sont cloisonnés.
-export default function CatalogueView() {
+export default function CatalogueView({ onNavigate }) {
   const { currentUid } = useAuth()
   const { exercises, isLoading } = useExercises()
   const [editingId, setEditingId] = useState(null)
@@ -22,6 +24,8 @@ export default function CatalogueView() {
         <h1 className="text-2xl font-semibold tracking-[-0.02em] text-fg mt-1">Exercices</h1>
         <p className="text-sm text-muted mt-1">Catalogue partagé entre les deux profils.</p>
       </header>
+
+      <SegmentedTabs items={SETTINGS_SUBS} active="catalogue" onChange={onNavigate} className="mb-5" />
 
       {creating ? (
         <ExerciseForm

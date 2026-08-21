@@ -66,8 +66,8 @@ export default function MuscauziApp() {
               />
             )}
             {tab === 'poids' && <TrackingView />}
-            {tab === 'programme' && <ProgramView />}
-            {tab === 'catalogue' && <CatalogueView />}
+            {tab === 'programme' && <ProgramView onNavigate={changeTab} />}
+            {tab === 'catalogue' && <CatalogueView onNavigate={changeTab} />}
           </Suspense>
         )}
       </AppShell>

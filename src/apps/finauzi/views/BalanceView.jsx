@@ -9,7 +9,7 @@ import { getCategory } from '../config/categories.js'
 import { formatDateShort } from '../utils/cashflow.js'
 import { COMMON_SUBS } from '../config/navigation.js'
 import SettleModal from '../components/balance/SettleModal.jsx'
-import MobileSubTabs from '../components/layout/MobileSubTabs.jsx'
+import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
 
 // Les deux compteurs ne se règlent pas au même endroit :
 //   • les apports se rééquilibrent en virant AU POT
@@ -50,7 +50,7 @@ export default function BalanceView({ onNavigate }) {
   return (
     <div className="fade-in pb-32 lg:pb-12">
       <div className="max-w-3xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 xl:px-16 pt-8 lg:pt-10">
-        <MobileSubTabs subs={COMMON_SUBS} active="balance" onNavigate={onNavigate} className="mb-6" />
+        <SegmentedTabs items={COMMON_SUBS} active="balance" onChange={onNavigate} className="mb-6" />
 
         <h1 className="text-2xl font-semibold tracking-tight text-white mb-1">Équilibre</h1>
         <p className="text-xs text-white/40 mb-8">
@@ -116,12 +116,6 @@ export default function BalanceView({ onNavigate }) {
                 )
               })}
             </div>
-
-            {target > 0 && (
-              <p className="text-[11px] text-white/30 mt-4">
-                Objectif convenu : {format(target)} chacun par mois.
-              </p>
-            )}
 
             <button
               onClick={() => setSettling({

@@ -6,6 +6,14 @@ import { Dumbbell, LineChart, Scale, Settings, CalendarRange, ListChecks } from 
 export const SETTINGS_IDS = ['programme', 'catalogue']
 export const SETTINGS_DEFAULT = 'programme'
 
+// Sur mobile la barre du bas n'a qu'un onglet « Réglages » : sans ce contrôle
+// segmenté, le catalogue d'exercices serait tout simplement inatteignable au
+// doigt. Sur desktop, chacun a son entrée de sidebar.
+export const SETTINGS_SUBS = [
+  { id: 'programme', label: 'Programme', short: 'Programme', icon: CalendarRange },
+  { id: 'catalogue', label: 'Exercices', short: 'Exercices', icon: ListChecks },
+]
+
 export const MUSC_TABS = [
   { id: 'seance',   label: 'Séance',   icon: Dumbbell },
   { id: 'progres',  label: 'Progrès',  icon: LineChart },

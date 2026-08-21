@@ -69,7 +69,9 @@ export default function ExerciseDetailView({ exercise, sessions, isLoading, note
             formatLabel={(d) => formatDateShortFr(fromLocalDateKey(d.date))}
           />
         )}
-        <p className="text-[11px] text-faint mt-3 leading-relaxed">{weightHint(exercise)}</p>
+        {weightHint(exercise) && (
+          <p className="text-[11px] text-faint mt-3 leading-relaxed">{weightHint(exercise)}</p>
+        )}
       </div>
 
       {history.length > 0 && (
