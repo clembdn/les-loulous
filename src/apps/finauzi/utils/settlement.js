@@ -3,8 +3,14 @@
 // Deux compteurs volontairement SÉPARÉS, parce qu'ils ne se règlent pas
 // de la même façon :
 //
-//   1. L'ÉQUILIBRE DES APPORTS — « Lise doit encore verser 500 € au pot ».
-//      Se règle en virant sur le compte joint.
+//   1. L'ÉQUILIBRE DES APPORTS — « Lise a mis 500 € de moins que Clément ».
+//      Deux façons de le solder, et le montant n'est PAS le même :
+//        • verser 500 € AU POT — le pot grossit d'autant, mais c'est un
+//          virement international, donc avec frais et change.
+//        • virer 250 € À CLÉMENT en France — le pot ne bouge pas, chacun
+//          a sorti la même chose de sa poche, et le virement est gratuit.
+//      Le second est presque toujours le bon geste : d'où `amountToEqualize`
+//      (au pot) et `amountToRebalance` (= la moitié, entre persos).
 //
 //   2. LA BALANCE DES DETTES — « Lise doit 340 € à Clément ».
 //      Se règle en virant à l'autre personne.
@@ -19,9 +25,9 @@
 
 import { CLEMENT_UID, LISE_UID, AUTHORIZED_UIDS, getOtherUid } from '@/shared/config/people.js'
 import { getAccount, getAccountCurrency, JOINT_ACCOUNT_ID, SPLIT_COMMON } from '../config/accounts.js'
-import { toEUR, round2 } from './money.js'
+import { toEUR, round2, txRate } from './money.js'
 import { getOccurrences } from './recurrence.js'
-import { normalizeKind } from './ledger.js'
+import { normalizeKind, SETTLES_DEBT, SETTLES_CONTRIBUTION } from './ledger.js'
 
 function emptyByPerson(value = 0) {
   return { [CLEMENT_UID]: value, [LISE_UID]: value }
@@ -57,13 +63,31 @@ export function getContributions(transactions, rate, now = new Date()) {
     const occurrences = getOccurrences(tx, tx.date, now)
     if (occurrences.length === 0) continue
 
-    // Virement d'un perso vers le pot — l'apport classique.
-    if (kind === 'transfer' && !tx.isSettlement) {
+    if (kind === 'transfer') {
       const from = getAccount(tx.fromAccount)
       const to = getAccount(tx.toAccount)
+      const lineRate = txRate(tx, rate)
 
+      // Rééquilibrage réglé de perso à perso, sans passer par le pot.
+      // L'émetteur a fini par sortir cet argent de sa poche pour le commun,
+      // le receveur en a récupéré autant : l'écart se referme de deux fois
+      // le montant viré. C'est pour ça qu'on ne vire que la moitié de l'écart.
+      if (from.kind === 'personal' && to.kind === 'personal'
+          && tx.settles === SETTLES_CONTRIBUTION) {
+        const amountEUR = toEUR(tx.amount, tx.currency, lineRate)
+        for (const date of occurrences) {
+          record(from.ownerUid, amountEUR, date, tx)
+          record(to.ownerUid, -amountEUR, date, tx)
+        }
+        continue
+      }
+
+      // Un remboursement de dette ne dit rien de qui a alimenté le pot.
+      if (tx.settles === SETTLES_DEBT) continue
+
+      // Virement d'un perso vers le pot — l'apport classique.
       if (from.kind === 'personal' && to.id === JOINT_ACCOUNT_ID) {
-        const amountEUR = toEUR(tx.amount, tx.currency, rate)
+        const amountEUR = toEUR(tx.amount, tx.currency, lineRate)
         for (const date of occurrences) record(from.ownerUid, amountEUR, date, tx)
         continue
       }
@@ -72,16 +96,18 @@ export function getContributions(transactions, rate, now = new Date()) {
       if (from.id === JOINT_ACCOUNT_ID && to.kind === 'personal') {
         const received = tx.amountReceived != null ? tx.amountReceived : tx.amount
         const receivedCurrency = tx.amountReceived != null ? getAccountCurrency(to.id) : tx.currency
-        const amountEUR = toEUR(received, receivedCurrency, rate)
+        const amountEUR = toEUR(received, receivedCurrency, lineRate)
         for (const date of occurrences) record(to.ownerUid, -amountEUR, date, tx)
         continue
       }
+
+      continue
     }
 
     // Revenu tombant directement sur le pot et rattaché à quelqu'un —
     // le salaire australien versé sur le compte joint est un apport.
     if (kind === 'income' && tx.toAccount === JOINT_ACCOUNT_ID && tx.split !== SPLIT_COMMON) {
-      const amountEUR = toEUR(tx.amount, tx.currency, rate)
+      const amountEUR = toEUR(tx.amount, tx.currency, txRate(tx, rate))
       for (const date of occurrences) record(tx.split, amountEUR, date, tx)
     }
   }
@@ -93,9 +119,14 @@ export function getContributions(transactions, rate, now = new Date()) {
     byMonth,
     entries,
     gap,
-    // Qui est en retard, et de combien il doit verser AU POT pour égaliser.
+    // Qui est en retard, et ce qu'il lui en coûte pour revenir à égalité.
     behindUid: gap === 0 ? null : (gap > 0 ? LISE_UID : CLEMENT_UID),
-    amountToEqualize: Math.abs(gap),
+    aheadUid: gap === 0 ? null : (gap > 0 ? CLEMENT_UID : LISE_UID),
+    // Chemin « au pot » : il verse tout l'écart, le pot grossit d'autant.
+    amountToEqualize: round2(Math.abs(gap)),
+    // Chemin « France→France » : il vire la moitié à l'autre, le pot ne
+    // bouge pas. Gratuit, et c'est le geste recommandé.
+    amountToRebalance: round2(Math.abs(gap) / 2),
     isBalanced: Math.abs(gap) < 1,
   }
 }
@@ -132,7 +163,7 @@ export function getDebtLedger(transactions, rate, now = new Date()) {
     const occurrences = getOccurrences(tx, tx.date, now)
     if (occurrences.length === 0) continue
 
-    const amountEUR = toEUR(tx.amount, tx.currency, rate)
+    const amountEUR = toEUR(tx.amount, tx.currency, txRate(tx, rate))
     const split = tx.split
 
     if (kind === 'expense') {
@@ -175,13 +206,16 @@ export function getDebtLedger(transactions, rate, now = new Date()) {
     const from = getAccount(tx.fromAccount)
     const to = getAccount(tx.toAccount)
 
-    // Un virement d'un perso à l'autre solde toujours quelque chose.
+    // Un virement d'un perso à l'autre solde quelque chose — reste à savoir
+    // quoi. S'il rééquilibre les apports, il est déjà compté là-bas :
+    // le passer aussi en dette le compterait deux fois, et à l'envers.
     if (from.kind === 'personal' && to.kind === 'personal') {
+      if (tx.settles === SETTLES_CONTRIBUTION) continue
       for (const d of occurrences) move(from.ownerUid, amountEUR, tx, d, 'a remboursé')
       continue
     }
 
-    if (!tx.isSettlement) continue
+    if (tx.settles !== SETTLES_DEBT) continue
 
     // Remboursement au pot (« je rends ce que j'ai pris sur le joint »).
     if (from.kind === 'personal' && to.id === JOINT_ACCOUNT_ID) {
@@ -202,13 +236,5 @@ export function getDebtLedger(transactions, rate, now = new Date()) {
     creditorUid: Math.abs(clementNet) < 0.01 ? null : (clementNet > 0 ? CLEMENT_UID : LISE_UID),
     amount: Math.abs(clementNet),
     isSettled: Math.abs(clementNet) < 0.01,
-  }
-}
-
-// Vue d'ensemble — ce que les écrans de règlement consomment.
-export function getSettlementSummary(transactions, rate, now = new Date()) {
-  return {
-    contributions: getContributions(transactions, rate, now),
-    debts: getDebtLedger(transactions, rate, now),
   }
 }

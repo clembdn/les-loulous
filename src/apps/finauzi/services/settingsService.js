@@ -1,4 +1,4 @@
-import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore'
+import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
 import { JOINT_ACCOUNT_ID } from '../config/accounts.js'
 import { DEFAULT_EUR_TO_AUD, convert } from '../utils/money.js'
@@ -9,9 +9,6 @@ export const DEFAULT_SETTINGS = {
   // Solde de départ de chaque compte, DANS SA PROPRE DEVISE.
   // Le joint est en A$, les persos en €.
   openingBalances: { joint: 0, clement: 0, lise: 0 },
-  // Date à laquelle ces soldes ont été relevés. Tout mouvement antérieur
-  // est ignoré dans le calcul du solde courant.
-  openingDate: null,
   // Seuil de sécurité par compte, dans la devise du compte. C'est lui qui
   // déclenche l'alerte de réappro du compte joint.
   safetyBuffers: { joint: 2000 },
@@ -69,11 +66,6 @@ export function subscribeToSettings(callback, onError) {
     onError?.(error)
     callback({ ...DEFAULT_SETTINGS })
   })
-}
-
-export async function getSettings() {
-  const snap = await getDoc(SETTINGS_DOC)
-  return hydrate(snap.exists() ? snap.data() : null)
 }
 
 export async function updateSettings(updates, currentUid) {

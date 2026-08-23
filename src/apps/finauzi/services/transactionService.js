@@ -11,8 +11,9 @@ import {
   isValidAccountId, isValidSplit, getDefaultSplit,
 } from '../config/accounts.js'
 import { normalizeRecurrence } from '../utils/recurrence.js'
-import { normalizeKind, TX_KINDS } from '../utils/ledger.js'
+import { normalizeKind, TX_KINDS, normalizeSettles, SETTLES_DEBT, SETTLES_CONTRIBUTION } from '../utils/ledger.js'
 import { todayISO } from '../utils/dates.js'
+import { getCachedEurToAud } from './exchangeRateService.js'
 
 const TX_PATH = 'couples/main/transactions'
 
@@ -81,17 +82,26 @@ function normalize(raw) {
     ? raw.currency
     : (isLegacy ? 'EUR' : getAccountCurrency(anchorAccount))
 
+  // Le taux qui avait cours à la saisie. Absent sur les lignes écrites avant
+  // son introduction : elles retomberont sur le taux global des réglages.
+  const rawRate = Number(raw.rate)
+  const rate = isFinite(rawRate) && rawRate > 0 ? rawRate : null
+
+  const settles = normalizeSettles(raw)
+
   return {
     id: raw.id,
     kind,
     title: raw.title || '',
     amount,
     currency,
+    rate,
     amountReceived: raw.amountReceived != null ? Number(raw.amountReceived) : null,
     fromAccount,
     toAccount,
     split,
-    isSettlement: raw.isSettlement === true,
+    settles,
+    isSettlement: settles !== null,
     recurrence: normalizeRecurrence(raw.recurrence),
     date: raw.date,
     endDate: raw.endDate || null,
@@ -145,16 +155,32 @@ function buildPayload(input) {
   const split = isValidSplit(input.split) ? input.split : getDefaultSplit(sourceAccount)
   const recurrence = normalizeRecurrence(input.recurrence)
 
+  // Ce que ce virement solde, s'il solde quelque chose. `isSettlement` est
+  // conservé en doublon : les documents déjà en base s'en servent, et les
+  // règles Firestore le valident.
+  const settles = kind === 'transfer' ? normalizeSettles(input) : null
+
+  // Le taux est figé à l'écriture pour que la conversion de cette ligne ne
+  // bouge plus. Saisi à la main s'il est fourni, sinon le dernier taux
+  // connu — jamais un appel réseau ici : une écriture doit rester instantanée,
+  // y compris hors ligne.
+  const explicitRate = Number(input.rate)
+  const rate = isFinite(explicitRate) && explicitRate > 0
+    ? Math.round(explicitRate * 1e6) / 1e6
+    : getCachedEurToAud()
+
   return {
     kind,
     title: String(input.title || '').trim(),
     amount: Math.round((Number(input.amount) || 0) * 100) / 100,
     currency,
+    rate,
     amountReceived,
     fromAccount,
     toAccount,
     split: kind === 'transfer' ? SPLIT_COMMON : split,
-    isSettlement: kind === 'transfer' && input.isSettlement === true,
+    settles,
+    isSettlement: settles !== null,
     recurrence,
     date: input.date,
     endDate: recurrence !== 'one-off' && input.endDate ? input.endDate : null,
@@ -188,33 +214,28 @@ export async function deleteTransaction(id) {
   await deleteDoc(txDoc(id))
 }
 
-// On réécrit le document complet plutôt que le seul champ `isActive` :
-// les règles Firestore valident la forme entière, et un document d'avant
-// la refonte n'aurait pas passé la validation en écriture partielle.
-export async function toggleTransactionActive(tx, currentUid) {
-  await updateTransaction(tx.id, { ...tx, isActive: !tx.isActive }, currentUid)
-}
-
 // ─── Raccourcis de règlement ──────────────────────────────────────────────
 
 // « Régler la dette » — un virement d'un perso à l'autre, marqué comme
 // règlement pour que le grand livre le voie et remette la balance à zéro.
-export async function createDebtSettlement({ fromUid, toUid, amountEUR, date }, currentUid) {
+export async function createDebtSettlement({ fromUid, toUid, amountEUR, date, rate }, currentUid) {
   return createTransaction({
     kind: 'transfer',
     title: 'Remboursement',
     amount: amountEUR,
     fromAccount: getPersonalAccountId(fromUid),
     toAccount: getPersonalAccountId(toUid),
-    isSettlement: true,
+    settles: SETTLES_DEBT,
     recurrence: 'one-off',
     date: date || todayISO(),
     category: 'transfer',
+    rate,
   }, currentUid)
 }
 
-// « Remettre au pot » — l'apport qui rééquilibre les versements.
-export async function createContribution({ fromUid, amountEUR, amountReceivedAUD, date }, currentUid) {
+// « Remettre au pot » — l'apport classique, du perso vers le compte joint.
+// Virement international : le montant crédité en A$ porte le vrai taux.
+export async function createContribution({ fromUid, amountEUR, amountReceivedAUD, date, rate }, currentUid) {
   return createTransaction({
     kind: 'transfer',
     title: 'Apport compte joint',
@@ -222,10 +243,29 @@ export async function createContribution({ fromUid, amountEUR, amountReceivedAUD
     amountReceived: amountReceivedAUD,
     fromAccount: getPersonalAccountId(fromUid),
     toAccount: JOINT_ACCOUNT_ID,
-    isSettlement: false,
     recurrence: 'one-off',
     date: date || todayISO(),
     category: 'transfer',
+    rate,
+  }, currentUid)
+}
+
+// « Rééquilibrer sans passer par le pot » — celui qui est en retard vire la
+// MOITIÉ de l'écart à l'autre, de compte français à compte français. Le pot
+// ne bouge pas, personne ne paie de frais de change, et l'écart se referme
+// entièrement : l'émetteur a sorti l'argent, le receveur l'a récupéré.
+export async function createContributionRebalance({ fromUid, toUid, amountEUR, date, rate }, currentUid) {
+  return createTransaction({
+    kind: 'transfer',
+    title: 'Rééquilibrage des apports',
+    amount: amountEUR,
+    fromAccount: getPersonalAccountId(fromUid),
+    toAccount: getPersonalAccountId(toUid),
+    settles: SETTLES_CONTRIBUTION,
+    recurrence: 'one-off',
+    date: date || todayISO(),
+    category: 'transfer',
+    rate,
   }, currentUid)
 }
 

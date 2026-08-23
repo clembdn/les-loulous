@@ -83,9 +83,6 @@ export function dayLabel(dow) {
   return DAY_LABELS[dow % 7]
 }
 
-export function dayShort(dow) {
-  return DAY_SHORT[dow % 7]
-}
 
 // « lundi 21 août » — en-têtes de séance / de journée.
 export function formatDayFr(value = new Date(), { withYear = false } = {}) {

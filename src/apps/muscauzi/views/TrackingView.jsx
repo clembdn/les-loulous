@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Check, Scale } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { Button } from '@/shared/ui/Button.jsx'

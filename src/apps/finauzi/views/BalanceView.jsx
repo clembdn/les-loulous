@@ -12,8 +12,10 @@ import SettleModal from '../components/balance/SettleModal.jsx'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
 
 // Les deux compteurs ne se règlent pas au même endroit :
-//   • les apports se rééquilibrent en virant AU POT
-//   • les dettes se soldent en virant À L'AUTRE
+//   • les apports se rééquilibrent soit en virant la MOITIÉ de l'écart à
+//     l'autre en France (gratuit, chemin par défaut), soit en versant TOUT
+//     l'écart au pot (virement international, quand le pot doit être rempli)
+//   • les dettes se soldent en virant à l'autre
 // D'où deux blocs distincts, chacun avec son propre bouton d'action.
 export default function BalanceView({ onNavigate }) {
   const { transactions, settings, isLoading } = useAppData()
@@ -81,11 +83,17 @@ export default function BalanceView({ onNavigate }) {
             ) : (
               <div className="mb-5">
                 <p className="text-2xl font-semibold text-white tabular leading-none">
-                  {format(contributions.amountToEqualize)}
+                  {format(contributions.amountToRebalance)}
                 </p>
                 <p className="text-xs text-white/45 mt-2">
                   <span className="text-white/70">{getPersonLabel(contributions.behindUid)}</span>
-                  {' '}doit verser ça au pot pour que les apports soient à égalité.
+                  {' '}vire ça à {getPersonLabel(contributions.aheadUid)} depuis son compte
+                  français : virement gratuit, et l'écart est refermé.
+                </p>
+                <p className="text-[11px] text-white/30 mt-2 leading-relaxed">
+                  Ou {format(contributions.amountToEqualize)} versés directement au pot,
+                  si le compte joint a besoin d'être réalimenté — mais c'est un virement
+                  international, avec frais et change.
                 </p>
               </div>
             )}
@@ -121,11 +129,15 @@ export default function BalanceView({ onNavigate }) {
               onClick={() => setSettling({
                 mode: 'contribution',
                 fromUid: contributions.behindUid || currentUser?.uid,
+                // À égalité, il n'y a personne à qui virer : le seul geste
+                // qui reste est d'alimenter le pot.
+                toUid: contributions.aheadUid,
                 suggestedEUR: contributions.isBalanced ? target : contributions.amountToEqualize,
+                suggestedDirectEUR: contributions.amountToRebalance,
               })}
               className="w-full mt-5 py-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 text-sm font-medium hover:bg-sky-500/15 transition"
             >
-              Enregistrer un apport
+              {contributions.isBalanced ? 'Enregistrer un apport' : 'Rééquilibrer'}
             </button>
           </section>
 

@@ -10,6 +10,7 @@ import {
   getAccount, getAccountCurrency, getDefaultSplit, getPersonalAccountId,
 } from '../../config/accounts.js'
 import { RECURRENCES } from '../../utils/recurrence.js'
+import { SETTLES_DEBT, SETTLES_CONTRIBUTION } from '../../utils/ledger.js'
 import { convert } from '../../utils/money.js'
 import Modal from '@/shared/ui/Modal.jsx'
 import { toast } from '@/shared/ui/sonner.jsx'
@@ -24,6 +25,29 @@ const KINDS = [
 ]
 
 const CURRENCY_SYMBOL = { EUR: '€', AUD: 'A$' }
+
+// Un virement entre les deux comptes persos peut vouloir dire trois choses,
+// et se tromper de case fausse un compteur entier.
+const SETTLES_OPTIONS = [
+  {
+    id: null,
+    label: 'Rien',
+    activeClass: 'bg-white/10 text-white',
+    hint: 'Un simple mouvement d\'argent, sans effet sur les compteurs.',
+  },
+  {
+    id: SETTLES_DEBT,
+    label: 'Une dette',
+    activeClass: 'bg-teal-500/15 text-teal-400',
+    hint: 'Remet à zéro ce que l\'un doit à l\'autre (dépenses avancées, perso payé sur le joint).',
+  },
+  {
+    id: SETTLES_CONTRIBUTION,
+    label: 'Des apports',
+    activeClass: 'bg-sky-500/15 text-sky-400',
+    hint: 'Rattrape un retard de versements au pot sans virer à l\'étranger : l\'écart se referme de deux fois le montant.',
+  },
+]
 
 export default function TransactionFormModal({ onClose, currentUid, existing }) {
   const { settings } = useAppData()
@@ -43,7 +67,8 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
   const [amountReceived, setAmountReceived] = useState(
     existing?.amountReceived != null ? String(existing.amountReceived) : '',
   )
-  const [isSettlement, setIsSettlement] = useState(existing?.isSettlement === true)
+  // Ce que ce virement solde : rien, une dette, ou un retard d'apports.
+  const [settles, setSettles] = useState(existing?.settles ?? null)
   const [recurrence, setRecurrence] = useState(existing?.recurrence || 'one-off')
   const [date, setDate] = useState(existing?.date ? existing.date.slice(0, 10) : todayISO())
   const [endDate, setEndDate] = useState(existing?.endDate ? existing.endDate.slice(0, 10) : '')
@@ -58,6 +83,8 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
   const sourceCurrency = getAccountCurrency(sourceAccountId)
   const destCurrency = getAccountCurrency(toAccount)
   const isCrossCurrency = kind === 'transfer' && sourceCurrency !== destCurrency
+  const isBetweenPersonals = getAccount(fromAccount).kind === 'personal'
+    && getAccount(toAccount).kind === 'personal'
 
   // Passer en mode virement pré-remplit le cas courant : mon perso → le pot.
   useEffect(() => {
@@ -86,18 +113,20 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
     setSplit(getDefaultSplit(sourceAccountId))
   }, [sourceAccountId, isEdit])
 
+  // Hors virement, il n'y a rien à solder.
   useEffect(() => {
-    if (kind === 'transfer') return
-    // Un virement entre persos est presque toujours un remboursement.
-    setIsSettlement(false)
+    if (kind !== 'transfer') setSettles(null)
   }, [kind])
 
   useEffect(() => {
-    if (kind !== 'transfer') return
-    const from = getAccount(fromAccount)
-    const to = getAccount(toAccount)
-    if (from.kind === 'personal' && to.kind === 'personal') setIsSettlement(true)
-  }, [kind, fromAccount, toAccount])
+    if (isEdit || kind !== 'transfer') return
+    // Un virement entre persos solde presque toujours quelque chose, et la
+    // dette est le cas le plus courant — le rééquilibrage se choisit juste à
+    // côté. Dès qu'un bout n'est plus un compte perso, « des apports » n'a
+    // plus de sens : on le retire plutôt que de laisser un choix impossible.
+    if (isBetweenPersonals) setSettles((prev) => prev ?? SETTLES_DEBT)
+    else setSettles((prev) => (prev === SETTLES_CONTRIBUTION ? null : prev))
+  }, [kind, isBetweenPersonals, isEdit])
 
   const parsedAmount = useMemo(() => {
     const raw = parseFloat(String(amount).replace(',', '.'))
@@ -134,7 +163,7 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
       fromAccount: kind === 'income' ? null : fromAccount,
       toAccount: kind === 'expense' ? null : toAccount,
       split,
-      isSettlement,
+      settles,
       recurrence,
       date,
       endDate: recurrence !== 'one-off' && endDate ? endDate : null,
@@ -306,19 +335,48 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
           </Field>
         )}
 
-        {/* Marquer un virement comme remboursement */}
-        {kind === 'transfer' && (
+        {/* Ce que ce virement solde. Entre deux comptes persos il y a trois
+            réponses possibles, et elles ne tombent pas dans le même compteur :
+            un rééquilibrage d'apports n'est PAS une dette. */}
+        {kind === 'transfer' && isBetweenPersonals && (
+          <Field label="Ce virement solde">
+            <div className="grid grid-cols-3 gap-1.5">
+              {SETTLES_OPTIONS.map((option) => {
+                const active = settles === option.id
+                return (
+                  <button
+                    key={option.id || 'none'}
+                    type="button"
+                    onClick={() => setSettles(option.id)}
+                    className={`px-2 py-2.5 rounded-xl text-[11px] font-medium transition border ${
+                      active
+                        ? `${option.activeClass} border-white/20`
+                        : 'bg-white/[0.03] text-white/50 border-white/10 hover:border-white/20'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-[11px] text-white/40 mt-1.5 leading-relaxed">
+              {SETTLES_OPTIONS.find((o) => o.id === settles)?.hint}
+            </p>
+          </Field>
+        )}
+
+        {kind === 'transfer' && !isBetweenPersonals && (
           <label className="flex items-start gap-3 px-3 py-3 bg-white/[0.03] border border-white/10 rounded-xl cursor-pointer">
             <input
               type="checkbox"
-              checked={isSettlement}
-              onChange={(e) => setIsSettlement(e.target.checked)}
+              checked={settles === SETTLES_DEBT}
+              onChange={(e) => setSettles(e.target.checked ? SETTLES_DEBT : null)}
               className="mt-0.5 h-4 w-4 accent-sky-400"
             />
             <span className="min-w-0">
               <span className="block text-sm text-white">C'est un remboursement</span>
               <span className="block text-[11px] text-white/40 mt-0.5">
-                {isSettlement
+                {settles === SETTLES_DEBT
                   ? 'Ce virement solde une dette et ne compte pas comme un apport au pot.'
                   : 'Un virement vers le joint compte comme un apport et rééquilibre les versements.'}
               </span>

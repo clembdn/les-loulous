@@ -6,7 +6,7 @@
 //   forecast.js   — projections, autonomie du compte, réappro
 //   recurrence.js — échéances réelles des transactions récurrentes
 //
-// Ce fichier ne garde que les helpers partagés (dates, voyage) et des
+// Ce fichier ne garde que les helpers partagés (dates, départ) et des
 // raccourcis « ce mois-ci » pour les écrans qui n'ont pas besoin de plus.
 
 import { startOfMonth, endOfMonth } from './forecast.js'
@@ -39,27 +39,12 @@ export function formatDateShort(d) {
   return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export function formatDateCompact(d) {
-  const date = d instanceof Date ? d : new Date(d)
-  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
-}
-
 export function formatMonthLong(d) {
   const date = d instanceof Date ? d : new Date(d)
   return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
 }
 
-// ─── Voyage ───────────────────────────────────────────────────────────────
-// Le séjour est coupé en deux par la date de départ :
-//   'prep'      — avant le départ, on épargne
-//   'australia' — depuis l'arrivée, le compte joint tourne
-
-export function getJourneyPhase(date, departureDate) {
-  if (!departureDate) return null
-  const d = date instanceof Date ? date : new Date(date)
-  const dep = departureDate instanceof Date ? departureDate : new Date(departureDate)
-  return d.getTime() < dep.getTime() ? 'prep' : 'australia'
-}
+// ─── Départ ───────────────────────────────────────────────────────────────
 
 // Jours entiers d'ici au départ. Positif = il reste des jours,
 // 0 = jour J, négatif = jours depuis l'arrivée.

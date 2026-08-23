@@ -10,6 +10,20 @@ import { CLEMENT_UID, LISE_UID, AUTHORIZED_UIDS, getPersonLabel } from '@/shared
 //
 // La devise est portée par le COMPTE, pas par l'app : le solde du joint est
 // un vrai solde en A$, pas une conversion d'affichage.
+//
+// Chaque compte porte aussi son RÉSEAU de virement : deux comptes du même
+// réseau se virent de l'argent gratuitement (SEPA en France, virement
+// domestique en Australie), traverser deux réseaux coûte des frais. C'est ce
+// qui rend le rééquilibrage France→France préférable à un virement au pot.
+// Au retour en France, il suffira de basculer les comptes sur le réseau FR.
+
+// ─── Réseaux de virement ──────────────────────────────────────────────────
+// Un virement à l'intérieur d'un réseau est gratuit et quasi instantané ;
+// entre deux réseaux, il passe par un change et des frais.
+export const NETWORKS = {
+  FR: { id: 'FR', label: 'France', short: 'FR', transferLabel: 'virement SEPA gratuit' },
+  AU: { id: 'AU', label: 'Australie', short: 'AU', transferLabel: 'virement domestique gratuit' },
+}
 
 export const JOINT_ACCOUNT_ID = 'joint'
 
@@ -24,6 +38,7 @@ export const ACCOUNTS = [
     kind: 'joint',
     ownerUid: null,
     currency: 'AUD',
+    network: 'AU',
     label: 'Compte joint',
     short: 'Joint',
     sublabel: 'Australie',
@@ -39,6 +54,7 @@ export const ACCOUNTS = [
     kind: 'personal',
     ownerUid: CLEMENT_UID,
     currency: 'EUR',
+    network: 'FR',
     label: `Perso ${getPersonLabel(CLEMENT_UID)}`,
     short: getPersonLabel(CLEMENT_UID),
     sublabel: 'France',
@@ -54,6 +70,7 @@ export const ACCOUNTS = [
     kind: 'personal',
     ownerUid: LISE_UID,
     currency: 'EUR',
+    network: 'FR',
     label: `Perso ${getPersonLabel(LISE_UID)}`,
     short: getPersonLabel(LISE_UID),
     sublabel: 'France',
@@ -67,7 +84,6 @@ export const ACCOUNTS = [
 ]
 
 export const ACCOUNTS_BY_ID = Object.fromEntries(ACCOUNTS.map((a) => [a.id, a]))
-export const ACCOUNT_IDS = ACCOUNTS.map((a) => a.id)
 export const PERSONAL_ACCOUNTS = ACCOUNTS.filter((a) => a.kind === 'personal')
 
 const FALLBACK_ACCOUNT = {
@@ -75,6 +91,7 @@ const FALLBACK_ACCOUNT = {
   kind: 'personal',
   ownerUid: null,
   currency: 'EUR',
+  network: 'FR',
   label: 'Compte inconnu',
   short: '—',
   sublabel: '',
@@ -94,22 +111,22 @@ export function isValidAccountId(id) {
   return !!ACCOUNTS_BY_ID[id]
 }
 
-export function isJointAccount(id) {
-  return id === JOINT_ACCOUNT_ID
-}
-
 // Le compte perso d'une personne — c'est là que tombent ses dépenses perso.
 export function getPersonalAccountId(uid) {
   return PERSONAL_ACCOUNT_ID[uid] || null
 }
 
-// L'inverse : à qui appartient ce compte ? null pour le joint.
-export function getAccountOwner(id) {
-  return getAccount(id).ownerUid
-}
-
 export function getAccountCurrency(id) {
   return getAccount(id).currency
+}
+
+export function getAccountNetwork(id) {
+  return NETWORKS[getAccount(id).network] || NETWORKS.FR
+}
+
+// Deux comptes du même réseau — le virement entre eux est gratuit.
+export function isSameNetwork(fromId, toId) {
+  return getAccount(fromId).network === getAccount(toId).network
 }
 
 // Ordre d'affichage : joint d'abord, puis mon perso, puis celui de l'autre.

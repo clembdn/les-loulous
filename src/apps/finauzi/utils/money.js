@@ -24,11 +24,18 @@ export function toEUR(amount, currency, eurToAud) {
   return convert(amount, currency === 'AUD' ? 'AUD' : 'EUR', 'EUR', eurToAud)
 }
 
-export function toAUD(amount, currency, eurToAud) {
-  return convert(amount, currency === 'AUD' ? 'AUD' : 'EUR', 'AUD', eurToAud)
-}
-
 // Arrondi monétaire au centime — évite les 0.30000000000000004 en cascade.
 export function round2(value) {
   return Math.round((Number(value) || 0) * 100) / 100
+}
+
+// ─── Taux figé à la saisie ────────────────────────────────────────────────
+// Une transaction née après l'ajout du champ `rate` porte le taux qui avait
+// cours le jour où elle a eu lieu : son montant converti ne bouge plus
+// jamais. Les lignes plus anciennes, elles, n'ont pas de taux propre et
+// retombent sur le taux global des réglages — c'est le comportement d'avant,
+// conservé pour ne pas réécrire l'historique existant.
+export function txRate(tx, fallbackRate) {
+  const r = Number(tx?.rate)
+  return isFinite(r) && r > 0 ? r : normalizeRate(fallbackRate)
 }

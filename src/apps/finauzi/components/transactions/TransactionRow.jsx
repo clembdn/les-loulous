@@ -1,6 +1,7 @@
 import { Repeat, ArrowRight } from 'lucide-react'
 import { getPerson } from '@/shared/config/people.js'
 import { getCategory } from '../../config/categories.js'
+import { SETTLES_DEBT, SETTLES_CONTRIBUTION } from '../../utils/ledger.js'
 import { getAccount, SPLIT_COMMON, JOINT_ACCOUNT_ID } from '../../config/accounts.js'
 import { getRecurrenceLabel } from '../../utils/recurrence.js'
 import { formatDateShort } from '../../utils/cashflow.js'
@@ -81,10 +82,13 @@ function TransferRoute({ tx }) {
       <span className={`${from.textClass} truncate`}>{from.short}</span>
       <ArrowRight size={10} className="text-white/25 flex-shrink-0" />
       <span className={`${to.textClass} truncate`}>{to.short}</span>
-      {tx.isSettlement && (
+      {tx.settles === SETTLES_DEBT && (
         <span className="text-teal-400 ml-1 flex-shrink-0">· remb.</span>
       )}
-      {!tx.isSettlement && to.id === JOINT_ACCOUNT_ID && (
+      {tx.settles === SETTLES_CONTRIBUTION && (
+        <span className="text-sky-400 ml-1 flex-shrink-0">· rééquil.</span>
+      )}
+      {!tx.settles && to.id === JOINT_ACCOUNT_ID && (
         <span className="text-sky-400 ml-1 flex-shrink-0">· apport</span>
       )}
     </span>

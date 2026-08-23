@@ -194,37 +194,3 @@ export function getTopUpNeeded(transactions, accountId, opening, { buffer = 0, r
     isNeeded: shortfall > 0,
   }
 }
-
-// Détail mois par mois d'un compte — le tableau « ce qui tombe quand ».
-export function buildMonthlyBreakdown(transactions, accountId, opening, { rate, months = 12, now = new Date() }) {
-  const base = startOfMonth(now)
-  const rows = []
-  let balance = getAccountBalanceAt(transactions, accountId, opening, endOfMonth(addMonths(base, -1)), rate)
-
-  for (let i = 0; i < months; i++) {
-    const monthStart = addMonths(base, i)
-    const monthEnd = endOfMonth(monthStart)
-    const events = expandOccurrences(transactions, { accountId, from: monthStart, to: monthEnd })
-
-    let inflow = 0
-    let outflow = 0
-    for (const event of events) {
-      const delta = getAccountDelta(event.tx, accountId, rate)
-      if (delta >= 0) inflow += delta
-      else outflow += -delta
-    }
-
-    balance += inflow - outflow
-    rows.push({
-      date: monthStart,
-      key: `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, '0')}`,
-      label: monthStart.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
-      inflow: round2(inflow),
-      outflow: round2(outflow),
-      net: round2(inflow - outflow),
-      balance: round2(balance),
-      isFuture: monthStart > now,
-    })
-  }
-  return rows
-}

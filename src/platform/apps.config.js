@@ -34,7 +34,3 @@ export const APPS = [
     status: 'live',
   },
 ]
-
-export function getApp(id) {
-  return APPS.find((a) => a.id === id) || null
-}

@@ -11,8 +11,8 @@
 // inter-devises, `amountReceived` porte le montant réellement crédité en A$ :
 // c'est lui qui fait foi côté joint (il encaisse le vrai taux et les frais).
 
-import { getAccount, getAccountCurrency, JOINT_ACCOUNT_ID, ACCOUNTS } from '../config/accounts.js'
-import { convert } from './money.js'
+import { getAccountCurrency, ACCOUNTS } from '../config/accounts.js'
+import { convert, txRate } from './money.js'
 import { getOccurrences } from './recurrence.js'
 
 export const TX_KINDS = ['expense', 'income', 'transfer']
@@ -21,25 +21,29 @@ export function normalizeKind(kind) {
   return TX_KINDS.includes(kind) ? kind : 'expense'
 }
 
+// ─── Ce qu'un virement solde ──────────────────────────────────────────────
+// Un virement marqué comme règlement peut solder deux choses qui n'ont rien
+// à voir, et les confondre fausse les deux compteurs :
+//
+//   'debt'         — l'un rembourse l'autre, ou rend au pot ce qu'il y a
+//                    pris. Joue sur la balance des dettes.
+//   'contribution' — l'un compense son retard d'apports en virant
+//                    directement à l'autre, sans que l'argent passe par le
+//                    pot. C'est le virement France→France gratuit : il joue
+//                    sur l'équilibre des apports, PAS sur les dettes.
+export const SETTLES_DEBT = 'debt'
+export const SETTLES_CONTRIBUTION = 'contribution'
+export const SETTLES_KINDS = [SETTLES_DEBT, SETTLES_CONTRIBUTION]
+
+export function normalizeSettles(raw) {
+  if (SETTLES_KINDS.includes(raw?.settles)) return raw.settles
+  // Avant l'ajout du champ, `isSettlement: true` ne pouvait désigner qu'un
+  // règlement de dette — le rééquilibrage direct n'existait pas.
+  return raw?.isSettlement === true ? SETTLES_DEBT : null
+}
+
 export function isTransfer(tx) {
   return tx.kind === 'transfer'
-}
-
-// Un virement d'un perso vers le joint qui n'est pas un règlement de dette :
-// c'est un apport au pot commun.
-export function isContribution(tx) {
-  return tx.kind === 'transfer'
-    && tx.toAccount === JOINT_ACCOUNT_ID
-    && !tx.isSettlement
-    && getAccount(tx.fromAccount).kind === 'personal'
-}
-
-// Un retrait du pot vers un perso — l'inverse d'un apport.
-export function isWithdrawal(tx) {
-  return tx.kind === 'transfer'
-    && tx.fromAccount === JOINT_ACCOUNT_ID
-    && !tx.isSettlement
-    && getAccount(tx.toAccount).kind === 'personal'
 }
 
 // Est-ce que ce mouvement touche ce compte, dans un sens ou dans l'autre ?
@@ -49,10 +53,11 @@ export function touchesAccount(tx, accountId) {
 
 // Impact d'UNE échéance de `tx` sur le solde de `accountId`,
 // exprimé dans la devise de ce compte.
-export function getAccountDelta(tx, accountId, rate) {
+export function getAccountDelta(tx, accountId, fallbackRate) {
   const currency = getAccountCurrency(accountId)
   const kind = normalizeKind(tx.kind)
   const amount = Number(tx.amount) || 0
+  const rate = txRate(tx, fallbackRate)
 
   if (kind === 'expense') {
     if (tx.fromAccount !== accountId) return 0
@@ -97,10 +102,6 @@ export function getAccountBalanceAt(transactions, accountId, opening, atDate, ra
     balance += delta * countUpTo(tx, atDate)
   }
   return balance
-}
-
-export function getAccountBalance(transactions, accountId, opening, rate, now = new Date()) {
-  return getAccountBalanceAt(transactions, accountId, opening, now, rate)
 }
 
 // Solde de tous les comptes d'un coup — chacun dans sa propre devise.
@@ -156,7 +157,7 @@ export function summarizePeriod(transactions, { accountId = null, from, to, rate
       continue
     }
 
-    const amount = convert(Number(tx.amount) || 0, tx.currency, targetCurrency, rate) * count
+    const amount = convert(Number(tx.amount) || 0, tx.currency, targetCurrency, txRate(tx, rate)) * count
     if (accountId) {
       if (kind === 'expense' && tx.fromAccount !== accountId) continue
       if (kind === 'income' && tx.toAccount !== accountId) continue
@@ -185,7 +186,7 @@ export function getSpendingByCategory(transactions, { accountId = null, from, to
     const count = getOccurrences(tx, from, to).length
     if (count === 0) continue
 
-    const amount = convert(Number(tx.amount) || 0, tx.currency, currency, rate) * count
+    const amount = convert(Number(tx.amount) || 0, tx.currency, currency, txRate(tx, rate)) * count
     const categoryId = tx.category || 'other-expense'
     byCategory[categoryId] = (byCategory[categoryId] || 0) + amount
   }
@@ -203,7 +204,7 @@ export function getSpendingBySplit(transactions, { from, to, rate, currency = 'E
     const count = getOccurrences(tx, from, to).length
     if (count === 0) continue
 
-    const amount = convert(Number(tx.amount) || 0, tx.currency, currency, rate) * count
+    const amount = convert(Number(tx.amount) || 0, tx.currency, currency, txRate(tx, rate)) * count
     bySplit[tx.split] = (bySplit[tx.split] || 0) + amount
   }
   return bySplit

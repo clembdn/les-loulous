@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { LogOut, Save, Download, Check, Lock } from 'lucide-react'
+import { LogOut, Save, Download, Check, Lock, RefreshCw } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext.jsx'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { useCurrency } from '../../context/CurrencyContext.jsx'
@@ -12,6 +12,7 @@ import {
   DEFAULT_USER_COLORS,
 } from '@/shared/config/people.js'
 import { downloadTransactionsCsv } from '../../utils/exportCsv.js'
+import { fetchEurToAud } from '../../services/exchangeRateService.js'
 import { Sheet, SheetContent, SheetBody } from '@/shared/ui/sheet.jsx'
 import { toast } from '@/shared/ui/sonner.jsx'
 import { cn } from '@/shared/lib/utils.js'
@@ -64,6 +65,22 @@ export default function SettingsDrawer({ open, onClose }) {
     const next = currency === 'EUR' ? 'AUD' : 'EUR'
     updateSettings({ currency: next }, currentUser?.uid)
       .catch((err) => toast.error(err.message || 'Erreur de synchronisation'))
+  }
+
+  // Le taux du jour, à la demande. On ne l'enregistre pas d'office : c'est un
+  // réglage partagé, l'utilisateur valide avec « OK ».
+  const [fetchingRate, setFetchingRate] = useState(false)
+
+  function onFetchRate() {
+    setFetchingRate(true)
+    fetchEurToAud({ force: true })
+      .then((result) => {
+        setEurToAud(String(Math.round(result.rate * 10000) / 10000))
+        if (result.isFallback) toast.error('Taux du jour indisponible')
+        else if (result.isStale) toast.success('Dernier taux connu (hors ligne)')
+        else toast.success(`Taux BCE du ${result.date || 'jour'}`)
+      })
+      .finally(() => setFetchingRate(false))
   }
 
   function onSaveRate() {
@@ -190,6 +207,14 @@ export default function SettingsDrawer({ open, onClose }) {
                   />
                   <button
                     type="button"
+                    onClick={onFetchRate}
+                    title="Récupérer le taux du jour"
+                    className="px-3 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 text-white/70 transition"
+                  >
+                    <RefreshCw size={15} className={fetchingRate ? 'animate-spin' : ''} />
+                  </button>
+                  <button
+                    type="button"
                     onClick={onSaveRate}
                     className="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 text-white text-sm font-medium transition"
                   >
@@ -198,7 +223,9 @@ export default function SettingsDrawer({ open, onClose }) {
                 </div>
                 <p className="text-[11px] text-white/30 mt-1.5">
                   Chaque compte garde sa vraie devise. Ce taux ne sert qu'aux
-                  totaux consolidés et aux montants estimés.
+                  totaux consolidés, aux montants estimés, et aux lignes trop
+                  anciennes pour porter leur propre taux — celles saisies
+                  depuis en gardent un, figé au jour de leur saisie.
                 </p>
               </div>
             </div>

@@ -17,11 +17,7 @@ export function useAppData() {
   return {
     transactions: [],
     settings: DEFAULT_SETTINGS,
-    checklist: [],
-    timeline: [],
     isLoading: true,
-    isChecklistLoading: true,
-    isTimelineLoading: true,
     error: null,
   }
 }
