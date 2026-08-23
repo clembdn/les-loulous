@@ -11,7 +11,7 @@ import {
   isValidAccountId, isValidSplit, getDefaultSplit,
 } from '../config/accounts.js'
 import { normalizeRecurrence } from '../utils/recurrence.js'
-import { normalizeKind, TX_KINDS, normalizeSettles, SETTLES_DEBT, SETTLES_CONTRIBUTION } from '../utils/ledger.js'
+import { normalizeKind, TX_KINDS } from '../utils/ledger.js'
 import { todayISO } from '../utils/dates.js'
 import { getCachedEurToAud } from './exchangeRateService.js'
 
@@ -87,8 +87,6 @@ function normalize(raw) {
   const rawRate = Number(raw.rate)
   const rate = isFinite(rawRate) && rawRate > 0 ? rawRate : null
 
-  const settles = normalizeSettles(raw)
-
   return {
     id: raw.id,
     kind,
@@ -100,8 +98,6 @@ function normalize(raw) {
     fromAccount,
     toAccount,
     split,
-    settles,
-    isSettlement: settles !== null,
     recurrence: normalizeRecurrence(raw.recurrence),
     date: raw.date,
     endDate: raw.endDate || null,
@@ -142,9 +138,16 @@ function buildPayload(input) {
     : (isValidAccountId(input.toAccount) ? input.toAccount : JOINT_ACCOUNT_ID)
 
   const sourceAccount = kind === 'income' ? toAccount : fromAccount
-  const currency = getAccountCurrency(sourceAccount)
 
-  // Sur un virement inter-devises, le montant crédité fait foi côté
+  // La devise du compte est le défaut, pas une contrainte. Chacun détient de
+  // l'argent dans les deux pays derrière un seul compte perso : Lise peut
+  // alimenter le pot avec son salaire australien, en A$, depuis ce même compte.
+  // Le montant est alors stocké EN A$, et toutes les conversions partent de là.
+  const currency = input.currency === 'AUD' || input.currency === 'EUR'
+    ? input.currency
+    : getAccountCurrency(sourceAccount)
+
+  // Sur un virement qui change de devise, le montant crédité fait foi côté
   // destination : il porte le vrai taux et les frais du transfert.
   let amountReceived = null
   if (kind === 'transfer' && toAccount && getAccountCurrency(toAccount) !== currency) {
@@ -154,11 +157,6 @@ function buildPayload(input) {
 
   const split = isValidSplit(input.split) ? input.split : getDefaultSplit(sourceAccount)
   const recurrence = normalizeRecurrence(input.recurrence)
-
-  // Ce que ce virement solde, s'il solde quelque chose. `isSettlement` est
-  // conservé en doublon : les documents déjà en base s'en servent, et les
-  // règles Firestore le valident.
-  const settles = kind === 'transfer' ? normalizeSettles(input) : null
 
   // Le taux est figé à l'écriture pour que la conversion de cette ligne ne
   // bouge plus. Saisi à la main s'il est fourni, sinon le dernier taux
@@ -179,8 +177,6 @@ function buildPayload(input) {
     fromAccount,
     toAccount,
     split: kind === 'transfer' ? SPLIT_COMMON : split,
-    settles,
-    isSettlement: settles !== null,
     recurrence,
     date: input.date,
     endDate: recurrence !== 'one-off' && input.endDate ? input.endDate : null,
@@ -216,16 +212,17 @@ export async function deleteTransaction(id) {
 
 // ─── Raccourcis de règlement ──────────────────────────────────────────────
 
-// « Régler la dette » — un virement d'un perso à l'autre, marqué comme
-// règlement pour que le grand livre le voie et remette la balance à zéro.
-export async function createDebtSettlement({ fromUid, toUid, amountEUR, date, rate }, currentUid) {
+// « Régler le solde » — un virement d'un perso à l'autre. Rien à marquer :
+// tout virement entre leurs deux comptes solde le compte, par construction.
+// Il part du compte français, donc en euros et sans frais.
+export async function createSettlement({ fromUid, toUid, amount, currency, date, rate }, currentUid) {
   return createTransaction({
     kind: 'transfer',
-    title: 'Remboursement',
-    amount: amountEUR,
+    title: 'Règlement',
+    amount,
+    currency,
     fromAccount: getPersonalAccountId(fromUid),
     toAccount: getPersonalAccountId(toUid),
-    settles: SETTLES_DEBT,
     recurrence: 'one-off',
     date: date || todayISO(),
     category: 'transfer',
@@ -233,35 +230,19 @@ export async function createDebtSettlement({ fromUid, toUid, amountEUR, date, ra
   }, currentUid)
 }
 
-// « Remettre au pot » — l'apport classique, du perso vers le compte joint.
-// Virement international : le montant crédité en A$ porte le vrai taux.
-export async function createContribution({ fromUid, amountEUR, amountReceivedAUD, date, rate }, currentUid) {
+// « Alimenter le pot » — un apport du perso vers le compte joint.
+// `currency` dit avec quel argent : des euros de France (virement
+// international, d'où `amountReceived` pour capter le vrai taux et les frais)
+// ou des dollars déjà en Australie (virement domestique, rien à convertir).
+export async function createContribution({ fromUid, amount, currency, amountReceived, date, rate }, currentUid) {
   return createTransaction({
     kind: 'transfer',
     title: 'Apport compte joint',
-    amount: amountEUR,
-    amountReceived: amountReceivedAUD,
+    amount,
+    currency,
+    amountReceived,
     fromAccount: getPersonalAccountId(fromUid),
     toAccount: JOINT_ACCOUNT_ID,
-    recurrence: 'one-off',
-    date: date || todayISO(),
-    category: 'transfer',
-    rate,
-  }, currentUid)
-}
-
-// « Rééquilibrer sans passer par le pot » — celui qui est en retard vire la
-// MOITIÉ de l'écart à l'autre, de compte français à compte français. Le pot
-// ne bouge pas, personne ne paie de frais de change, et l'écart se referme
-// entièrement : l'émetteur a sorti l'argent, le receveur l'a récupéré.
-export async function createContributionRebalance({ fromUid, toUid, amountEUR, date, rate }, currentUid) {
-  return createTransaction({
-    kind: 'transfer',
-    title: 'Rééquilibrage des apports',
-    amount: amountEUR,
-    fromAccount: getPersonalAccountId(fromUid),
-    toAccount: getPersonalAccountId(toUid),
-    settles: SETTLES_CONTRIBUTION,
     recurrence: 'one-off',
     date: date || todayISO(),
     category: 'transfer',

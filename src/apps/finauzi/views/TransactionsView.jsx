@@ -5,25 +5,54 @@ import { useUI } from '../context/UIContext.jsx'
 import { AUTHORIZED_UIDS, getPerson } from '@/shared/config/people.js'
 import { CATEGORIES, getCategory } from '../config/categories.js'
 import { ACCOUNTS, SPLIT_COMMON, getAccount } from '../config/accounts.js'
-import { touchesAccount } from '../utils/ledger.js'
-import { formatDateShort } from '../utils/cashflow.js'
+import { touchesAccount, expandOccurrences } from '../utils/ledger.js'
+import { formatDateShort, addMonths } from '../utils/cashflow.js'
 import { DEPARTURE_DATE, DEPARTURE_TIMESTAMP } from '../config/journey.js'
 import TransactionRow from '../components/transactions/TransactionRow.jsx'
 import { Sheet, SheetContent, SheetBody, SheetFooter } from '@/shared/ui/sheet.jsx'
 import { cn } from '@/shared/lib/utils.js'
 
-function groupByMonth(txs) {
-  const groups = new Map()
+// Un mois d'avance, pas plus. De quoi voir le prochain loyer et les prochaines
+// semaines d'abonnement pour anticiper, sans noyer l'historique sous des années
+// d'échéances théoriques.
+const FORECAST_HORIZON_MONTHS = 1
+
+// Une transaction récurrente n'est qu'UN document, mais elle se produit autant
+// de fois qu'elle a d'échéances. L'historique les déplie toutes, sans rien à
+// ressaisir : un loyer mensuel apparaît chaque mois, un abonnement hebdo chaque
+// semaine. Les échéances postérieures à aujourd'hui sont marquées
+// `isForecast` — elles ne se sont pas encore produites, elles s'affichent en
+// pointillés et ne comptent nulle part ailleurs (soldes, équilibre, budgets
+// s'arrêtent tous à aujourd'hui).
+function expandHistory(txs, now) {
+  if (txs.length === 0) return []
+  let earliest = null
   for (const tx of txs) {
-    const d = new Date(tx.date)
+    const d = tx.date ? new Date(tx.date) : null
+    if (d && !isNaN(d) && (earliest === null || d < earliest)) earliest = d
+  }
+  if (!earliest) return []
+  const horizon = addMonths(now, FORECAST_HORIZON_MONTHS)
+  return expandOccurrences(txs, { from: earliest, to: horizon })
+    .map((event) => ({ ...event, isForecast: event.date > now }))
+}
+
+function groupByMonth(events) {
+  const groups = new Map()
+  for (const event of events) {
+    const d = event.date
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
     if (!groups.has(key)) groups.set(key, { label, items: [] })
-    groups.get(key).items.push(tx)
+    groups.get(key).items.push(event)
   }
   return [...groups.entries()]
     .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([key, group]) => ({ key, ...group }))
+    .map(([key, group]) => ({
+      key,
+      ...group,
+      forecastCount: group.items.filter((e) => e.isForecast).length,
+    }))
 }
 
 export default function TransactionsView() {
@@ -54,6 +83,8 @@ export default function TransactionsView() {
     return out
   }, [splitFilter, kindFilter, accountFilter])
 
+  // Filtrer AVANT de déplier : inutile de générer les échéances de lignes
+  // que l'utilisateur ne regarde pas.
   const filtered = useMemo(() => {
     let list = applyBaseFilters(transactions.filter((tx) => tx.isActive !== false))
     if (categoryFilter !== 'all') list = list.filter((tx) => (tx.category || 'other-expense') === categoryFilter)
@@ -65,10 +96,17 @@ export default function TransactionsView() {
         getCategory(tx.category).label.toLowerCase().includes(q),
       )
     }
-    return list.sort((a, b) => new Date(b.date) - new Date(a.date))
+    return list
   }, [transactions, applyBaseFilters, categoryFilter, search])
 
-  const groups = useMemo(() => groupByMonth(filtered), [filtered])
+  const events = useMemo(() => {
+    const expanded = expandHistory(filtered, new Date())
+    // `expandOccurrences` trie du plus ancien au plus récent ; l'historique
+    // se lit à l'envers.
+    return expanded.reverse()
+  }, [filtered])
+
+  const groups = useMemo(() => groupByMonth(events), [events])
 
   const visibleCategories = useMemo(() => {
     const list = applyBaseFilters(transactions.filter((tx) => tx.isActive !== false))
@@ -188,15 +226,22 @@ export default function TransactionsView() {
                     <Fragment key={g.key}>
                       {showDeparture && <DepartureDivider date={DEPARTURE_DATE} />}
                       <div>
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-white/30 mb-1 px-3">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-white/30 mb-1 px-3 flex items-center gap-2">
                           {g.label}
+                          {g.forecastCount > 0 && (
+                            <span className="normal-case tracking-normal text-[10px] text-white/25">
+                              · {g.forecastCount} à venir
+                            </span>
+                          )}
                         </p>
                         <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-1">
-                          {g.items.map((tx) => (
+                          {g.items.map((event) => (
                             <TransactionRow
-                              key={tx.id}
-                              tx={tx}
-                              onClick={() => openForm(tx)}
+                              key={`${event.tx.id}-${event.timestamp}`}
+                              tx={event.tx}
+                              date={event.date}
+                              isForecast={event.isForecast}
+                              onClick={() => openForm(event.tx)}
                             />
                           ))}
                         </div>
@@ -214,7 +259,7 @@ export default function TransactionsView() {
       <MobileFiltersSheet
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
-        resultsCount={filtered.length}
+        resultsCount={events.length}
         onReset={resetFilters}
         {...filtersProps}
       />
@@ -630,7 +675,7 @@ function FilterRow({ active, onClick, accentClass, children }) {
 // reverse-chronological list — i.e. the boundary where we render the "départ" divider.
 function shouldShowDepartureBefore(groups, idx, departureTime) {
   if (!departureTime) return false
-  const phase = (g) => new Date(g.items[0].date).getTime() >= departureTime ? 'australia' : 'prep'
+  const phase = (g) => g.items[0].timestamp >= departureTime ? 'australia' : 'prep'
   const current = phase(groups[idx])
   if (current !== 'prep') return false
   if (idx === 0) return false

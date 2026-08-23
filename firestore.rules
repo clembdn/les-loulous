@@ -50,16 +50,6 @@ service cloud.firestore {
             && data.fromAccount != data.toAccount);
     }
 
-    // Ce qu'un virement solde : une dette entre les deux, ou un retard
-    // d'apports au pot réglé directement de perso à perso. Absent (ou null)
-    // sur les lignes écrites avant l'ajout du champ.
-    function isValidSettles(data) {
-      return !('settles' in data)
-        || data.settles == null
-        || data.settles == "debt"
-        || data.settles == "contribution";
-    }
-
     // Taux EUR→AUD figé à la saisie. Borné large : au-delà, c'est une faute
     // de frappe, pas un taux de change.
     function isValidRate(data) {
@@ -77,8 +67,6 @@ service cloud.firestore {
         && hasValidAccountRouting(data)
         && isValidSplit(data.split)
         && isValidRecurrence(data.recurrence)
-        && data.isSettlement is bool
-        && isValidSettles(data)
         && isValidRate(data)
         && (data.amountReceived == null
             || (data.amountReceived is number && data.amountReceived >= 0));

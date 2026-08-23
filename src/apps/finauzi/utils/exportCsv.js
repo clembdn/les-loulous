@@ -1,5 +1,6 @@
 import { getCategory } from '../config/categories.js'
 import { getAccount, getSplitLabel } from '../config/accounts.js'
+import { getTransferKind } from './ledger.js'
 import { RECURRENCES_BY_ID } from './recurrence.js'
 import { todayISO } from './dates.js'
 
@@ -64,21 +65,13 @@ export function buildTransactionsCsv(transactions) {
         money(tx.amountReceived),
         RECURRENCES_BY_ID[tx.recurrence]?.label || tx.recurrence,
         tx.endDate ? tx.endDate.slice(0, 10) : '',
-        settlesLabel(tx.settles),
+        getTransferKind(tx)?.label || '',
         tx.notes || '',
         tx.isActive === false ? 'Non' : 'Oui',
       ]),
     )
   }
   return lines.join('\n')
-}
-
-// La colonne « Règlement » du CSV : dire ce que le virement solde vaut mieux
-// qu'un « Oui » qui confond deux compteurs distincts.
-function settlesLabel(settles) {
-  if (settles === 'debt') return 'Dette'
-  if (settles === 'contribution') return 'Apports'
-  return ''
 }
 
 export function downloadCsv(filename, content) {

@@ -13,9 +13,10 @@ function StatCard({ icon: Icon, label, value, valueClass }) {
   )
 }
 
-// `summary` vient de `summarizePeriod` (ledger.js) : { income, expenses,
-// transfersIn, transfersOut, net }. Les virements en sont volontairement
-// absents — déplacer 2 000 € vers le pot n'est ni un revenu ni une dépense.
+// `summary` vient de `summarizePeriod` (ledger.js). On affiche `inflow` /
+// `outflow` et non `income` / `expenses` : sur un compte donné, un virement
+// reçu EST un revenu pour ce compte — le joint n'a que ça. En vue consolidée,
+// les deux paires sont identiques, les virements internes étant neutralisés.
 //
 // `currency` : devise dans laquelle le résumé est déjà exprimé (vue d'un
 // compte). Omis, les montants sont en euros et suivent la devise d'affichage.
@@ -27,13 +28,13 @@ export default function QuickStats({ summary, currency }) {
       <StatCard
         icon={TrendingUp}
         label="Revenus"
-        value={`+${formatEUR(summary.income)}`}
+        value={`+${formatEUR(summary.inflow)}`}
         valueClass="text-emerald-400"
       />
       <StatCard
         icon={TrendingDown}
         label="Dépenses"
-        value={`−${formatEUR(summary.expenses)}`}
+        value={`−${formatEUR(summary.outflow)}`}
         valueClass="text-red-400"
       />
       <StatCard

@@ -1,11 +1,7 @@
 import { useState } from 'react'
-import { ArrowRight, AlertTriangle, RefreshCw, Check } from 'lucide-react'
+import { ArrowRight, AlertTriangle, RefreshCw, ArrowLeftRight } from 'lucide-react'
 import { getPerson } from '@/shared/config/people.js'
-import {
-  createDebtSettlement,
-  createContribution,
-  createContributionRebalance,
-} from '../../services/transactionService.js'
+import { createSettlement, createContribution } from '../../services/transactionService.js'
 import { useAppData } from '../../context/AppDataContext.jsx'
 import { useCurrency } from '../../context/CurrencyContext.jsx'
 import { useExchangeRate } from '../../hooks/useExchangeRate.js'
@@ -18,25 +14,23 @@ import Modal from '@/shared/ui/Modal.jsx'
 import { toast } from '@/shared/ui/sonner.jsx'
 import { todayISO } from '../../utils/dates.js'
 
+const SYMBOL = { EUR: '€', AUD: 'A$' }
 
-// Trois règlements possibles, et surtout deux façons de rattraper un retard
-// d'apports — pour des montants différents :
+// Deux gestes, et un seul répond à « qui doit quoi » :
 //
-//   mode="debt"                    un perso vers l'autre, solde la dette
-//   mode="contribution" · direct   un perso vers l'autre, MOITIÉ de l'écart,
-//                                  virement France→France gratuit
-//   mode="contribution" · pot      un perso vers le joint, TOUT l'écart,
-//                                  virement international avec frais
+//   mode="settle"       un perso vers l'autre — solde le compte entre eux.
+//                       C'est le seul montant à regarder : il englobe déjà
+//                       l'écart d'apports ET les avances (voir settlement.js).
+//   mode="contribution" un perso vers le joint — remplit le pot. Ça ne règle
+//                       rien entre eux, ça donne de quoi payer les charges.
 //
-// Le chemin direct est proposé par défaut : il coûte moins cher et referme
-// l'écart aussi bien. Le chemin « au pot » reste là pour le cas où le pot a
-// vraiment besoin d'être réalimenté.
+// Le montant se saisit en € ou en A$ : c'est le même compte perso, mais pas
+// le même argent selon qu'on vire depuis la France ou depuis l'Australie.
 export default function SettleModal({
   mode,
   fromUid,
   toUid,
   suggestedEUR,
-  suggestedDirectEUR,
   onClose,
   currentUid,
 }) {
@@ -45,37 +39,19 @@ export default function SettleModal({
   const live = useExchangeRate(settingsRate)
 
   const isContribution = mode === 'contribution'
-  // Un rééquilibrage direct n'a de sens que si on sait à qui virer.
-  const canGoDirect = isContribution && !!toUid
 
-  const [path, setPath] = useState(canGoDirect ? 'direct' : 'pot')
-  const isDirect = isContribution && path === 'direct'
-  const isPot = isContribution && path === 'pot'
-
-  const defaultAmount = isContribution
-    ? (canGoDirect ? suggestedDirectEUR : suggestedEUR)
-    : suggestedEUR
-
-  const [amount, setAmount] = useState(round(defaultAmount))
+  const [currency, setCurrency] = useState('EUR')
+  const [amount, setAmount] = useState(round(suggestedEUR))
   const [received, setReceived] = useState('')
   const [date, setDate] = useState(todayISO())
   const [rateInput, setRateInput] = useState('')
-
-  function selectPath(next) {
-    setPath(next)
-    // Le montant juste n'est pas le même selon le chemin : on repropose
-    // celui du chemin choisi plutôt que de laisser un chiffre trompeur.
-    setAmount(round(next === 'direct' ? suggestedDirectEUR : suggestedEUR))
-    setReceived('')
-  }
 
   const from = getPerson(fromUid, settings.userColors)
   const to = toUid ? getPerson(toUid, settings.userColors) : null
   const jointAccount = getAccount(JOINT_ACCOUNT_ID)
 
   const fromAccountId = PERSONAL_ACCOUNT_ID[fromUid]
-  const toAccountId = isPot ? JOINT_ACCOUNT_ID : PERSONAL_ACCOUNT_ID[toUid]
-  const crossesNetwork = fromAccountId && toAccountId && !isSameNetwork(fromAccountId, toAccountId)
+  const toAccountId = isContribution ? JOINT_ACCOUNT_ID : PERSONAL_ACCOUNT_ID[toUid]
 
   const parsed = parseFloat(String(amount).replace(',', '.'))
   const validAmount = isFinite(parsed) && parsed > 0
@@ -85,61 +61,43 @@ export default function SettleModal({
   const parsedRate = parseFloat(String(rateInput).replace(',', '.'))
   const isManualRate = isFinite(parsedRate) && parsedRate > 0
   const effectiveRate = isManualRate ? parsedRate : live.rate
-  const estimatedAUD = validAmount ? convert(parsed, 'EUR', 'AUD', effectiveRate) : null
+
+  const otherCurrency = currency === 'EUR' ? 'AUD' : 'EUR'
+  const estimatedOther = validAmount ? convert(parsed, currency, otherCurrency, effectiveRate) : null
+
+  // Le pot est en A$ : y virer des euros passe par un change et des frais.
+  // Y virer des dollars déjà sur place ne coûte rien.
+  const jointCurrency = jointAccount.currency
+  const crossesCurrency = isContribution && currency !== jointCurrency
+  const crossesNetwork = !isContribution
+    ? false
+    : !!fromAccountId && !isSameNetwork(fromAccountId, toAccountId) && currency === 'EUR'
 
   function onSubmit(e) {
     e.preventDefault()
     if (!validAmount) return toast.error('Montant invalide')
 
-    const common = { amountEUR: parsed, date, rate: effectiveRate }
+    const common = { amount: parsed, currency, date, rate: effectiveRate }
 
-    let action
-    if (isPot) {
-      action = createContribution({
+    const action = isContribution
+      ? createContribution({
         ...common,
         fromUid,
-        amountReceivedAUD: isFinite(parsedReceived) && parsedReceived > 0 ? parsedReceived : estimatedAUD,
+        // Ce qui atterrit vraiment sur le compte australien, frais inclus.
+        amountReceived: crossesCurrency
+          ? (isFinite(parsedReceived) && parsedReceived > 0 ? parsedReceived : estimatedOther)
+          : null,
       }, currentUid)
-    } else if (isDirect) {
-      action = createContributionRebalance({ ...common, fromUid, toUid }, currentUid)
-    } else {
-      action = createDebtSettlement({ ...common, fromUid, toUid }, currentUid)
-    }
+      : createSettlement({ ...common, fromUid, toUid }, currentUid)
 
     action.catch((err) => { console.error(err); toast.error(err.message || 'Erreur de synchronisation') })
-    toast.success(isContribution ? 'Rééquilibrage enregistré' : 'Remboursement enregistré')
+    toast.success(isContribution ? 'Apport enregistré' : 'Règlement enregistré')
     onClose()
   }
 
-  const title = isContribution ? 'Rééquilibrer les apports' : 'Régler la dette'
-
   return (
-    <Modal open onClose={onClose} title={title}>
+    <Modal open onClose={onClose} title={isContribution ? 'Alimenter le compte joint' : 'Régler le solde'}>
       <form onSubmit={onSubmit} className="space-y-4">
-
-        {/* Choix du chemin — seulement quand il y en a deux. */}
-        {canGoDirect && (
-          <div className="grid grid-cols-2 gap-2">
-            <PathCard
-              active={isDirect}
-              onClick={() => selectPath('direct')}
-              label={`Virer à ${to?.label}`}
-              hint="France → France"
-              amount={suggestedDirectEUR}
-              badge="Gratuit"
-              badgeClass="bg-emerald-500/15 text-emerald-400"
-            />
-            <PathCard
-              active={isPot}
-              onClick={() => selectPath('pot')}
-              label="Verser au pot"
-              hint="France → Australie"
-              amount={suggestedEUR}
-              badge="Frais + change"
-              badgeClass="bg-amber-500/15 text-amber-400"
-            />
-          </div>
-        )}
 
         {/* Trajet de l'argent */}
         <div className="flex items-center justify-center gap-3 py-3 bg-white/[0.03] rounded-xl">
@@ -148,7 +106,7 @@ export default function SettleModal({
             {from.label}
           </span>
           <ArrowRight size={14} className="text-white/25" />
-          {isPot ? (
+          {isContribution ? (
             <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${jointAccount.textClass}`}>
               <span className={`h-2 w-2 rounded-full ${jointAccount.dotClass}`} />
               {jointAccount.label}
@@ -161,22 +119,11 @@ export default function SettleModal({
           )}
         </div>
 
-        {/* Le seul avertissement qui compte : ce virement va coûter des frais. */}
-        {crossesNetwork && (
-          <div className="flex gap-2.5 items-start px-3 py-2.5 rounded-xl bg-amber-500/[0.08] border border-amber-500/20">
-            <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
-            <p className="text-[11px] leading-relaxed text-amber-200/80">
-              Ce virement quitte le réseau {getAccountNetwork(fromAccountId).label} pour
-              le réseau {getAccountNetwork(toAccountId).label} : frais de transfert et change.
-              {canGoDirect && ' Le rééquilibrage France → France, lui, est gratuit.'}
-            </p>
-          </div>
-        )}
-
-        <Field label="Montant envoyé en EUR">
+        {/* Montant, avec bascule de devise */}
+        <Field label="Montant">
           <div className="relative">
             <span className="absolute left-0 top-0 bottom-0 w-12 flex items-center justify-center text-base font-semibold text-white/50 border-r border-white/10 pointer-events-none">
-              €
+              {SYMBOL[currency]}
             </span>
             <input
               type="text"
@@ -184,21 +131,41 @@ export default function SettleModal({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0,00"
-              className={`${inputClass} pl-14 text-lg tabular`}
+              className={`${inputClass} pl-14 pr-20 text-lg tabular`}
               autoFocus
             />
+            <button
+              type="button"
+              onClick={() => { setCurrency(otherCurrency); setReceived('') }}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-white/50 hover:text-white hover:bg-white/[0.06] transition"
+              aria-label={`Saisir en ${otherCurrency} plutôt qu'en ${currency}`}
+              title={`Basculer en ${otherCurrency}`}
+            >
+              <ArrowLeftRight size={12} strokeWidth={2.2} />
+              {otherCurrency}
+            </button>
           </div>
-          {isContribution && validAmount && (
+          {validAmount && estimatedOther != null && (
             <p className="text-[11px] text-white/35 mt-1.5">
-              {isDirect
-                ? 'Un virement direct referme l\'écart de deux fois son montant : la moitié suffit.'
-                : 'Au pot, il faut verser tout l\'écart pour égaliser les apports.'}
+              ≈ {estimatedOther.toFixed(2).replace('.', ',')} {SYMBOL[otherCurrency]} au taux du jour
             </p>
           )}
         </Field>
 
+        {/* Le seul avertissement qui compte : ce virement va coûter des frais. */}
+        {crossesNetwork && (
+          <div className="flex gap-2.5 items-start px-3 py-2.5 rounded-xl bg-amber-500/[0.08] border border-amber-500/20">
+            <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-[11px] leading-relaxed text-amber-200/80">
+              Virer des euros du réseau {getAccountNetwork(fromAccountId).label} vers
+              le réseau {getAccountNetwork(toAccountId).label} coûte des frais et un change.
+              Si l'argent est déjà en Australie, bascule le montant en A$.
+            </p>
+          </div>
+        )}
+
         {/* Taux : n'a d'effet que si le virement change de devise. */}
-        {isPot && (
+        {crossesCurrency && (
           <Field label="Taux EUR → AUD">
             <div className="relative">
               <input
@@ -224,18 +191,18 @@ export default function SettleModal({
           </Field>
         )}
 
-        {isPot && (
-          <Field label="Reçu en AUD (optionnel)">
+        {crossesCurrency && (
+          <Field label={`Reçu en ${jointCurrency} (optionnel)`}>
             <div className="relative">
               <span className="absolute left-0 top-0 bottom-0 w-12 flex items-center justify-center text-base font-semibold text-white/50 border-r border-white/10 pointer-events-none">
-                A$
+                {SYMBOL[jointCurrency]}
               </span>
               <input
                 type="text"
                 inputMode="decimal"
                 value={received}
                 onChange={(e) => setReceived(e.target.value)}
-                placeholder={estimatedAUD != null ? estimatedAUD.toFixed(2).replace('.', ',') : '0,00'}
+                placeholder={estimatedOther != null ? estimatedOther.toFixed(2).replace('.', ',') : '0,00'}
                 className={`${inputClass} pl-14 text-lg tabular`}
               />
             </div>
@@ -255,11 +222,9 @@ export default function SettleModal({
         </Field>
 
         <p className="text-[11px] text-white/35">
-          {isDirect
-            ? 'Ce virement compte dans l\'équilibre des apports, pas dans la balance des dettes.'
-            : isPot
-              ? 'Cet apport compte dans l\'équilibre des versements au pot commun.'
-              : 'Ce virement est marqué comme remboursement : il solde la dette sans compter comme un apport.'}
+          {isContribution
+            ? 'Cet apport remplit le pot. Il compte aussi dans le solde entre vous : mettre plus que l\'autre, c\'est prendre de l\'avance.'
+            : 'Ce virement solde tout d\'un coup — l\'écart d\'apports comme les avances.'}
         </p>
 
         <button
@@ -285,32 +250,6 @@ function rateSourceLabel(live, isManual) {
   if (live.isStale) return 'Dernier taux connu (hors ligne). Modifiable à la main.'
   if (live.date) return `Taux BCE du ${live.date}, via Frankfurter. Modifiable à la main.`
   return 'Taux du jour. Modifiable à la main.'
-}
-
-function PathCard({ active, onClick, label, hint, amount, badge, badgeClass }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`text-left px-3 py-2.5 rounded-xl border transition ${
-        active
-          ? 'bg-white/[0.07] border-white/25'
-          : 'bg-white/[0.02] border-white/10 hover:border-white/20'
-      }`}
-    >
-      <div className="flex items-start justify-between gap-1.5">
-        <span className="text-xs font-medium text-white leading-tight">{label}</span>
-        {active && <Check size={13} className="text-white/70 shrink-0" />}
-      </div>
-      <span className="block text-[10px] text-white/35 mt-0.5">{hint}</span>
-      <span className="block text-sm font-semibold text-white tabular mt-1.5">
-        {Number(amount) > 0 ? `${(Math.round(Number(amount) * 100) / 100).toFixed(2).replace('.', ',')} €` : '—'}
-      </span>
-      <span className={`inline-block mt-1.5 px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wide ${badgeClass}`}>
-        {badge}
-      </span>
-    </button>
-  )
 }
 
 const inputClass = 'w-full px-3 py-2.5 bg-white/[0.04] border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/30 transition'

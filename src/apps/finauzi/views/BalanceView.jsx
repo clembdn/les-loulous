@@ -4,19 +4,23 @@ import { useAppData } from '../context/AppDataContext.jsx'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { useCurrency } from '../context/CurrencyContext.jsx'
 import { AUTHORIZED_UIDS, getPerson, getPersonLabel } from '@/shared/config/people.js'
-import { getContributions, getDebtLedger } from '../utils/settlement.js'
+import { getBalanceSummary } from '../utils/settlement.js'
 import { getCategory } from '../config/categories.js'
 import { formatDateShort } from '../utils/cashflow.js'
 import { COMMON_SUBS } from '../config/navigation.js'
 import SettleModal from '../components/balance/SettleModal.jsx'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
 
-// Les deux compteurs ne se règlent pas au même endroit :
-//   • les apports se rééquilibrent soit en virant la MOITIÉ de l'écart à
-//     l'autre en France (gratuit, chemin par défaut), soit en versant TOUT
-//     l'écart au pot (virement international, quand le pot doit être rempli)
-//   • les dettes se soldent en virant à l'autre
-// D'où deux blocs distincts, chacun avec son propre bouton d'action.
+// UN chiffre en tête, et un seul geste pour le solder.
+//
+// Avant, deux compteurs séparés — « qui a mis le plus au pot » et « qui doit
+// quoi à qui » — obligeaient à faire deux virements pour un seul déséquilibre,
+// parfois en sens inverse l'un de l'autre. Ils sont maintenant additionnés
+// (voir settlement.js) : une avance de 500 € et un retard d'apports de 200 €
+// se compensent, et il ne reste qu'un virement à faire.
+//
+// Les composantes restent affichées en dessous, mais comme EXPLICATION du
+// chiffre, jamais comme actions séparées.
 export default function BalanceView({ onNavigate }) {
   const { transactions, settings, isLoading } = useAppData()
   const { currentUser } = useAuth()
@@ -25,16 +29,15 @@ export default function BalanceView({ onNavigate }) {
 
   const rate = settings.eurToAud
   const userColors = settings.userColors
-  const target = Number(settings.contributionTargetEUR) || 0
+  // Ce que chacun s'est engagé à verser au pot chaque mois — le montant
+  // pré-rempli quand on vient l'alimenter.
+  const contributionTarget = Number(settings.contributionTargetEUR) || 0
 
-  const contributions = useMemo(
-    () => getContributions(transactions, rate),
+  const balance = useMemo(
+    () => getBalanceSummary(transactions, rate),
     [transactions, rate],
   )
-  const debts = useMemo(
-    () => getDebtLedger(transactions, rate),
-    [transactions, rate],
-  )
+  const { contributions, advances, settlements } = balance
 
   const maxContribution = Math.max(
     ...AUTHORIZED_UIDS.map((uid) => contributions.total[uid] || 0),
@@ -47,6 +50,32 @@ export default function BalanceView({ onNavigate }) {
       .slice(0, 6)
   }, [contributions.byMonth])
 
+  // Le détail du chiffre, du point de vue de celui à qui on doit. Les trois
+  // lignes s'additionnent exactement au solde affiché.
+  const breakdown = useMemo(() => {
+    const uid = balance.creditorUid || AUTHORIZED_UIDS[0]
+    return [
+      {
+        key: 'contributions',
+        label: 'Écart d\'apports au pot',
+        hint: 'la moitié de l\'écart, le pot étant financé 50/50',
+        value: contributions.credit[uid],
+      },
+      {
+        key: 'advances',
+        label: 'Avances et dépenses perso',
+        hint: 'dépenses communes avancées, perso passé sur le joint',
+        value: advances.net[uid],
+      },
+      {
+        key: 'settlements',
+        label: 'Règlements déjà faits',
+        hint: 'les virements de l\'un à l\'autre',
+        value: settlements.net[uid],
+      },
+    ].filter((row) => Math.abs(row.value) >= 0.01)
+  }, [balance.creditorUid, contributions.credit, advances.net, settlements.net])
+
   if (isLoading) return <Loader />
 
   return (
@@ -56,8 +85,88 @@ export default function BalanceView({ onNavigate }) {
 
         <h1 className="text-2xl font-semibold tracking-tight text-white mb-1">Équilibre</h1>
         <p className="text-xs text-white/40 mb-8">
-          Ce que chacun a mis au pot, et ce que chacun doit à l'autre.
+          Tout compris : apports au pot, avances, règlements déjà faits.
         </p>
+
+        {/* ─── Le solde, seul chiffre actionnable ──────────────────── */}
+        <section className="bg-white/[0.03] border border-white/5 rounded-2xl p-5 lg:p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Scale size={15} className="text-teal-400" />
+            <span className="text-[11px] uppercase tracking-[0.18em] text-white/40">
+              Solde entre vous
+            </span>
+          </div>
+
+          {balance.isSettled ? (
+            <div className="flex items-start gap-2.5">
+              <CheckCircle2 size={17} className="text-emerald-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-base font-semibold text-emerald-400">Tout est équilibré</p>
+                <p className="text-xs text-white/45 mt-0.5">
+                  Personne ne doit rien à personne, apports compris.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="lg:grid lg:grid-cols-2 lg:gap-8 lg:items-start">
+              <div>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <PersonChip uid={balance.debtorUid} userColors={userColors} />
+                  <ArrowRight size={14} className="text-white/25" />
+                  <PersonChip uid={balance.creditorUid} userColors={userColors} />
+                </div>
+                <p className="text-3xl font-semibold text-white tabular leading-none">
+                  {format(balance.amount)}
+                </p>
+                <p className="text-xs text-white/45 mt-2 leading-relaxed">
+                  {getPersonLabel(balance.debtorUid)} doit ça à {getPersonLabel(balance.creditorUid)},
+                  tout compris. Un seul virement de compte français à compte
+                  français remet le compteur à zéro.
+                </p>
+
+                <button
+                  onClick={() => setSettling({
+                    mode: 'settle',
+                    fromUid: balance.debtorUid,
+                    toUid: balance.creditorUid,
+                    suggestedEUR: balance.amount,
+                  })}
+                  className="w-full mt-5 py-2.5 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 text-sm font-medium hover:bg-teal-500/15 transition"
+                >
+                  Régler {format(balance.amount)}
+                </button>
+              </div>
+
+              {/* D'où sort le chiffre — explication, pas action. */}
+              {breakdown.length > 0 && (
+                <div className="mt-6 lg:mt-0 pt-5 lg:pt-0 border-t lg:border-t-0 lg:border-l border-white/5 lg:pl-8">
+                  <p className="text-[10px] uppercase tracking-wider text-white/30 mb-3">
+                    En faveur de {getPersonLabel(balance.creditorUid)}
+                  </p>
+                  <div className="space-y-2.5">
+                    {breakdown.map((row) => (
+                      <div key={row.key} className="flex items-baseline justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs text-white/70">{row.label}</p>
+                          <p className="text-[10px] text-white/30 leading-snug">{row.hint}</p>
+                        </div>
+                        <span className={`text-xs font-medium tabular flex-shrink-0 ${row.value > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {row.value > 0 ? '+' : '−'}{format(Math.abs(row.value))}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="flex items-baseline justify-between gap-3 pt-2.5 border-t border-white/5">
+                      <p className="text-xs font-medium text-white">Solde</p>
+                      <span className="text-sm font-semibold text-white tabular">
+                        {format(balance.amount)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
 
         <div className="lg:grid lg:grid-cols-2 lg:gap-6 xl:gap-8 space-y-6 lg:space-y-0">
 
@@ -70,33 +179,16 @@ export default function BalanceView({ onNavigate }) {
               </span>
             </div>
 
-            {contributions.isBalanced ? (
-              <div className="flex items-start gap-2.5 mb-5">
-                <CheckCircle2 size={17} className="text-emerald-400 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-base font-semibold text-emerald-400">Versements à égalité</p>
-                  <p className="text-xs text-white/45 mt-0.5">
-                    Vous avez mis exactement la même somme dans le pot.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="mb-5">
-                <p className="text-2xl font-semibold text-white tabular leading-none">
-                  {format(contributions.amountToRebalance)}
-                </p>
-                <p className="text-xs text-white/45 mt-2">
-                  <span className="text-white/70">{getPersonLabel(contributions.behindUid)}</span>
-                  {' '}vire ça à {getPersonLabel(contributions.aheadUid)} depuis son compte
-                  français : virement gratuit, et l'écart est refermé.
-                </p>
-                <p className="text-[11px] text-white/30 mt-2 leading-relaxed">
-                  Ou {format(contributions.amountToEqualize)} versés directement au pot,
-                  si le compte joint a besoin d'être réalimenté — mais c'est un virement
-                  international, avec frais et change.
-                </p>
-              </div>
-            )}
+            <p className="text-xs text-white/45 mb-5 leading-relaxed">
+              {contributions.isBalanced
+                ? 'Vous avez mis exactement la même somme dans le pot.'
+                : <>
+                    <span className="text-white/70">{getPersonLabel(contributions.aheadUid)}</span>
+                    {' '}a mis {format(contributions.amountToEqualize)} de plus que
+                    {' '}{getPersonLabel(contributions.behindUid)}. C'est déjà compté dans
+                    le solde ci-dessus — inutile de le régler à part.
+                  </>}
+            </p>
 
             <div className="space-y-3">
               {AUTHORIZED_UIDS.map((uid) => {
@@ -125,86 +217,47 @@ export default function BalanceView({ onNavigate }) {
               })}
             </div>
 
+            {/* Alimenter le pot est une question de trésorerie, pas d'équité :
+                c'est « le compte joint a-t-il de quoi payer le loyer ». */}
             <button
               onClick={() => setSettling({
                 mode: 'contribution',
-                fromUid: contributions.behindUid || currentUser?.uid,
-                // À égalité, il n'y a personne à qui virer : le seul geste
-                // qui reste est d'alimenter le pot.
-                toUid: contributions.aheadUid,
-                suggestedEUR: contributions.isBalanced ? target : contributions.amountToEqualize,
-                suggestedDirectEUR: contributions.amountToRebalance,
+                fromUid: currentUser?.uid,
+                suggestedEUR: contributionTarget,
               })}
               className="w-full mt-5 py-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 text-sm font-medium hover:bg-sky-500/15 transition"
             >
-              {contributions.isBalanced ? 'Enregistrer un apport' : 'Rééquilibrer'}
+              Alimenter le compte joint
             </button>
           </section>
 
-          {/* ─── Dettes croisées ───────────────────────────────────── */}
+          {/* ─── D'où viennent les avances ─────────────────────────── */}
           <section className="bg-white/[0.03] border border-white/5 rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-4">
               <Scale size={15} className="text-teal-400" />
               <span className="text-[11px] uppercase tracking-[0.18em] text-white/40">
-                Qui doit quoi
+                Avances et dépenses perso
               </span>
             </div>
 
-            {debts.isSettled ? (
-              <div className="flex items-start gap-2.5">
-                <CheckCircle2 size={17} className="text-emerald-400 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-base font-semibold text-emerald-400">Tout est réglé</p>
-                  <p className="text-xs text-white/45 mt-0.5">
-                    Personne ne doit rien à personne.
-                  </p>
-                </div>
-              </div>
+            {advances.reasons.length === 0 ? (
+              <p className="text-xs text-white/40">
+                Aucune dépense commune avancée d'un compte perso, aucun achat
+                perso passé sur le joint.
+              </p>
             ) : (
               <>
-                <div className="flex items-center gap-2.5 mb-2">
-                  <PersonChip uid={debts.debtorUid} userColors={userColors} />
-                  <ArrowRight size={14} className="text-white/25" />
-                  <PersonChip uid={debts.creditorUid} userColors={userColors} />
-                </div>
-                <p className="text-2xl font-semibold text-white tabular leading-none mt-3">
-                  {format(debts.amount)}
-                </p>
-                <p className="text-xs text-white/45 mt-2">
-                  {getPersonLabel(debts.debtorUid)} doit ça à {getPersonLabel(debts.creditorUid)},
-                  d'après les dépenses avancées et les achats perso passés sur le joint.
-                </p>
-
-                <button
-                  onClick={() => setSettling({
-                    mode: 'debt',
-                    fromUid: debts.debtorUid,
-                    toUid: debts.creditorUid,
-                    suggestedEUR: debts.amount,
-                  })}
-                  className="w-full mt-5 py-2.5 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 text-sm font-medium hover:bg-teal-500/15 transition"
-                >
-                  Régler {format(debts.amount)}
-                </button>
-              </>
-            )}
-
-            {debts.reasons.length > 0 && (
-              <div className="mt-5 pt-5 border-t border-white/5">
-                <p className="text-[10px] uppercase tracking-wider text-white/30 mb-2">
-                  D'où ça vient
-                </p>
                 <div className="space-y-1">
-                  {debts.reasons.slice(0, 6).map((reason, i) => (
+                  {advances.reasons.slice(0, 8).map((reason, i) => (
                     <ReasonRow key={`${reason.tx.id}-${i}`} reason={reason} userColors={userColors} format={format} />
                   ))}
                 </div>
-                {debts.reasons.length > 6 && (
+                {advances.reasons.length > 8 && (
                   <p className="text-[10px] text-white/25 mt-2">
-                    et {debts.reasons.length - 6} autre{debts.reasons.length - 6 > 1 ? 's' : ''} ligne{debts.reasons.length - 6 > 1 ? 's' : ''}
+                    et {advances.reasons.length - 8} autre{advances.reasons.length - 8 > 1 ? 's' : ''} ligne{advances.reasons.length - 8 > 1 ? 's' : ''}
                   </p>
                 )}
-              </div>
+              </>
             )}
           </section>
         </div>

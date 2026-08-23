@@ -11,7 +11,7 @@
 // inter-devises, `amountReceived` porte le montant réellement crédité en A$ :
 // c'est lui qui fait foi côté joint (il encaisse le vrai taux et les frais).
 
-import { getAccountCurrency, ACCOUNTS } from '../config/accounts.js'
+import { getAccount, getAccountCurrency, JOINT_ACCOUNT_ID, ACCOUNTS } from '../config/accounts.js'
 import { convert, txRate } from './money.js'
 import { getOccurrences } from './recurrence.js'
 
@@ -21,29 +21,31 @@ export function normalizeKind(kind) {
   return TX_KINDS.includes(kind) ? kind : 'expense'
 }
 
-// ─── Ce qu'un virement solde ──────────────────────────────────────────────
-// Un virement marqué comme règlement peut solder deux choses qui n'ont rien
-// à voir, et les confondre fausse les deux compteurs :
+// ─── Nature d'un virement ─────────────────────────────────────────────────
+// Elle se déduit entièrement des deux comptes, sans rien à cocher :
 //
-//   'debt'         — l'un rembourse l'autre, ou rend au pot ce qu'il y a
-//                    pris. Joue sur la balance des dettes.
-//   'contribution' — l'un compense son retard d'apports en virant
-//                    directement à l'autre, sans que l'argent passe par le
-//                    pot. C'est le virement France→France gratuit : il joue
-//                    sur l'équilibre des apports, PAS sur les dettes.
-export const SETTLES_DEBT = 'debt'
-export const SETTLES_CONTRIBUTION = 'contribution'
-export const SETTLES_KINDS = [SETTLES_DEBT, SETTLES_CONTRIBUTION]
+//   perso → joint    un apport au pot
+//   joint → perso    un retrait du pot
+//   perso → perso    un règlement entre eux
+//
+// Voir l'en-tête de settlement.js pour pourquoi un « remboursement au pot »
+// n'existe plus : c'était un apport déguisé, et le distinguer comptait deux
+// fois le même euro.
 
-export function normalizeSettles(raw) {
-  if (SETTLES_KINDS.includes(raw?.settles)) return raw.settles
-  // Avant l'ajout du champ, `isSettlement: true` ne pouvait désigner qu'un
-  // règlement de dette — le rééquilibrage direct n'existait pas.
-  return raw?.isSettlement === true ? SETTLES_DEBT : null
+export const TRANSFER_KINDS = {
+  contribution: { id: 'contribution', label: 'Apport', short: 'apport', className: 'text-sky-400' },
+  withdrawal: { id: 'withdrawal', label: 'Retrait', short: 'retrait', className: 'text-amber-400' },
+  settlement: { id: 'settlement', label: 'Règlement', short: 'règlement', className: 'text-teal-400' },
 }
 
-export function isTransfer(tx) {
-  return tx.kind === 'transfer'
+export function getTransferKind(tx) {
+  if (normalizeKind(tx.kind) !== 'transfer') return null
+  const from = getAccount(tx.fromAccount)
+  const to = getAccount(tx.toAccount)
+  if (from.kind === 'personal' && to.kind === 'personal') return TRANSFER_KINDS.settlement
+  if (to.id === JOINT_ACCOUNT_ID && from.kind === 'personal') return TRANSFER_KINDS.contribution
+  if (from.id === JOINT_ACCOUNT_ID && to.kind === 'personal') return TRANSFER_KINDS.withdrawal
+  return null
 }
 
 // Est-ce que ce mouvement touche ce compte, dans un sens ou dans l'autre ?
@@ -131,8 +133,19 @@ export function getNetWorthEUR(balances, rate) {
 }
 
 // ─── Agrégats sur une période ─────────────────────────────────────────────
-// Les virements sont exclus des dépenses et des revenus : déplacer 2 000 €
-// de son perso vers le joint n'est ni l'un ni l'autre.
+// Un virement n'est ni un revenu ni une dépense POUR LE COUPLE — déplacer
+// 2 000 € de son perso vers le joint n'appauvrit personne. Mais POUR UN COMPTE
+// pris isolément, c'en est un : le compte joint n'a aucun revenu propre, il ne
+// vit que des virements reçus. Afficher 0 € de revenus sur le joint alors qu'il
+// est alimenté tous les mois n'apprenait rien à personne.
+//
+// D'où deux jeux de chiffres dans le même résumé :
+//   income / expenses          les vrais revenus et dépenses, virements exclus
+//   inflow / outflow           tout ce qui entre et sort du compte regardé
+//   net                        inflow − outflow, donc la variation du solde
+//
+// En vue consolidée (`accountId` nul), les virements sont neutralisés et
+// inflow/outflow retombent exactement sur income/expenses.
 
 export function summarizePeriod(transactions, { accountId = null, from, to, rate }) {
   let income = 0
@@ -151,27 +164,37 @@ export function summarizePeriod(transactions, { accountId = null, from, to, rate
     const targetCurrency = accountId ? getAccountCurrency(accountId) : 'EUR'
 
     if (kind === 'transfer') {
-      const delta = getAccountDelta(tx, accountId || tx.fromAccount, rate) * count
+      // Hors vue d'un compte, un virement interne ne bouge rien.
+      if (!accountId) continue
+      // `getAccountDelta` gère déjà le sens, la devise et le montant
+      // réellement crédité quand le virement change de monnaie.
+      const delta = getAccountDelta(tx, accountId, rate) * count
       if (delta >= 0) transfersIn += delta
       else transfersOut += -delta
       continue
     }
 
-    const amount = convert(Number(tx.amount) || 0, tx.currency, targetCurrency, txRate(tx, rate)) * count
     if (accountId) {
       if (kind === 'expense' && tx.fromAccount !== accountId) continue
       if (kind === 'income' && tx.toAccount !== accountId) continue
     }
+
+    const amount = convert(Number(tx.amount) || 0, tx.currency, targetCurrency, txRate(tx, rate)) * count
     if (kind === 'income') income += amount
     else expenses += amount
   }
+
+  const inflow = income + transfersIn
+  const outflow = expenses + transfersOut
 
   return {
     income,
     expenses,
     transfersIn,
     transfersOut,
-    net: income - expenses,
+    inflow,
+    outflow,
+    net: inflow - outflow,
   }
 }
 

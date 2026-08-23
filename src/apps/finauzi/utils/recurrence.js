@@ -111,7 +111,6 @@ export function getOccurrences(tx, from, to) {
   return dates
 }
 
-// Nombre d'échéances dans [from, to] sans matérialiser le tableau.
 // Montant ramené au mois — pour comparer des charges de fréquences
 // différentes (le loyer hebdo face à l'abonnement mensuel).
 export function getMonthlyEquivalent(tx) {

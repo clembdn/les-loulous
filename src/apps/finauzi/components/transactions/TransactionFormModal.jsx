@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { ArrowRight, Info } from 'lucide-react'
+import { ArrowRight, Info, ArrowLeftRight } from 'lucide-react'
 import { createTransaction, updateTransaction, deleteTransaction } from '../../services/transactionService.js'
 import { AUTHORIZED_UIDS, getPerson } from '@/shared/config/people.js'
 import { useAppData } from '../../context/AppDataContext.jsx'
@@ -10,7 +10,6 @@ import {
   getAccount, getAccountCurrency, getDefaultSplit, getPersonalAccountId,
 } from '../../config/accounts.js'
 import { RECURRENCES } from '../../utils/recurrence.js'
-import { SETTLES_DEBT, SETTLES_CONTRIBUTION } from '../../utils/ledger.js'
 import { convert } from '../../utils/money.js'
 import Modal from '@/shared/ui/Modal.jsx'
 import { toast } from '@/shared/ui/sonner.jsx'
@@ -25,29 +24,6 @@ const KINDS = [
 ]
 
 const CURRENCY_SYMBOL = { EUR: '€', AUD: 'A$' }
-
-// Un virement entre les deux comptes persos peut vouloir dire trois choses,
-// et se tromper de case fausse un compteur entier.
-const SETTLES_OPTIONS = [
-  {
-    id: null,
-    label: 'Rien',
-    activeClass: 'bg-white/10 text-white',
-    hint: 'Un simple mouvement d\'argent, sans effet sur les compteurs.',
-  },
-  {
-    id: SETTLES_DEBT,
-    label: 'Une dette',
-    activeClass: 'bg-teal-500/15 text-teal-400',
-    hint: 'Remet à zéro ce que l\'un doit à l\'autre (dépenses avancées, perso payé sur le joint).',
-  },
-  {
-    id: SETTLES_CONTRIBUTION,
-    label: 'Des apports',
-    activeClass: 'bg-sky-500/15 text-sky-400',
-    hint: 'Rattrape un retard de versements au pot sans virer à l\'étranger : l\'écart se referme de deux fois le montant.',
-  },
-]
 
 export default function TransactionFormModal({ onClose, currentUid, existing }) {
   const { settings } = useAppData()
@@ -67,8 +43,6 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
   const [amountReceived, setAmountReceived] = useState(
     existing?.amountReceived != null ? String(existing.amountReceived) : '',
   )
-  // Ce que ce virement solde : rien, une dette, ou un retard d'apports.
-  const [settles, setSettles] = useState(existing?.settles ?? null)
   const [recurrence, setRecurrence] = useState(existing?.recurrence || 'one-off')
   const [date, setDate] = useState(existing?.date ? existing.date.slice(0, 10) : todayISO())
   const [endDate, setEndDate] = useState(existing?.endDate ? existing.endDate.slice(0, 10) : '')
@@ -80,11 +54,16 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
   // Le compte qui porte le montant saisi : la source pour une dépense ou un
   // virement, la destination pour un revenu.
   const sourceAccountId = kind === 'income' ? toAccount : fromAccount
-  const sourceCurrency = getAccountCurrency(sourceAccountId)
   const destCurrency = getAccountCurrency(toAccount)
-  const isCrossCurrency = kind === 'transfer' && sourceCurrency !== destCurrency
-  const isBetweenPersonals = getAccount(fromAccount).kind === 'personal'
-    && getAccount(toAccount).kind === 'personal'
+
+  // La devise du compte n'est qu'un défaut. Chacun a de l'argent des deux
+  // côtés du globe derrière un seul compte perso : Lise doit pouvoir alimenter
+  // le pot avec son salaire australien, en A$, sans qu'on lui impose l'euro.
+  const [currency, setCurrency] = useState(
+    existing?.currency || getAccountCurrency(existing?.fromAccount || existing?.toAccount || JOINT_ACCOUNT_ID),
+  )
+  const otherCurrency = currency === 'EUR' ? 'AUD' : 'EUR'
+  const isCrossCurrency = kind === 'transfer' && currency !== destCurrency
 
   // Passer en mode virement pré-remplit le cas courant : mon perso → le pot.
   useEffect(() => {
@@ -113,20 +92,12 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
     setSplit(getDefaultSplit(sourceAccountId))
   }, [sourceAccountId, isEdit])
 
-  // Hors virement, il n'y a rien à solder.
+  // Idem pour la devise : elle suit le compte tant qu'on n'édite pas une
+  // ligne existante, où le choix déjà fait doit être respecté.
   useEffect(() => {
-    if (kind !== 'transfer') setSettles(null)
-  }, [kind])
-
-  useEffect(() => {
-    if (isEdit || kind !== 'transfer') return
-    // Un virement entre persos solde presque toujours quelque chose, et la
-    // dette est le cas le plus courant — le rééquilibrage se choisit juste à
-    // côté. Dès qu'un bout n'est plus un compte perso, « des apports » n'a
-    // plus de sens : on le retire plutôt que de laisser un choix impossible.
-    if (isBetweenPersonals) setSettles((prev) => prev ?? SETTLES_DEBT)
-    else setSettles((prev) => (prev === SETTLES_CONTRIBUTION ? null : prev))
-  }, [kind, isBetweenPersonals, isEdit])
+    if (isEdit) return
+    setCurrency(getAccountCurrency(sourceAccountId))
+  }, [sourceAccountId, isEdit])
 
   const parsedAmount = useMemo(() => {
     const raw = parseFloat(String(amount).replace(',', '.'))
@@ -142,8 +113,8 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
   // vrai chiffre relevé sur le compte d'arrivée.
   const estimatedReceived = useMemo(() => {
     if (!isCrossCurrency || parsedAmount == null) return null
-    return convert(parsedAmount, sourceCurrency, destCurrency, rate)
-  }, [isCrossCurrency, parsedAmount, sourceCurrency, destCurrency, rate])
+    return convert(parsedAmount, currency, destCurrency, rate)
+  }, [isCrossCurrency, parsedAmount, currency, destCurrency, rate])
 
   const categoriesForKind = getCategoriesByType(kind)
 
@@ -163,7 +134,7 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
       fromAccount: kind === 'income' ? null : fromAccount,
       toAccount: kind === 'expense' ? null : toAccount,
       split,
-      settles,
+      currency,
       recurrence,
       date,
       endDate: recurrence !== 'one-off' && endDate ? endDate : null,
@@ -255,11 +226,13 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
           />
         </Field>
 
-        {/* Montant — la devise découle du compte, elle ne se choisit pas. */}
-        <Field label={`Montant en ${sourceCurrency}`}>
+        {/* Montant. La double flèche bascule EUR ⇄ AUD : c'est le même
+            compte perso, mais pas le même argent — l'euro de France ou le
+            dollar du salaire australien. */}
+        <Field label="Montant">
           <div className="relative">
             <span className="absolute left-0 top-0 bottom-0 w-12 flex items-center justify-center text-base font-semibold text-white/50 border-r border-white/10 pointer-events-none">
-              {CURRENCY_SYMBOL[sourceCurrency]}
+              {CURRENCY_SYMBOL[currency]}
             </span>
             <input
               type="text"
@@ -267,16 +240,25 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0,00"
-              className={`${inputClass} pl-14 text-lg tabular`}
+              className={`${inputClass} pl-14 pr-20 text-lg tabular`}
             />
+            <button
+              type="button"
+              onClick={() => setCurrency(otherCurrency)}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium text-white/50 hover:text-white hover:bg-white/[0.06] transition"
+              aria-label={`Saisir en ${otherCurrency} plutôt qu'en ${currency}`}
+              title={`Basculer en ${otherCurrency}`}
+            >
+              <ArrowLeftRight size={12} strokeWidth={2.2} />
+              {otherCurrency}
+            </button>
           </div>
           <p className="text-[11px] text-white/35 mt-1.5">
-            Devise du compte {getAccount(sourceAccountId).label.toLowerCase()}
-            {sourceCurrency === 'EUR' && parsedAmount > 0 && (
-              <> · ≈ {convert(parsedAmount, 'EUR', 'AUD', rate).toFixed(0)} A$</>
-            )}
-            {sourceCurrency === 'AUD' && parsedAmount > 0 && (
-              <> · ≈ {convert(parsedAmount, 'AUD', 'EUR', rate).toFixed(0)} €</>
+            {currency === getAccountCurrency(sourceAccountId)
+              ? `Devise du compte ${getAccount(sourceAccountId).label.toLowerCase()}`
+              : `Saisi en ${currency}, converti pour le compte ${getAccount(sourceAccountId).label.toLowerCase()}`}
+            {parsedAmount > 0 && (
+              <> · ≈ {convert(parsedAmount, currency, otherCurrency, rate).toFixed(0)} {CURRENCY_SYMBOL[otherCurrency]}</>
             )}
           </p>
         </Field>
@@ -333,55 +315,6 @@ export default function TransactionFormModal({ onClose, currentUid, existing }) 
               {getSplitHint(kind, sourceAccountId, split)}
             </p>
           </Field>
-        )}
-
-        {/* Ce que ce virement solde. Entre deux comptes persos il y a trois
-            réponses possibles, et elles ne tombent pas dans le même compteur :
-            un rééquilibrage d'apports n'est PAS une dette. */}
-        {kind === 'transfer' && isBetweenPersonals && (
-          <Field label="Ce virement solde">
-            <div className="grid grid-cols-3 gap-1.5">
-              {SETTLES_OPTIONS.map((option) => {
-                const active = settles === option.id
-                return (
-                  <button
-                    key={option.id || 'none'}
-                    type="button"
-                    onClick={() => setSettles(option.id)}
-                    className={`px-2 py-2.5 rounded-xl text-[11px] font-medium transition border ${
-                      active
-                        ? `${option.activeClass} border-white/20`
-                        : 'bg-white/[0.03] text-white/50 border-white/10 hover:border-white/20'
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                )
-              })}
-            </div>
-            <p className="text-[11px] text-white/40 mt-1.5 leading-relaxed">
-              {SETTLES_OPTIONS.find((o) => o.id === settles)?.hint}
-            </p>
-          </Field>
-        )}
-
-        {kind === 'transfer' && !isBetweenPersonals && (
-          <label className="flex items-start gap-3 px-3 py-3 bg-white/[0.03] border border-white/10 rounded-xl cursor-pointer">
-            <input
-              type="checkbox"
-              checked={settles === SETTLES_DEBT}
-              onChange={(e) => setSettles(e.target.checked ? SETTLES_DEBT : null)}
-              className="mt-0.5 h-4 w-4 accent-sky-400"
-            />
-            <span className="min-w-0">
-              <span className="block text-sm text-white">C'est un remboursement</span>
-              <span className="block text-[11px] text-white/40 mt-0.5">
-                {settles === SETTLES_DEBT
-                  ? 'Ce virement solde une dette et ne compte pas comme un apport au pot.'
-                  : 'Un virement vers le joint compte comme un apport et rééquilibre les versements.'}
-              </span>
-            </span>
-          </label>
         )}
 
         <Field label="Catégorie">
