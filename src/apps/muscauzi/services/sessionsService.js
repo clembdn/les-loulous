@@ -130,9 +130,21 @@ export function hasWork(entry) {
   return entry.skipped || entry.sets.length > 0
 }
 
-export function isEntryComplete(entry) {
+/**
+ * L'occurrence est-elle bouclée ?
+ *
+ * `prescribedSets` est la prescription VIVANTE, celle du programme d'aujourd'hui
+ * — pas celle figée dans l'entrée. Les deux divergent dès qu'on passe un
+ * exercice de 4×8 à 5×8 : l'entrée enregistrée dit toujours 4, et sans ce
+ * paramètre la pastille affichait « terminé » pendant que le libellé juste à
+ * côté annonçait « 4/5 ». La prescription figée ne sert qu'à relire
+ * l'historique, jamais à juger la séance du jour.
+ */
+export function isEntryComplete(entry, prescribedSets) {
   if (!entry) return false
-  return entry.skipped || doneSets(entry).length >= entry.prescribedSets
+  if (entry.skipped) return true
+  const required = Math.max(1, Number(prescribedSets) || entry.prescribedSets || 1)
+  return doneSets(entry).length >= required
 }
 
 export function hasCompletedWork(session) {

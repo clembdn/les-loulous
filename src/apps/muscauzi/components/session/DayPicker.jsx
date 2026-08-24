@@ -1,7 +1,6 @@
 import { cn } from '@/shared/lib/utils.js'
-import { DAY_SHORT, DAY_LABELS, isoDayOfWeek } from '@/shared/lib/dates.js'
-
-const DOWS = [1, 2, 3, 4, 5, 6, 7]
+import { DAY_SHORT, dayLabel, isoDayOfWeek } from '@/shared/lib/dates.js'
+import { DOWS } from '../../services/programService.js'
 
 // Sélecteur de jour de la semaine.
 //
@@ -23,7 +22,7 @@ export default function DayPicker({ value, onChange, counts = {}, today, classNa
           <button
             key={dow}
             onClick={() => onChange(dow)}
-            aria-label={`${DAY_LABELS[dow % 7]} — ${count > 0 ? `${count} exercices` : 'repos'}`}
+            aria-label={`${dayLabel(dow)} — ${count > 0 ? `${count} exercices` : 'repos'}`}
             aria-pressed={isActive}
             className={cn(
               'relative h-[52px] rounded-xl border flex flex-col items-center justify-center gap-0.5',

@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import LineChart from '@/shared/ui/LineChart.jsx'
+import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
+import { Skeleton } from '@/shared/ui/Skeleton.jsx'
 import { formatDateFr, formatDateShortFr, fromLocalDateKey } from '@/shared/lib/dates.js'
-import { cn } from '@/shared/lib/utils.js'
 import {
-  METRICS, metricsFor, defaultMetricId, formatMetric, formatSets, historyForExercise,
+  metricsFor, defaultMetricId, formatMetric, formatSets, historyForExercise,
 } from '../utils/metrics.js'
 import { getExerciseType, weightHint } from '../config/exercises.js'
 import ExerciseNote from '../components/session/ExerciseNote.jsx'
@@ -12,7 +13,11 @@ import ExerciseNote from '../components/session/ExerciseNote.jsx'
 export default function ExerciseDetailView({ exercise, sessions, isLoading, note, onSaveNote, onBack }) {
   const available = metricsFor(exercise)
   const [metricId, setMetricId] = useState(() => defaultMetricId(exercise))
-  const metric = METRICS[metricId] || available[0]
+  // On choisit dans les métriques VALABLES pour cet exercice, pas dans toutes.
+  // Repasser un mouvement en poids du corps laissait sinon la courbe sur le
+  // volume, qui vaut zéro partout : un graphe plat qu'on lit comme une
+  // régression alors que rien n'a été perdu.
+  const metric = available.find((m) => m.id === metricId) || available[0]
 
   // Un point par date : si le mouvement figure plusieurs fois dans la séance,
   // toutes ses occurrences sont agrégées — jamais deux points le même jour.
@@ -38,26 +43,17 @@ export default function ExerciseDetailView({ exercise, sessions, isLoading, note
 
       <ExerciseNote note={note} onSave={(text) => onSaveNote(exercise.id, text)} />
 
-      {available.length > 1 && (
-        <div className="inline-flex p-1 rounded-xl bg-surface-2 border border-border mb-4">
-          {available.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => setMetricId(m.id)}
-              className={cn(
-                'px-3.5 h-9 rounded-lg text-sm font-medium transition',
-                m.id === metricId ? 'bg-accent text-accent-fg' : 'text-muted hover:text-fg',
-              )}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <SegmentedTabs
+        items={available}
+        active={metric.id}
+        onChange={setMetricId}
+        desktopHidden={false}
+        className="mb-4"
+      />
 
       <div className="rounded-2xl border border-border bg-surface p-4 mb-6">
         {isLoading && series.length === 0 ? (
-          <div className="h-[220px] animate-pulse rounded-xl bg-surface-2" />
+          <Skeleton className="h-[220px] border-0 bg-surface-2" />
         ) : series.length === 0 ? (
           <p className="py-16 text-center text-sm text-muted">
             Pas encore de série validée pour cet exercice.
@@ -89,7 +85,7 @@ export default function ExerciseDetailView({ exercise, sessions, isLoading, note
                     <span className="block text-[11px] text-faint">{h.occurrences} passages</span>
                   )}
                 </span>
-                <span className="text-xs text-muted tabular text-right">{formatSets(h.sets)}</span>
+                <span className="text-xs text-muted tabular text-right">{formatSets(h.sets, exercise)}</span>
               </div>
             ))}
           </div>

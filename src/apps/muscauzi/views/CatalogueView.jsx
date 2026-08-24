@@ -6,6 +6,8 @@ import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
 import { Input } from '@/shared/ui/Input.jsx'
 import ConfirmDialog from '@/shared/ui/ConfirmDialog.jsx'
+import SwipeRow from '@/shared/ui/SwipeRow.jsx'
+import { SkeletonList } from '@/shared/ui/Skeleton.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { EXERCISE_TYPES, DEFAULT_TYPE, getExerciseType } from '../config/exercises.js'
 import { useExercises } from '../hooks/useMuscData.js'
@@ -103,11 +105,7 @@ export default function CatalogueView({ onNavigate }) {
       )}
 
       {isLoading && exercises.length === 0 ? (
-        <div className="space-y-2">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-[58px] rounded-xl border border-border bg-surface animate-pulse" />
-          ))}
-        </div>
+        <SkeletonList count={4} itemClassName="h-[58px]" />
       ) : exercises.length === 0 && !creating ? (
         <div className="text-center py-14 px-6 rounded-2xl border border-dashed border-border">
           <ListChecks size={28} className="mx-auto text-faint" />
@@ -128,28 +126,32 @@ export default function CatalogueView({ onNavigate }) {
                 }}
               />
             ) : (
-              <div
+              <SwipeRow
                 key={ex.id}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl border border-border bg-surface"
+                className="rounded-xl border border-border"
+                left={{ icon: Pencil, label: 'Modifier', tone: 'accent', onAction: () => setEditingId(ex.id) }}
+                right={{ icon: Trash2, label: 'Supprimer', tone: 'danger', onAction: () => askDelete(ex) }}
               >
-                <span className="flex-1 min-w-0">
-                  <span className="block text-[15px] font-medium text-fg truncate">{ex.name}</span>
-                  <span className="block text-xs text-muted mt-0.5">
-                    {getExerciseType(ex.type).label}
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[15px] font-medium text-fg truncate">{ex.name}</span>
+                    <span className="block text-xs text-muted mt-0.5">
+                      {getExerciseType(ex.type).label}
+                    </span>
                   </span>
-                </span>
-                <Button variant="ghost" size="icon" aria-label={`Modifier ${ex.name}`} onClick={() => setEditingId(ex.id)}>
-                  <Pencil size={15} />
-                </Button>
-                <Button
-                  variant="danger"
-                  size="icon"
-                  aria-label={`Supprimer ${ex.name}`}
-                  onClick={() => askDelete(ex)}
-                >
-                  <Trash2 size={15} />
-                </Button>
-              </div>
+                  <Button variant="ghost" size="icon" aria-label={`Modifier ${ex.name}`} onClick={() => setEditingId(ex.id)}>
+                    <Pencil size={15} />
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="icon"
+                    aria-label={`Supprimer ${ex.name}`}
+                    onClick={() => askDelete(ex)}
+                  >
+                    <Trash2 size={15} />
+                  </Button>
+                </div>
+              </SwipeRow>
             )
           ))}
         </div>

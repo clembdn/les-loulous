@@ -46,12 +46,144 @@ export function formatMetric(value, metricId) {
   return m.unit ? `${rounded} ${m.unit}` : String(rounded)
 }
 
-// « 60 kg × 8 · 60 × 8 · 55 × 8 » — le rappel compact de la dernière fois.
-export function formatSets(sets, { unit = 'kg' } = {}) {
+/**
+ * « 60 kg × 8 · 60 × 8 · 55 × 8 » — le rappel compact de la dernière fois.
+ *
+ * L'unité n'est écrite que sur la première série : répétée quatre fois, elle
+ * noie les chiffres qu'on est venu lire.
+ *
+ * Le POIDS DU CORPS a sa propre écriture. Sa charge vaut 0, et le format
+ * commun affichait donc « 0 kg × 12 » — un zéro qui se lit comme une erreur de
+ * saisie. Non lesté, seules les répétitions sont dites ; lesté, le lest est
+ * signé (« +10 kg ») pour qu'on ne le confonde pas avec une charge totale.
+ */
+/**
+ * Une charge, écrite en français : 62,5 — jamais 62.5.
+ *
+ * Le champ de saisie accepte déjà la virgule, mais ce qui revenait de Firestore
+ * était un nombre relu par `String()`, donc pointé. Taper « 62,5 » puis
+ * recharger l'écran changeait le séparateur sous les yeux : deux écritures pour
+ * une même charge, dont aucune n'était fausse — juste incohérentes.
+ */
+export function formatWeight(value) {
+  return String(Number(value) || 0).replace('.', ',')
+}
+
+function formatOneSet(set, exercise, isFirst) {
+  const weight = Number(set?.weightKg) || 0
+  if (isBodyweight(exercise) && weight <= 0) {
+    return isFirst ? `${set.reps} reps` : String(set.reps)
+  }
+  const shown = isBodyweight(exercise) ? `+${formatWeight(weight)}` : formatWeight(weight)
+  return isFirst ? `${shown} kg × ${set.reps}` : `${shown} × ${set.reps}`
+}
+
+export function formatSets(sets, exercise) {
   if (!sets || sets.length === 0) return null
-  return sets
-    .map((s, i) => (i === 0 ? `${s.weightKg} ${unit} × ${s.reps}` : `${s.weightKg} × ${s.reps}`))
-    .join(' · ')
+  return sets.map((s, i) => formatOneSet(s, exercise, i === 0)).join(' · ')
+}
+
+/**
+ * Valeur d'UNE série, pour la comparer à une autre.
+ *
+ * Charge et répétitions ne se comparent pas terme à terme — 70 × 5 vaut-il
+ * mieux que 60 × 8 ? Epley tranche en ramenant les deux à un maximum estimé.
+ *
+ * Au poids du corps, la charge est nulle et Epley rendrait 0 pour tout le
+ * monde : seules les répétitions comptent. Le lest n'entre donc pas dans la
+ * comparaison — passer de 12 reps à 12 reps + 10 kg n'est pas signalé.
+ */
+export function setScore(set, exercise) {
+  const reps = Number(set?.reps) || 0
+  if (reps <= 0) return 0
+  if (isBodyweight(exercise)) return reps
+  const weight = Number(set?.weightKg) || 0
+  if (weight <= 0) return 0
+  return weight * (1 + reps / 30)
+}
+
+export function bestScore(sets, exercise) {
+  return (sets || []).reduce((best, s) => Math.max(best, setScore(s, exercise)), 0)
+}
+
+/**
+ * A-t-on fait mieux que la dernière fois ?
+ *
+ * On compare la MEILLEURE série de chaque séance, pas leur somme : ajouter une
+ * cinquième série n'est pas un progrès de force, et un jour où l'on s'arrête à
+ * trois séries ne doit pas effacer un record établi sur la première.
+ *
+ * Sans référence, on ne dit rien : une première fois n'est pas un progrès.
+ */
+export function beatsPrevious(sets, previousSets, exercise) {
+  const previous = bestScore(previousSets, exercise)
+  if (previous <= 0) return false
+  return bestScore(sets, exercise) > previous
+}
+
+/**
+ * Ce qu'une séance pèse, en trois chiffres.
+ *
+ * Ce sont les seuls totaux comparables d'une séance à l'autre : ils ne
+ * dépendent d'aucun exercice en particulier, donc changer un mouvement dans le
+ * programme ne fait pas décrocher la comparaison.
+ *
+ * Le volume est nul pour une séance entièrement au poids du corps — c'est
+ * exact, pas une panne : il n'y a pas de charge à additionner. L'affichage doit
+ * donc savoir se taire plutôt qu'annoncer « 0 kg ».
+ */
+export function sessionTotals(session) {
+  let volume = 0
+  let sets = 0
+  let reps = 0
+  for (const entry of Object.values(session?.entries || {})) {
+    for (const s of doneSets(entry)) {
+      sets += 1
+      reps += s.reps
+      volume += s.weightKg * s.reps
+    }
+  }
+  return { volume, sets, reps }
+}
+
+/**
+ * Le travail d'une séance regroupé PAR MOUVEMENT.
+ *
+ * Un exercice présent deux fois dans la même séance ne doit pas produire deux
+ * lignes : ses séries sont mises bout à bout, comme le fait déjà l'écran
+ * Progrès. On garde le rang de sa PREMIÈRE occurrence pour retrouver l'ordre
+ * dans lequel la séance a été faite.
+ */
+export function workByExercise(session) {
+  const out = {}
+  for (const entry of Object.values(session?.entries || {})) {
+    const done = doneSets(entry)
+    if (!entry.exerciseId || done.length === 0) continue
+    const current = out[entry.exerciseId]
+    if (current) {
+      current.sets.push(...done)
+      current.order = Math.min(current.order, entry.order)
+    } else {
+      out[entry.exerciseId] = {
+        exerciseId: entry.exerciseId,
+        name: entry.name,
+        order: entry.order,
+        sets: [...done],
+      }
+    }
+  }
+  return out
+}
+
+/** La série qui vaut le plus — celle qu'on montre pour résumer un mouvement. */
+export function bestSet(sets, exercise) {
+  let best = null
+  let bestValue = 0
+  for (const s of sets || []) {
+    const value = setScore(s, exercise)
+    if (value > bestValue) { bestValue = value; best = s }
+  }
+  return best
 }
 
 /**

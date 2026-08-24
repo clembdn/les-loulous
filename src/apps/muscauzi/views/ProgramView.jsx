@@ -3,9 +3,10 @@ import { Plus, Minus, Trash2, ChevronUp, ChevronDown, X, Search, CalendarRange, 
 import { toast } from 'sonner'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
+import SwipeRow from '@/shared/ui/SwipeRow.jsx'
+import { SkeletonList } from '@/shared/ui/Skeleton.jsx'
 import { Input } from '@/shared/ui/Input.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
-import { cn } from '@/shared/lib/utils.js'
 import { weekParity, isoDayOfWeek } from '@/shared/lib/dates.js'
 import { useExercises, useProgram } from '../hooks/useMuscData.js'
 import { saveProgramDay, resolveLineName, withoutOrphans, DOWS } from '../services/programService.js'
@@ -13,7 +14,13 @@ import { SETTINGS_SUBS } from '../config/navigation.js'
 import DayPicker from '../components/session/DayPicker.jsx'
 import { newInstanceId } from '../utils/ids.js'
 
-const PARITY_LABEL = { odd: 'Semaine impaire', even: 'Semaine paire' }
+// Le choix de parité est un contrôle segmenté comme les autres : deux boutons
+// pleins côte à côte laissaient croire à deux actions, pas à un choix entre
+// deux états d'un même écran.
+const PARITY_TABS = [
+  { id: 'odd',  label: 'Semaine impaire', short: 'Impaire' },
+  { id: 'even', label: 'Semaine paire',   short: 'Paire' },
+]
 
 // Éditeur de programme : parité × jour de la semaine, indépendant par profil.
 // Toute modification ici est sans effet sur les séances déjà enregistrées —
@@ -104,22 +111,13 @@ export default function ProgramView({ onNavigate }) {
 
       <SegmentedTabs items={SETTINGS_SUBS} active="programme" onChange={onNavigate} className="mb-5" />
 
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        {['odd', 'even'].map((p) => (
-          <button
-            key={p}
-            onClick={() => setParity(p)}
-            className={cn(
-              'h-11 rounded-xl text-sm font-medium border transition',
-              p === parity
-                ? 'bg-accent text-accent-fg border-accent'
-                : 'bg-surface-2 text-muted border-border hover:text-fg',
-            )}
-          >
-            {PARITY_LABEL[p]}
-          </button>
-        ))}
-      </div>
+      <SegmentedTabs
+        items={PARITY_TABS}
+        active={parity}
+        onChange={setParity}
+        desktopHidden={false}
+        className="mb-3"
+      />
 
       <DayPicker
         value={dayOfWeek}
@@ -129,16 +127,19 @@ export default function ProgramView({ onNavigate }) {
       />
 
       {isLoading && lines.length === 0 ? (
-        <div className="space-y-2">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-[76px] rounded-xl border border-border bg-surface animate-pulse" />
-          ))}
-        </div>
+        <SkeletonList count={3} itemClassName="h-[76px]" />
       ) : (
         <div className="space-y-2">
-          {lines.map((line, i) => {
-            return (
-              <div key={line.instanceId} className="px-4 py-3 rounded-xl border border-border bg-surface">
+          {/* Glisser duplique ou retire ; les boutons font la même chose et
+              restent les seuls chemins au clavier et à la souris. */}
+          {lines.map((line, i) => (
+            <SwipeRow
+              key={line.instanceId}
+              className="rounded-xl border border-border"
+              left={{ icon: Copy, label: 'Dupliquer', tone: 'accent', onAction: () => duplicateLine(i) }}
+              right={{ icon: Trash2, label: 'Retirer', tone: 'danger', onAction: () => removeLine(i) }}
+            >
+              <div className="px-4 py-3">
                 <div className="flex items-center gap-2">
                   <span className="flex-1 min-w-0 text-[15px] font-medium text-fg truncate">
                     {resolveLineName(line, exerciseById)}
@@ -174,8 +175,8 @@ export default function ProgramView({ onNavigate }) {
                   <Stepper label="reps" value={line.reps} min={1} max={50} onChange={(v) => updateLine(i, { reps: v })} />
                 </div>
               </div>
-            )
-          })}
+            </SwipeRow>
+          ))}
 
           {lines.length === 0 && !picking && (
             <div className="text-center py-10 px-6 rounded-2xl border border-dashed border-border">

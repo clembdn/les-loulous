@@ -5,6 +5,7 @@ import {
 import { db } from '@/shared/lib/firebase.js'
 import { DEFAULT_TYPE, EXERCISE_TYPE_BY_ID } from '../config/exercises.js'
 import { normalizeSession } from './sessionsService.js'
+import { PARITIES } from './programService.js'
 
 // Catalogue d'exercices PERSONNEL : `users/{uid}/exercises/{id}`.
 //
@@ -20,7 +21,6 @@ function sessionDoc(uid, dateKey) { return doc(db, 'users', uid, 'sessions', dat
 function noteDoc(uid, exerciseId) { return doc(db, 'users', uid, 'exerciseNotes', exerciseId) }
 function lastPerfDoc(uid) { return doc(db, 'users', uid, 'meta', 'lastPerf') }
 
-const PARITIES = ['even', 'odd']
 
 function resolveType(raw) {
   return EXERCISE_TYPE_BY_ID[raw] ? raw : DEFAULT_TYPE

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { ChevronRight, LineChart as LineChartIcon } from 'lucide-react'
 import { fromLocalDateKey, formatDateFr } from '@/shared/lib/dates.js'
+import { SkeletonList } from '@/shared/ui/Skeleton.jsx'
 import { useExercises, useSessions, useNotes } from '../hooks/useMuscData.js'
 import { formatSets, latestByExercise } from '../utils/metrics.js'
 import { saveNote } from '../services/notesService.js'
@@ -50,11 +51,7 @@ export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
       </header>
 
       {(exercisesLoading || sessionsLoading) && ordered.length === 0 ? (
-        <div className="space-y-2">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-[62px] rounded-xl border border-border bg-surface animate-pulse" />
-          ))}
-        </div>
+        <SkeletonList count={5} itemClassName="h-[62px]" />
       ) : ordered.length === 0 ? (
         <div className="text-center py-14 px-6 rounded-2xl border border-dashed border-border">
           <LineChartIcon size={28} className="mx-auto text-faint" />
@@ -76,7 +73,7 @@ export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
                 <span className="flex-1 min-w-0">
                   <span className="block text-[15px] font-medium text-fg truncate">{ex.name}</span>
                   <span className="block text-xs text-muted mt-0.5 truncate tabular">
-                    {formatDateFr(fromLocalDateKey(last.date))} · {formatSets(last.sets)}
+                    {formatDateFr(fromLocalDateKey(last.date))} · {formatSets(last.sets, ex)}
                   </span>
                 </span>
                 <ChevronRight size={16} className="shrink-0 text-faint" />

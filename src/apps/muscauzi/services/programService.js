@@ -16,10 +16,6 @@ function programDoc(uid, parity) {
   return doc(db, 'users', uid, 'program', parity)
 }
 
-export function isParity(value) {
-  return PARITIES.includes(value)
-}
-
 // Secours pour une ligne sans instanceId (données antérieures à son
 // introduction). DÉTERMINISTE — un aléatoire tiré à chaque lecture changerait
 // à chaque écho de Firestore et la séance perdrait ses saisies — mais

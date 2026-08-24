@@ -3,18 +3,21 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Only Lise and Clément can access the shared couple space.
-    function isAuthorizedUser() {
-      return request.auth != null
-        && (
-          request.auth.uid == "J8xOqDWZv5gEss5CBbQ7kQOsTwV2"
-          || request.auth.uid == "o8wLosYoh7b989P9gQyZCk8tt3l1"
-        );
-    }
-
+    // Les deux seuls comptes, énumérés UNE fois.
+    //
+    // Cette liste existait en double : une copie pour « qui a le droit
+    // d'entrer », une autre pour « à qui un document peut être attribué ». Deux
+    // listes du même fait finissent par diverger, et celle qu'on oublie de
+    // mettre à jour n'échoue pas bruyamment — elle laisse simplement passer, ou
+    // refuse, sans qu'on sache laquelle a parlé.
     function isValidPersonUid(uid) {
       return uid == "J8xOqDWZv5gEss5CBbQ7kQOsTwV2"
         || uid == "o8wLosYoh7b989P9gQyZCk8tt3l1";
+    }
+
+    // Only Lise and Clément can access the shared couple space.
+    function isAuthorizedUser() {
+      return request.auth != null && isValidPersonUid(request.auth.uid);
     }
 
     function hasValidMetadata(data) {
@@ -265,6 +268,12 @@ service cloud.firestore {
 
     // Seul le propriétaire touche ses séances, ses courbes et ses pesées :
     // aucune vue partagée entre les deux profils.
+    //
+    // `isOwner` prouve DÉJÀ qui écrit — `request.auth.uid` est le segment de
+    // chemin lui-même. Revalider `updatedBy` par-dessus, comme le fait l'espace
+    // partagé où plusieurs mains écrivent dans le même document, n'ajouterait
+    // aucune garantie ici : ça ne ferait que multiplier les façons de refuser
+    // une écriture légitime à laquelle il manque un champ décoratif.
     function isOwner(uid) {
       return isAuthorizedUser() && request.auth.uid == uid;
     }
@@ -295,18 +304,30 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 80
-        && isExerciseType(request.resource.data.type)
-        && hasValidMetadata(request.resource.data);
+        && isExerciseType(request.resource.data.type);
 
       allow delete: if isOwner(uid);
     }
 
+    // ── Pourquoi `create, update` et jamais `write` ────────────────────────
+    //
+    // `write` couvre AUSSI la suppression. Or lors d'une suppression
+    // `request.resource` est nul : la condition déréférençait alors du vide,
+    // l'expression partait en erreur, et la règle refusait — pas par décision,
+    // par accident. Une suppression qu'on voudrait autoriser un jour aurait
+    // échoué sans qu'aucune ligne ici ne dise pourquoi. Chaque verbe est donc
+    // énoncé, et `delete` répond pour lui-même.
+
     // Programme : un document par parité de semaine, contenant les sept jours.
     match /users/{uid}/program/{parity} {
       allow read: if isOwner(uid);
-      allow write: if isOwner(uid)
+      allow create, update: if isOwner(uid)
         && (parity == "even" || parity == "odd")
-        && request.resource.data.days is map;
+        && request.resource.data.days is map
+        // Sept jours, pas un de plus : une clé inattendue serait un bogue
+        // d'écriture, et un document de programme n'a aucune raison d'enfler.
+        && request.resource.data.days.size() <= 7;
+      allow delete: if isOwner(uid);
     }
 
     // Séances. `entries` est une map indexée par instanceId (l'occurrence de
@@ -316,13 +337,25 @@ service cloud.firestore {
     // (`programSnapshot`) n'est plus écrite, seulement relue.
     match /users/{uid}/sessions/{dateId} {
       allow read: if isOwner(uid);
-      allow write: if isOwner(uid)
+      allow create, update: if isOwner(uid)
         && isDateId(dateId)
         && request.resource.data.entries is map
-        && (request.resource.data.parity == "even" || request.resource.data.parity == "odd")
-        && request.resource.data.dayOfWeek is int
-        && request.resource.data.dayOfWeek >= 1
-        && request.resource.data.dayOfWeek <= 7;
+        // `parity` et `dayOfWeek` ne sont validés QUE s'ils sont là.
+        //
+        // Les exiger sur toute écriture cassait le nettoyage : supprimer un
+        // exercice fusionne un retrait d'entrées dans chaque séance concernée,
+        // sans connaître la parité de séances écrites avant que ce champ
+        // n'existe. L'état fusionné n'en portait donc pas, la règle refusait, et
+        // c'est le LOT ENTIER qui échouait — l'exercice restait au catalogue
+        // sans que rien n'explique le refus.
+        && (!("parity" in request.resource.data)
+            || request.resource.data.parity == "even"
+            || request.resource.data.parity == "odd")
+        && (!("dayOfWeek" in request.resource.data)
+            || (request.resource.data.dayOfWeek is int
+                && request.resource.data.dayOfWeek >= 1
+                && request.resource.data.dayOfWeek <= 7));
+      allow delete: if isOwner(uid);
     }
 
     // Cache de la dernière perf, dénormalisé dans un seul document : ouvrir la
@@ -332,9 +365,10 @@ service cloud.firestore {
     // présent dans la requête.
     match /users/{uid}/meta/lastPerf {
       allow read: if isOwner(uid);
-      allow write: if isOwner(uid)
+      allow create, update: if isOwner(uid)
         && (!("byInstance" in request.resource.data) || request.resource.data.byInstance is map)
         && (!("byExercise" in request.resource.data) || request.resource.data.byExercise is map);
+      allow delete: if isOwner(uid);
     }
 
     // Notes de réglages, PAR UTILISATEUR — la hauteur de siège de l'un n'est
@@ -351,11 +385,12 @@ service cloud.firestore {
     // Pesées, une par jour.
     match /users/{uid}/weights/{dateId} {
       allow read: if isOwner(uid);
-      allow write: if isOwner(uid)
+      allow create, update: if isOwner(uid)
         && isDateId(dateId)
         && request.resource.data.value is number
         && request.resource.data.value > 0
         && request.resource.data.value < 500;
+      allow delete: if isOwner(uid);
     }
 
     // Deny everything else.

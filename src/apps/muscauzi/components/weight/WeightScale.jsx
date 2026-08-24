@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
 import { cn } from '@/shared/lib/utils.js'
+import { tick } from '@/shared/lib/haptics.js'
 
 // Règle graduée HORIZONTALE, façon balance mécanique : on fait défiler la
 // règle sous une aiguille fixe.
@@ -37,6 +38,25 @@ export default function WeightScale({ value, onChange }) {
   const [ready, setReady] = useState(false)
   const [dragging, setDragging] = useState(false)
 
+  /**
+   * La règle a-t-elle été touchée PAR QUELQU'UN ?
+   *
+   * Sans cette distinction, la règle annonçait ses propres mouvements comme
+   * s'ils venaient de l'utilisateur. Se positionner au montage déclenche un
+   * événement de défilement ; si la mise en page n'est pas encore stabilisée,
+   * le navigateur borne la position demandée, la valeur relue diffère de celle
+   * reçue, et `onChange` partait avec un chiffre que personne n'avait choisi.
+   *
+   * L'écran au-dessus en concluait « l'utilisateur a réglé la balance » et
+   * cessait définitivement d'adopter la dernière pesée venue de Firestore : la
+   * molette restait bloquée sur sa valeur de repli. C'est ce qui affichait 70 kg
+   * à chaque ouverture.
+   *
+   * On n'annonce donc un changement que si un geste réel l'a précédé.
+   */
+  const userDriven = useRef(false)
+  const engage = () => { userDriven.current = true }
+
   // Positionnement initial, et recalage si la valeur change de l'extérieur —
   // mais jamais pendant que l'utilisateur manipule la règle.
   useEffect(() => {
@@ -50,6 +70,10 @@ export default function WeightScale({ value, onChange }) {
   const handleScroll = useCallback(() => {
     const el = scrollerRef.current
     if (!el) return
+    // Défilement provoqué par le code (positionnement, recalage) : il ne dit
+    // rien de l'intention de l'utilisateur, donc il ne remonte rien.
+    if (!userDriven.current) return
+
     isScrolling.current = true
     if (!rafId.current) {
       rafId.current = requestAnimationFrame(() => {
@@ -57,15 +81,18 @@ export default function WeightScale({ value, onChange }) {
         const next = offsetToValue(el.scrollLeft)
         if (next !== value) {
           // Un cran = une micro-vibration, comme le curseur d'une balance.
-          navigator.vibrate?.(4)
+          tick()
           onChange(next)
         }
       })
     }
-    // Fin de défilement : on se cale pile sur la graduation.
+    // Fin de défilement : on se cale pile sur la graduation. Le recalage est
+    // lui-même un défilement du code — d'où la remise à zéro AVANT de le
+    // lancer, pour qu'il ne se réannonce pas.
     clearTimeout(settleTimer.current)
     settleTimer.current = setTimeout(() => {
       isScrolling.current = false
+      userDriven.current = false
       const target = valueToOffset(offsetToValue(el.scrollLeft))
       if (Math.abs(el.scrollLeft - target) > 0.5) el.scrollTo({ left: target, behavior: 'smooth' })
     }, 140)
@@ -78,6 +105,9 @@ export default function WeightScale({ value, onChange }) {
 
   // Glisser à la souris : le pavé tactile n'a pas besoin d'un geste horizontal.
   const onPointerDown = (e) => {
+    engage()
+    // Au doigt, le défilement natif suffit : seul le pointeur a besoin qu'on
+    // lui fabrique un glisser-déposer.
     if (e.pointerType === 'touch') return
     const el = scrollerRef.current
     if (!el) return
@@ -119,6 +149,7 @@ export default function WeightScale({ value, onChange }) {
       <div
         ref={scrollerRef}
         onScroll={handleScroll}
+        onWheel={engage}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
@@ -136,6 +167,7 @@ export default function WeightScale({ value, onChange }) {
         aria-valuenow={value}
         aria-valuetext={`${value.toFixed(1)} kilogrammes`}
         onKeyDown={(e) => {
+          engage()
           if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); nudge(-0.1) }
           if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); nudge(0.1) }
           if (e.key === 'PageDown') { e.preventDefault(); nudge(-1) }

@@ -1,10 +1,15 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
-import { Dumbbell, Scale, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import {
+  Dumbbell, Scale, ArrowRight, ChevronLeft, ChevronRight, X, MoveHorizontal,
+} from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import {
   toLocalDateKey, fromLocalDateKey, shiftDateKey, weekParity, isoDayOfWeek, formatDayFr,
 } from '@/shared/lib/dates.js'
 import { cn } from '@/shared/lib/utils.js'
+import { ProgressRing } from '@/shared/ui/Progress.jsx'
+import { SkeletonList } from '@/shared/ui/Skeleton.jsx'
+import { Button } from '@/shared/ui/Button.jsx'
 import {
   useExercises, useProgram, useSession, useLastPerf, useWeights, useNotes,
 } from '../hooks/useMuscData.js'
@@ -12,10 +17,35 @@ import { saveEntry, clearEntry, hasWork, isEntryComplete } from '../services/ses
 import { withoutOrphans } from '../services/programService.js'
 import { saveNote } from '../services/notesService.js'
 import ExerciseAccordion from '../components/session/ExerciseAccordion.jsx'
+import RestTimer from '../components/session/RestTimer.jsx'
+import SessionSummary from '../components/session/SessionSummary.jsx'
 
 // On peut rattraper une séance oubliée jusqu'à une semaine en arrière. Au-delà,
 // le programme a pu changer : ce qui s'est passé se lit dans Progrès.
 const BACKFILL_DAYS = 6
+
+// Repos par défaut, puis la dernière durée choisie. Réglé une fois pour toutes
+// à la première séance : personne ne veut rouvrir un écran de réglages entre
+// deux séries.
+const REST_KEY = 'muscauzi.restSeconds'
+const REST_DEFAULT = 90
+const REST_MIN = 15
+const REST_MAX = 600
+
+const HINT_KEY = 'muscauzi.swipeHintSeen'
+
+// localStorage est indisponible en navigation privée sur certains navigateurs,
+// et lève à la lecture comme à l'écriture. Un réglage de confort ne doit pas
+// pouvoir empêcher une séance de s'afficher.
+function readStored(key, fallback) {
+  try {
+    const raw = window.localStorage.getItem(key)
+    return raw == null ? fallback : raw
+  } catch { return fallback }
+}
+function writeStored(key, value) {
+  try { window.localStorage.setItem(key, String(value)) } catch { /* tant pis */ }
+}
 
 export default function SessionView({ onOpenExercise, onOpenWeight }) {
   const { currentUid } = useAuth()
@@ -92,13 +122,49 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
     )
   }, [currentUid, dateKey, parity, dayOfWeek, lastPerf])
 
+  // ── Minuteur de repos ──────────────────────────────────────────────────────
+  const [restSeconds, setRestSeconds] = useState(
+    () => clampRest(Number(readStored(REST_KEY, REST_DEFAULT))),
+  )
+  const [rest, setRest] = useState(null)
+  const restCount = useRef(0)
+
+  const startRest = useCallback((label) => {
+    // On ne chronomètre pas un rattrapage : la séance d'hier est déjà finie.
+    if (dateKey !== todayKey) return
+    restCount.current += 1
+    setRest({ id: restCount.current, startedAt: Date.now(), duration: restSeconds, label })
+  }, [dateKey, todayKey, restSeconds])
+
+  // Rallonger le repos en cours vaut aussi pour les suivants : c'est le seul
+  // endroit où l'on découvre que 90 s ne suffisent pas sur cet exercice-là.
+  const adjustRest = useCallback((delta) => {
+    setRest((r) => {
+      if (!r) return r
+      const duration = clampRest(r.duration + delta)
+      setRestSeconds(duration)
+      writeStored(REST_KEY, duration)
+      return { ...r, duration }
+    })
+  }, [])
+
+  const dismissRest = useCallback(() => setRest(null), [])
+
+  // Changer de jour ferme le minuteur : il appartenait à la séance qu'on quitte.
+  useEffect(() => { setRest(null) }, [dateKey])
+
   const isLoading = exercisesLoading || sessionLoading || even.isLoading || odd.isLoading
   const total = lines.length
-  const doneCount = lines.filter((l) => isEntryComplete(session?.entries?.[l.instanceId])).length
+  const doneCount = lines.filter(
+    (l) => isEntryComplete(session?.entries?.[l.instanceId], l.prescribedSets),
+  ).length
+  const isSessionDone = total > 0 && doneCount === total
 
   const renderLine = (line, extra) => (
     <ExerciseAccordion
-      key={line.instanceId}
+      // La date fait partie de l'identité : sans elle, passer d'aujourd'hui à
+      // hier réutilisait le composant avec ses champs de saisie encore chargés.
+      key={`${dateKey}:${line.instanceId}`}
       line={line}
       extra={extra}
       exercise={exerciseById[line.exerciseId] || null}
@@ -111,6 +177,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
       onClear={() => clearEntry(currentUid, dateKey, line.instanceId, currentUid)}
       onOpenDetail={onOpenExercise}
       onSaveNote={(exerciseId, text) => saveNote(currentUid, exerciseId, text, currentUid)}
+      onRest={startRest}
     />
   )
 
@@ -144,33 +211,53 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
           </DateNav>
         </div>
 
-        <div className="flex items-center justify-center gap-3 mt-1">
-          {total > 0 && (
-            <span className="text-sm text-muted tabular">
-              {doneCount}/{total} exercice{total > 1 ? 's' : ''} terminé{doneCount > 1 ? 's' : ''}
+        {/* L'avancement se lit en une image plutôt qu'en une fraction : on sait
+            où on en est sans lire, téléphone à bout de bras. */}
+        {total > 0 && (
+          <div className="flex items-center justify-center gap-3 mt-3">
+            <ProgressRing size={40} stroke={3.5} value={doneCount} max={total}>
+              <span className="text-[11px] font-semibold text-fg tabular">{doneCount}</span>
+            </ProgressRing>
+            <span className="text-sm text-muted">
+              sur {total} exercice{total > 1 ? 's' : ''}
             </span>
-          )}
-          {!isToday && (
+          </div>
+        )}
+
+        {!isToday && (
+          <div className="text-center mt-2">
             <button
               onClick={() => setDateKey(todayKey)}
               className="text-sm text-accent hover:opacity-80 transition"
             >
               Aujourd'hui
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </header>
 
       {isToday && dayOfWeek === 1 && <WeighInNudge dateKey={dateKey} onGo={onOpenWeight} />}
 
+      {isSessionDone && (
+        <SessionSummary
+          session={session}
+          dateKey={dateKey}
+          exerciseById={exerciseById}
+          onSeeProgress={() => onOpenExercise(null)}
+        />
+      )}
+
       {isLoading && total === 0 ? (
-        <SkeletonList />
+        <SkeletonList count={4} className="space-y-2.5" itemClassName="h-[68px] rounded-2xl" />
       ) : total === 0 && extras.length === 0 ? (
         <EmptyDay />
       ) : (
-        <div className="space-y-2.5">
-          {lines.map((line) => renderLine(line, false))}
-        </div>
+        <>
+          {total > 0 && <SwipeHint />}
+          <div className="space-y-2.5">
+            {lines.map((line) => renderLine(line, false))}
+          </div>
+        </>
       )}
 
       {extras.length > 0 && (
@@ -184,8 +271,16 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
           </div>
         </section>
       )}
+
+      <RestTimer rest={rest} onAdjust={adjustRest} onDismiss={dismissRest} />
     </div>
   )
+}
+
+function clampRest(seconds) {
+  const n = Number(seconds)
+  if (!Number.isFinite(n)) return REST_DEFAULT
+  return Math.min(REST_MAX, Math.max(REST_MIN, Math.round(n)))
 }
 
 function DateNav({ onClick, disabled, label, children }) {
@@ -203,6 +298,36 @@ function DateNav({ onClick, disabled, label, children }) {
     >
       {children}
     </button>
+  )
+}
+
+/**
+ * Le geste ne se devine pas : rien à l'écran ne dit qu'une ligne glisse.
+ *
+ * Un repère montré UNE fois, puis plus jamais — la place d'un mode d'emploi
+ * n'est pas au-dessus de la séance qu'on vient ouvrir entre deux séries.
+ */
+function SwipeHint() {
+  const [seen, setSeen] = useState(() => readStored(HINT_KEY, '') === '1')
+  if (seen) return null
+
+  const dismiss = () => { writeStored(HINT_KEY, '1'); setSeen(true) }
+
+  return (
+    <div className="mb-3 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border border-dashed border-border-strong">
+      <MoveHorizontal size={15} className="shrink-0 text-accent" />
+      <p className="flex-1 text-[11px] leading-relaxed text-muted">
+        Glisse une série <span className="text-fg">d'un côté ou de l'autre</span> pour la marquer
+        faite — ou touche la pastille.
+      </p>
+      <button
+        onClick={dismiss}
+        aria-label="J'ai compris"
+        className="h-7 w-7 shrink-0 rounded-lg flex items-center justify-center text-faint hover:text-fg transition"
+      >
+        <X size={14} />
+      </button>
+    </div>
   )
 }
 
@@ -235,16 +360,6 @@ function EmptyDay() {
       <p className="text-sm text-muted mt-1">
         Repos — ou ajoute des exercices à ce jour dans les réglages.
       </p>
-    </div>
-  )
-}
-
-function SkeletonList() {
-  return (
-    <div className="space-y-2.5">
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="h-[68px] rounded-2xl border border-border bg-surface animate-pulse" />
-      ))}
     </div>
   )
 }
