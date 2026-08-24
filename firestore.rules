@@ -72,7 +72,16 @@ service cloud.firestore {
         && isValidRecurrence(data.recurrence)
         && isValidRate(data)
         && (data.amountReceived == null
-            || (data.amountReceived is number && data.amountReceived >= 0));
+            || (data.amountReceived is number && data.amountReceived >= 0))
+        // Provenance d'un import de relevé : l'identifiant que la banque a
+        // donné à l'opération, et le format du fichier. Bornés : ils viennent
+        // d'un fichier que personne n'a relu ligne à ligne.
+        && (!('externalId' in data)
+            || data.externalId == null
+            || (data.externalId is string && data.externalId.size() <= 200))
+        && (!('source' in data)
+            || data.source == null
+            || (data.source is string && data.source.size() <= 20));
     }
 
     // Transactions

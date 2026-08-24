@@ -1,5 +1,5 @@
 import { useMemo, Fragment, useState } from 'react'
-import { Plus, Search, Plane, SlidersHorizontal, X, Check } from 'lucide-react'
+import { Plus, Search, Plane, SlidersHorizontal, X, Check, Upload } from 'lucide-react'
 import { useAppData } from '../context/AppDataContext.jsx'
 import { useUI } from '../context/UIContext.jsx'
 import { AUTHORIZED_UIDS, getPerson } from '@/shared/config/people.js'
@@ -55,7 +55,7 @@ function groupByMonth(events) {
     }))
 }
 
-export default function TransactionsView() {
+export default function TransactionsView({ onNavigate }) {
   const { transactions, settings, isLoading } = useAppData()
   const userColors = settings.userColors
   const { openForm } = useUI()
@@ -134,13 +134,24 @@ export default function TransactionsView() {
       <div className="max-w-3xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 xl:px-16 pt-8 lg:pt-10">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold tracking-tight text-white">Transactions</h1>
-          <button
-            onClick={() => openForm(null)}
-            className="h-10 w-10 lg:hidden rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition"
-            aria-label="Ajouter"
-          >
-            <Plus size={18} strokeWidth={2.5} />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Sur desktop, l'import a son entrée dans la sidebar ; ici c'est
+                le seul chemin pour l'atteindre. */}
+            <button
+              onClick={() => onNavigate?.('import')}
+              className="lg:hidden h-10 px-3.5 rounded-full bg-white/[0.06] border border-white/10 text-white/70 inline-flex items-center gap-1.5 text-xs font-medium hover:text-white active:scale-95 transition"
+            >
+              <Upload size={14} />
+              Importer
+            </button>
+            <button
+              onClick={() => openForm(null)}
+              className="h-10 w-10 lg:hidden rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition"
+              aria-label="Ajouter"
+            >
+              <Plus size={18} strokeWidth={2.5} />
+            </button>
+          </div>
         </div>
 
         <div className="lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 xl:gap-14">

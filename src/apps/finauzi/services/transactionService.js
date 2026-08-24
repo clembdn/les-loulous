@@ -1,5 +1,5 @@
 import {
-  collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc,
+  collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, writeBatch,
   query, orderBy,
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
@@ -104,6 +104,11 @@ function normalize(raw) {
     category: resolveCategory(raw.category, kind),
     notes: raw.notes || null,
     isActive: raw.isActive !== false,
+    // Provenance : `externalId` est l'identifiant que la banque a donné à
+    // l'opération (FITID d'un OFX). C'est lui qui empêche un second import du
+    // même relevé de créer des doublons. Nul sur une saisie manuelle.
+    externalId: raw.externalId || null,
+    source: raw.source || null,
     createdAt: raw.createdAt,
     createdBy: raw.createdBy,
     updatedAt: raw.updatedAt,
@@ -183,6 +188,8 @@ function buildPayload(input) {
     category: resolveCategory(input.category, kind),
     notes: input.notes ? String(input.notes).trim() || null : null,
     isActive: input.isActive !== false,
+    externalId: input.externalId || null,
+    source: input.source || null,
   }
 }
 
@@ -208,6 +215,34 @@ export async function updateTransaction(id, input, currentUid) {
 
 export async function deleteTransaction(id) {
   await deleteDoc(txDoc(id))
+}
+
+// Import d'un relevé : tout part en un seul lot, donc en une seule écriture
+// facturée et surtout en une seule mise à jour de l'UI — créer quarante
+// lignes une par une ferait clignoter l'écran quarante fois.
+//
+// Firestore plafonne un lot à 500 opérations ; au-delà on enchaîne les lots.
+// La promesse n'est volontairement pas attendue côté appelant : hors ligne,
+// elle ne se résout qu'au retour du réseau, alors que le cache local, lui,
+// est déjà à jour.
+const BATCH_LIMIT = 450
+
+export async function createTransactionsBatch(inputs, currentUid) {
+  const now = new Date().toISOString()
+  for (let start = 0; start < inputs.length; start += BATCH_LIMIT) {
+    const batch = writeBatch(db)
+    for (const input of inputs.slice(start, start + BATCH_LIMIT)) {
+      batch.set(doc(txCollection()), {
+        ...buildPayload(input),
+        createdAt: now,
+        createdBy: currentUid,
+        updatedAt: now,
+        updatedBy: currentUid,
+      })
+    }
+    await batch.commit()
+  }
+  return inputs.length
 }
 
 // ─── Raccourcis de règlement ──────────────────────────────────────────────

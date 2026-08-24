@@ -10,6 +10,7 @@ const TransactionsView = lazy(() => import('./views/TransactionsView.jsx'))
 const BudgetsView = lazy(() => import('./views/BudgetsView.jsx'))
 const JointAccountView = lazy(() => import('./views/JointAccountView.jsx'))
 const BalanceView = lazy(() => import('./views/BalanceView.jsx'))
+const ImportView = lazy(() => import('./views/ImportView.jsx'))
 
 function Splash() {
   return (
@@ -21,7 +22,8 @@ function Splash() {
 
 function ActiveView({ active, onNavigate }) {
   switch (active) {
-    case 'transactions': return <TransactionsView />
+    case 'transactions': return <TransactionsView onNavigate={onNavigate} />
+    case 'import':       return <ImportView />
     case 'budgets':      return <BudgetsView />
     case 'joint':        return <JointAccountView onNavigate={onNavigate} />
     case 'balance':      return <BalanceView onNavigate={onNavigate} />

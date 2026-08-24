@@ -16,6 +16,10 @@ export const DEFAULT_SETTINGS = {
   contributionTargetEUR: 2000,
   budgets: {},
   userColors: {},
+  // Catégorisation apprise à l'import d'un relevé : { « carrefour »:
+  // « groceries » }. Corriger une catégorie une fois suffit à ce que les
+  // imports suivants tombent juste, sur les deux téléphones.
+  importRules: {},
   // Devise d'affichage des montants consolidés.
   currency: 'AUD',
   eurToAud: DEFAULT_EUR_TO_AUD,
@@ -55,6 +59,7 @@ function hydrate(data) {
     safetyBuffers: { ...DEFAULT_SETTINGS.safetyBuffers, ...migrated.safetyBuffers },
     budgets: { ...migrated.budgets },
     userColors: { ...migrated.userColors },
+    importRules: { ...migrated.importRules },
   }
 }
 

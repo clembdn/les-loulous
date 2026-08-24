@@ -1,4 +1,4 @@
-import { Home, List, PieChart, Users, Scale, Wallet } from 'lucide-react'
+import { Home, List, PieChart, Users, Scale, Wallet, Upload } from 'lucide-react'
 
 // Le compte joint et l'équilibre partagent un onglet sur mobile et
 // apparaissent séparément dans la sidebar desktop.
@@ -17,7 +17,9 @@ export const COMMON_DEFAULT_SUB = 'joint'
 export const MOBILE_TABS = [
   { id: 'dashboard', label: 'Accueil', icon: Home, activeFor: ['dashboard'], route: 'dashboard' },
   { id: 'common', label: 'Commun', icon: Users, activeFor: COMMON_SUB_IDS, route: COMMON_DEFAULT_SUB },
-  { id: 'transactions', label: 'Activité', icon: List, activeFor: ['transactions'], route: 'transactions' },
+  // L'import se lit depuis l'activité : sur mobile, il s'ouvre par le bouton
+  // de l'en-tête plutôt que par un cinquième onglet qui serrerait les autres.
+  { id: 'transactions', label: 'Activité', icon: List, activeFor: ['transactions', 'import'], route: 'transactions' },
   { id: 'budgets', label: 'Budgets', icon: PieChart, activeFor: ['budgets'], route: 'budgets' },
 ]
 
@@ -29,6 +31,7 @@ export const SIDEBAR_SECTIONS = [
     items: [
       { id: 'dashboard', label: 'Accueil', icon: Home },
       { id: 'transactions', label: 'Transactions', icon: List },
+      { id: 'import', label: 'Importer', icon: Upload },
       { id: 'budgets', label: 'Budgets', icon: PieChart },
     ],
   },
