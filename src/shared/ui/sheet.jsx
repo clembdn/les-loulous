@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
@@ -7,9 +8,17 @@ export const SheetTrigger = DialogPrimitive.Trigger
 export const SheetClose = DialogPrimitive.Close
 export const SheetPortal = DialogPrimitive.Portal
 
-function SheetOverlay({ className, ...props }) {
+/**
+ * Radix pose une `ref` sur le voile pour piloter son animation de sortie : il
+ * doit rester monté le temps que la transition se joue, ce qui suppose de
+ * pouvoir mesurer le nœud. Une fonction sans `forwardRef` avale cette `ref` —
+ * React le signalait en console, et le voile disparaissait d'un coup au lieu
+ * de s'effacer.
+ */
+const SheetOverlay = forwardRef(function SheetOverlay({ className, ...props }, ref) {
   return (
     <DialogPrimitive.Overlay
+      ref={ref}
       className={cn(
         'fixed inset-0 z-50 bg-black/60 backdrop-blur-sm',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
@@ -19,7 +28,7 @@ function SheetOverlay({ className, ...props }) {
       {...props}
     />
   )
-}
+})
 
 const sideStyles = {
   right:

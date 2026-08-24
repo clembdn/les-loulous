@@ -22,6 +22,9 @@ function noteDoc(uid, exerciseId) { return doc(db, 'users', uid, 'exerciseNotes'
 function lastPerfDoc(uid) { return doc(db, 'users', uid, 'meta', 'lastPerf') }
 
 
+// Firestore plafonne un lot à 500 opérations ; on garde de la marge.
+const BATCH_LIMIT = 400
+
 function resolveType(raw) {
   return EXERCISE_TYPE_BY_ID[raw] ? raw : DEFAULT_TYPE
 }
@@ -58,6 +61,33 @@ export function addExercise(uid, input, currentUid) {
     updatedAt: now,
     updatedBy: currentUid,
   })
+}
+
+/**
+ * Ajoute plusieurs exercices d'un coup — l'import depuis la bibliothèque.
+ *
+ * Un seul lot plutôt qu'une écriture par exercice : cocher quinze mouvements
+ * ne doit pas produire quinze allers-retours, ni pouvoir s'arrêter à mi-chemin
+ * en laissant un catalogue à moitié rempli.
+ *
+ * Les identifiants sont tirés côté client (`doc()` sans chemin), parce qu'un
+ * lot ne peut pas utiliser `addDoc`.
+ */
+export function addExercises(uid, drafts, currentUid) {
+  if (!drafts || drafts.length === 0) return Promise.resolve()
+  const now = new Date().toISOString()
+  const batch = writeBatch(db)
+  for (const draft of drafts.slice(0, BATCH_LIMIT)) {
+    batch.set(doc(exercisesCol(uid)), {
+      name: String(draft.name || '').trim(),
+      type: resolveType(draft.type),
+      createdAt: now,
+      createdBy: currentUid,
+      updatedAt: now,
+      updatedBy: currentUid,
+    })
+  }
+  return batch.commit()
 }
 
 export function updateExercise(uid, id, updates, currentUid) {
@@ -137,9 +167,6 @@ export async function collectExerciseImpact(uid, exerciseId) {
     instanceIds: [...instanceIds],
   }
 }
-
-// Firestore plafonne un lot à 500 opérations ; on garde de la marge.
-const BATCH_LIMIT = 400
 
 async function commitInChunks(ops) {
   for (let i = 0; i < ops.length; i += BATCH_LIMIT) {

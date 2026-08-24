@@ -326,7 +326,12 @@ service cloud.firestore {
         && request.resource.data.days is map
         // Sept jours, pas un de plus : une clé inattendue serait un bogue
         // d'écriture, et un document de programme n'a aucune raison d'enfler.
-        && request.resource.data.days.size() <= 7;
+        && request.resource.data.days.size() <= 7
+        // Nom de la séance par jour — écrit séparément des lignes, donc
+        // validé seulement quand il fait partie de la requête.
+        && (!("dayNames" in request.resource.data)
+            || (request.resource.data.dayNames is map
+                && request.resource.data.dayNames.size() <= 7));
       allow delete: if isOwner(uid);
     }
 
@@ -354,7 +359,13 @@ service cloud.firestore {
         && (!("dayOfWeek" in request.resource.data)
             || (request.resource.data.dayOfWeek is int
                 && request.resource.data.dayOfWeek >= 1
-                && request.resource.data.dayOfWeek <= 7));
+                && request.resource.data.dayOfWeek <= 7))
+        // Le nom recopié de la séance : c'est lui qui rend deux séances
+        // comparables. Vide est légitime — un programme peut ne pas nommer
+        // ses jours.
+        && (!("name" in request.resource.data)
+            || (request.resource.data.name is string
+                && request.resource.data.name.size() <= 40));
       allow delete: if isOwner(uid);
     }
 

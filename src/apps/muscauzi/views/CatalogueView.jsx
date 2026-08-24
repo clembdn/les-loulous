@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Plus, Trash2, Pencil, Check, X, ListChecks } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Plus, Trash2, Pencil, Check, X, ListChecks, Library } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
@@ -13,8 +13,10 @@ import { EXERCISE_TYPES, DEFAULT_TYPE, getExerciseType } from '../config/exercis
 import { useExercises } from '../hooks/useMuscData.js'
 import { SETTINGS_SUBS } from '../config/navigation.js'
 import {
-  addExercise, updateExercise, collectExerciseImpact, deleteExerciseCascade,
+  addExercise, addExercises, updateExercise, collectExerciseImpact, deleteExerciseCascade,
 } from '../services/exercisesService.js'
+import { exerciseKey } from '../config/exerciseLibrary.js'
+import ExerciseLibrarySheet from '../components/catalogue/ExerciseLibrarySheet.jsx'
 
 const plural = (n) => (n > 1 ? 's' : '')
 
@@ -53,6 +55,29 @@ export default function CatalogueView({ onNavigate }) {
   // s'affiche sans l'attendre.
   const [pending, setPending] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [library, setLibrary] = useState(false)
+  const [importing, setImporting] = useState(false)
+
+  // Ce que le catalogue contient déjà, sous une forme comparable aux noms de
+  // la bibliothèque : accents et casse ne doivent pas créer de faux doublons.
+  const existingKeys = useMemo(
+    () => new Set(exercises.map((e) => exerciseKey(e.name))),
+    [exercises],
+  )
+
+  const importFromLibrary = async (items) => {
+    setImporting(true)
+    try {
+      await addExercises(currentUid, items, currentUid)
+      toast.success(`${items.length} exercice${items.length > 1 ? 's' : ''} ajouté${items.length > 1 ? 's' : ''}`)
+      setLibrary(false)
+    } catch (err) {
+      console.error('[MuscAuzi] import bibliothèque:', err)
+      toast.error('Ajout impossible')
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const askDelete = (exercise) => {
     setPending({ exercise, impact: null })
@@ -99,9 +124,16 @@ export default function CatalogueView({ onNavigate }) {
           }}
         />
       ) : (
-        <Button variant="dashed" size="lg" className="w-full mb-4 text-sm" onClick={() => setCreating(true)}>
-          <Plus size={16} /> Nouvel exercice
-        </Button>
+        // La bibliothèque d'abord : taper un nom à la main est le chemin de
+        // secours, pas le chemin normal.
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <Button size="lg" className="text-sm" onClick={() => setLibrary(true)}>
+            <Library size={16} /> Bibliothèque
+          </Button>
+          <Button variant="dashed" size="lg" className="text-sm" onClick={() => setCreating(true)}>
+            <Plus size={16} /> À la main
+          </Button>
+        </div>
       )}
 
       {isLoading && exercises.length === 0 ? (
@@ -110,7 +142,9 @@ export default function CatalogueView({ onNavigate }) {
         <div className="text-center py-14 px-6 rounded-2xl border border-dashed border-border">
           <ListChecks size={28} className="mx-auto text-faint" />
           <p className="text-base font-medium text-fg mt-3">Catalogue vide</p>
-          <p className="text-sm text-muted mt-1">Commence par ajouter tes exercices.</p>
+          <p className="text-sm text-muted mt-1">
+            Pioche dans la bibliothèque — les exercices courants y sont déjà.
+          </p>
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -156,6 +190,14 @@ export default function CatalogueView({ onNavigate }) {
           ))}
         </div>
       )}
+
+      <ExerciseLibrarySheet
+        open={library}
+        onOpenChange={setLibrary}
+        existing={existingKeys}
+        onAdd={importFromLibrary}
+        busy={importing}
+      />
 
       <ConfirmDialog
         open={!!pending}

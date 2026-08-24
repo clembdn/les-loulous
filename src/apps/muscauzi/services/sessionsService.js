@@ -114,6 +114,11 @@ export function normalizeSession(id, raw) {
     date: id,
     parity: raw.parity === 'even' || raw.parity === 'odd' ? raw.parity : null,
     dayOfWeek: Number(raw.dayOfWeek) || null,
+    // Nom RECOPIÉ le jour même, comme le sont déjà le libellé et la
+    // prescription de chaque entrée. Renommer « Push » en « Haut du corps »
+    // dans le programme ne doit pas réécrire six mois d'historique, ni faire
+    // basculer d'anciennes séances dans une autre famille de comparaison.
+    name: typeof raw.name === 'string' ? raw.name : '',
     entries,
   }
 }
@@ -237,9 +242,9 @@ function refreshLastPerf(uid, dateKey, entry, done, lastPerf) {
 /**
  * Écrit une entrée dans la séance d'une date.
  *
- * `plan` ({ parity, dayOfWeek }) décrit la séance affichée au moment de la
- * saisie. Il est réécrit à chaque fois — c'est une métadonnée, plus une copie
- * dont dépend l'affichage.
+ * `plan` ({ parity, dayOfWeek, name }) décrit la séance affichée au moment de
+ * la saisie. Il est réécrit à chaque fois — c'est une métadonnée, plus une
+ * copie dont dépend l'affichage.
  *
  * Aucun `await` côté UI : le cache Firestore encaisse l'écriture et la
  * synchronise au retour du réseau — la salle capte mal.
@@ -259,6 +264,7 @@ export function saveEntry(uid, dateKey, entry, plan, currentUid, lastPerf) {
   setDoc(sessionDoc(uid, dateKey), {
     parity: plan.parity,
     dayOfWeek: plan.dayOfWeek,
+    name: plan.name || '',
     entries: { [entry.instanceId]: clean },
     updatedAt: now,
     updatedBy: currentUid,

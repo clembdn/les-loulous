@@ -72,7 +72,11 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
   const even = useProgram('even')
   const odd = useProgram('odd')
 
-  const programDays = parity === 'even' ? even.days : odd.days
+  const program = parity === 'even' ? even : odd
+  const programDays = program.days
+  // Le nom du jour au programme : c'est lui qu'on recopie dans la séance et
+  // qu'on affiche en tête.
+  const sessionName = program.names?.[dayOfWeek] || ''
 
   // Un mouvement supprimé du catalogue n'a plus rien à faire dans la séance.
   const catalogueReady = !exercisesLoading
@@ -118,9 +122,9 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
     saveEntry(
       currentUid, dateKey,
       { ...line, sets, skipped },
-      { parity, dayOfWeek }, currentUid, lastPerf,
+      { parity, dayOfWeek, name: sessionName }, currentUid, lastPerf,
     )
-  }, [currentUid, dateKey, parity, dayOfWeek, lastPerf])
+  }, [currentUid, dateKey, parity, dayOfWeek, sessionName, lastPerf])
 
   // ── Minuteur de repos ──────────────────────────────────────────────────────
   const [restSeconds, setRestSeconds] = useState(
@@ -194,8 +198,11 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
           </DateNav>
 
           <div className="flex-1 min-w-0 text-center">
-            <p className="text-xs uppercase tracking-[0.18em] text-faint">
-              {isToday ? 'Séance du jour' : 'Rattrapage'}
+            <p className="text-xs uppercase tracking-[0.18em] text-faint truncate">
+              {/* Le nom passe DEVANT la date : c'est lui qui dit ce qu'on
+                  vient faire aujourd'hui, et il rattache la séance à toutes
+                  les autres du même nom. */}
+              {sessionName || (isToday ? 'Séance du jour' : 'Rattrapage')}
             </p>
             <h1 className="text-2xl font-semibold tracking-[-0.02em] text-fg mt-0.5 first-letter:uppercase truncate">
               {formatDayFr(fromLocalDateKey(dateKey))}
@@ -242,6 +249,9 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
         <SessionSummary
           session={session}
           dateKey={dateKey}
+          name={sessionName}
+          parity={parity}
+          dayOfWeek={dayOfWeek}
           exerciseById={exerciseById}
           onSeeProgress={() => onOpenExercise(null)}
         />

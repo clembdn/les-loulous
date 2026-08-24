@@ -7,7 +7,7 @@ import { DOWS } from '../../services/programService.js'
 // Sept cases identiques ne disent rien : on ne sait pas lesquelles portent une
 // séance, ni où on est dans la semaine. Chaque case annonce donc sa charge
 // (nombre d'exercices, ou « repos »), et aujourd'hui est repéré par un point.
-export default function DayPicker({ value, onChange, counts = {}, today, className }) {
+export default function DayPicker({ value, onChange, counts = {}, names = {}, today, className }) {
   // `today` : le jour réel de la date consultée, pas forcément celui du jour —
   // on peut rattraper la séance d'hier.
   const marked = today || isoDayOfWeek(new Date())
@@ -16,13 +16,17 @@ export default function DayPicker({ value, onChange, counts = {}, today, classNa
     <div className={cn('grid grid-cols-7 gap-1.5', className)}>
       {DOWS.map((dow) => {
         const count = counts[dow] || 0
+        // Le nom ne tient pas dans une case de 44 px : il passe par le libellé
+        // accessible et l'info-bulle, là où il ne bouscule rien.
+        const name = names[dow] || ''
         const isActive = dow === value
         const isToday = dow === marked
         return (
           <button
             key={dow}
             onClick={() => onChange(dow)}
-            aria-label={`${dayLabel(dow)} — ${count > 0 ? `${count} exercices` : 'repos'}`}
+            title={name || undefined}
+            aria-label={`${dayLabel(dow)}${name ? ` — ${name}` : ''} — ${count > 0 ? `${count} exercices` : 'repos'}`}
             aria-pressed={isActive}
             className={cn(
               'relative h-[52px] rounded-xl border flex flex-col items-center justify-center gap-0.5',

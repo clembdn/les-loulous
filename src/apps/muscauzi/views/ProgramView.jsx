@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { Plus, Minus, Trash2, ChevronUp, ChevronDown, X, Search, CalendarRange, Copy } from 'lucide-react'
+import { useState, useMemo, useEffect } from 'react'
+import { Plus, Minus, Trash2, ChevronUp, ChevronDown, X, Search, CalendarRange, Copy, Tag } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
@@ -9,7 +9,9 @@ import { Input } from '@/shared/ui/Input.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
 import { weekParity, isoDayOfWeek } from '@/shared/lib/dates.js'
 import { useExercises, useProgram } from '../hooks/useMuscData.js'
-import { saveProgramDay, resolveLineName, withoutOrphans, DOWS } from '../services/programService.js'
+import {
+  saveProgramDay, saveProgramDayName, resolveLineName, withoutOrphans, DOWS, MAX_DAY_NAME,
+} from '../services/programService.js'
 import { SETTINGS_SUBS } from '../config/navigation.js'
 import DayPicker from '../components/session/DayPicker.jsx'
 import { newInstanceId } from '../utils/ids.js'
@@ -32,7 +34,7 @@ export default function ProgramView({ onNavigate }) {
   const [picking, setPicking] = useState(false)
 
   const { exercises, exerciseById, isLoading: exercisesLoading } = useExercises()
-  const { days, isLoading } = useProgram(parity)
+  const { days, names, isLoading } = useProgram(parity)
 
   // Le catalogue fait foi : une ligne qui ne pointe sur aucun exercice n'est
   // pas affichée, et la première modification du jour la fait disparaître du
@@ -87,6 +89,11 @@ export default function ProgramView({ onNavigate }) {
     commit(lines.filter((_, i) => i !== index))
   }
 
+  const renameDay = (name) => {
+    saveProgramDayName(currentUid, parity, dayOfWeek, name, currentUid)
+      .catch(() => toast.error('Enregistrement impossible'))
+  }
+
   const move = (index, delta) => {
     const target = index + delta
     if (target < 0 || target >= lines.length) return
@@ -123,7 +130,14 @@ export default function ProgramView({ onNavigate }) {
         value={dayOfWeek}
         onChange={setDayOfWeek}
         counts={dayCounts}
-        className="mb-5"
+        names={names}
+        className="mb-3"
+      />
+
+      <DayNameField
+        key={`${parity}-${dayOfWeek}`}
+        value={names[dayOfWeek] || ''}
+        onSave={renameDay}
       />
 
       {isLoading && lines.length === 0 ? (
@@ -201,6 +215,47 @@ export default function ProgramView({ onNavigate }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Le nom du jour — « Push », « Jambes », « Haut du corps ».
+ *
+ * Enregistré à la sortie du champ et non à chaque frappe : un nom se tape d'une
+ * traite, et écrire à chaque lettre produirait une dizaine d'écritures pour un
+ * seul mot.
+ *
+ * Le brouillon est LOCAL et repart de zéro à chaque jour affiché (d'où la clé
+ * chez l'appelant) : sans ça, changer de jour laissait le nom précédent dans le
+ * champ, prêt à être enregistré sur le mauvais jour.
+ */
+function DayNameField({ value, onSave }) {
+  const [draft, setDraft] = useState(value)
+
+  // Un écho de Firestore ne doit pas écraser ce qu'on est en train de taper :
+  // on ne se réaligne que si le champ est resté intact.
+  useEffect(() => { setDraft(value) }, [value])
+
+  const commit = () => {
+    const trimmed = draft.trim()
+    if (trimmed === value) return
+    onSave(trimmed)
+  }
+
+  return (
+    <div className="relative mb-5">
+      <Tag size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint pointer-events-none" />
+      <Input
+        value={draft}
+        maxLength={MAX_DAY_NAME}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+        placeholder="Nom de la séance — Push, Jambes…"
+        aria-label="Nom de la séance de ce jour"
+        className="pl-9"
+      />
     </div>
   )
 }

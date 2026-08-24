@@ -28,10 +28,11 @@ export function useExercises() {
   return { exercises, exerciseById: byId, isLoading }
 }
 
-// Programme du profil connecté pour une parité donnée.
+// Programme du profil connecté pour une parité donnée : les lignes de chaque
+// jour, et le nom de la séance qu'elles composent.
 export function useProgram(parity) {
   const { currentUid } = useAuth()
-  const [days, setDays] = useState(emptyProgram)
+  const [program, setProgram] = useState(emptyProgram)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -39,13 +40,13 @@ export function useProgram(parity) {
     setIsLoading(true)
     const unsub = subscribeToProgram(
       currentUid, parity,
-      (d) => { setDays(d); setIsLoading(false) },
+      (p) => { setProgram(p); setIsLoading(false) },
       () => setIsLoading(false),
     )
     return () => unsub()
   }, [currentUid, parity])
 
-  return { days, isLoading }
+  return { days: program.days, names: program.names, isLoading }
 }
 
 export function useSession(dateId) {

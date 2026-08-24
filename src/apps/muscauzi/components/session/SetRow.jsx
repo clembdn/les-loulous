@@ -49,7 +49,16 @@ export default function SetRow({
 
   return (
     <SwipeRow className="rounded-xl" rowClassName="bg-surface" left={action} right={action}>
-      <div className={cn('py-0.5 transition-colors', done && 'bg-accent/[0.04]')}>
+      {/* Une série faite se voit à sa LIGNE, pas seulement à sa pastille.
+          Le teint accent portait 4 % d'opacité : invisible sur un écran de
+          téléphone au soleil, alors que c'est le seul repère qu'on cherche en
+          balayant la liste entre deux séries. */}
+      <div
+        className={cn(
+          '-mx-1.5 px-1.5 py-1.5 rounded-xl transition-colors duration-300 ease-ios',
+          done && 'bg-accent/10 ring-1 ring-inset ring-accent/25',
+        )}
+      >
         <div className="flex items-baseline justify-between gap-2 mb-1">
           <span className="inline-flex items-center gap-2 shrink-0">
             {/* La pastille EST le contrôle : cocher et « c'est fait » ne
@@ -69,7 +78,7 @@ export default function SetRow({
             >
               <Check size={13} strokeWidth={3} />
             </button>
-            <span className={cn('text-[11px] font-medium', done ? 'text-muted' : 'text-faint')}>
+            <span className={cn('text-[11px] font-medium', done ? 'text-accent' : 'text-faint')}>
               {label}
             </span>
           </span>
@@ -87,6 +96,7 @@ export default function SetRow({
             onCommit={onCommit}
             placeholder={previous ? formatWeight(previous.weightKg) : '0'}
             suffix={bodyweight ? 'lest' : 'kg'}
+            done={done}
             ariaLabel={`${bodyweight ? 'Lest' : 'Charge'} — ${label}`}
           />
           <span className="text-faint text-sm shrink-0">×</span>
@@ -97,6 +107,7 @@ export default function SetRow({
             placeholder={previous ? String(previous.reps) : String(prescribedReps || '—')}
             suffix="reps"
             integer
+            done={done}
             ariaLabel={`Répétitions — ${label}`}
           />
           {/* Seules les séries ajoutées à la main se suppriment : une série
@@ -140,7 +151,7 @@ function formatPrevious(previous, bodyweight) {
  * n'aime pas. On filtre nous-mêmes, le champ n'accepte que des chiffres (et une
  * virgule pour les demi-plaques).
  */
-function NumField({ value, onChange, onCommit, placeholder, suffix, integer = false, ariaLabel }) {
+function NumField({ value, onChange, onCommit, placeholder, suffix, integer = false, done = false, ariaLabel }) {
   const sanitize = (raw) => {
     const cleaned = raw.replace(integer ? /[^\d]/g : /[^\d.,]/g, '')
     if (integer) return cleaned.slice(0, 3)
@@ -162,9 +173,12 @@ function NumField({ value, onChange, onCommit, placeholder, suffix, integer = fa
         onBlur={onCommit}
         onFocus={(e) => e.target.select()}
         onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-        className="w-full h-14 pl-3 pr-11 rounded-xl bg-surface-2 border border-border text-lg font-semibold text-fg tabular
-                   placeholder:text-faint placeholder:font-normal
-                   focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus:border-transparent transition"
+        className={cn(
+          'w-full h-14 pl-3 pr-11 rounded-xl border text-lg font-semibold text-fg tabular transition',
+          'placeholder:text-faint placeholder:font-normal',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus:border-transparent',
+          done ? 'bg-surface-2 border-accent/35' : 'bg-surface-2 border-border',
+        )}
       />
       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-faint pointer-events-none">{suffix}</span>
     </label>

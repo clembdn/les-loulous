@@ -6,66 +6,76 @@ import { shiftDateKey, fromLocalDateKey, formatDateFr } from '@/shared/lib/dates
 import { useSessionRange } from '../../hooks/useMuscData.js'
 import { hasCompletedWork } from '../../services/sessionsService.js'
 import {
-  sessionTotals, workByExercise, bestSet, bestScore, formatSets,
+  sessionTotals, workByExercise, bestSet, bestScore, formatSets, latestByExercise,
+  pickReferenceSession,
 } from '../../utils/metrics.js'
 
 /**
  * Le bilan de fin de séance.
  *
- * Coché le dernier exercice, il ne se passait rien : l'écran restait le même et
- * on quittait sans jamais voir la séance comme un tout. C'est pourtant le seul
- * moment où l'on a envie de savoir si on a fait mieux.
+ * ── Deux comparaisons, parce qu'il y a deux questions ───────────────────────
  *
- * ── Comparé à QUOI ──────────────────────────────────────────────────────────
+ * 1. LES TOTAUX se comparent à la dernière séance DE MÊME NOM. Rapprocher une
+ *    séance de celle qui la précède, quelle qu'elle soit, ne veut rien dire :
+ *    un jour de jambes pèse trois fois le volume d'un jour de bras, et l'écart
+ *    ne mesurait alors que l'alternance du programme. À défaut de nom, on
+ *    retombe sur la même case du programme (même parité, même jour) — la
+ *    séance d'il y a deux semaines, qui est bien la même.
  *
- * À la dernière séance qui a porté du vrai travail, pas à la veille : un jour
- * de repos, ou une séance ouverte puis abandonnée, ne sont pas un point de
- * comparaison. On la cherche dans une fenêtre bornée, en remontant depuis hier.
+ * 2. CHAQUE EXERCICE se compare à la dernière fois qu'il a été fait, où que ce
+ *    soit. C'est la seule comparaison qui reste vraie quand le programme
+ *    bouge : déplacer le développé couché du lundi au jeudi, l'ajouter à une
+ *    autre séance ou en changer l'ordre ne doit pas rompre le fil de sa
+ *    progression.
  *
- * Le cache `lastPerf` ne pouvait PAS servir : il est réécrit au fil de la
- * saisie du jour, donc au moment où ce bilan s'affiche il contient déjà les
- * chiffres d'aujourd'hui. Comparer aujourd'hui à lui-même n'aurait rien montré.
+ * Le cache `lastPerf` ne pouvait servir ni à l'un ni à l'autre : il est réécrit
+ * au fil de la saisie, donc au moment où ce bilan s'affiche il contient déjà
+ * les chiffres du jour. Tout se relit dans une fenêtre bornée de séances, qui
+ * s'arrête la veille.
  */
-const LOOKBACK_DAYS = 60
+const LOOKBACK_DAYS = 90
 
-export default function SessionSummary({ session, dateKey, exerciseById, onSeeProgress }) {
+export default function SessionSummary({
+  session, dateKey, name, parity, dayOfWeek, exerciseById, onSeeProgress,
+}) {
   const start = useMemo(() => shiftDateKey(dateKey, -LOOKBACK_DAYS), [dateKey])
   const end = useMemo(() => shiftDateKey(dateKey, -1), [dateKey])
   const { sessions, isLoading } = useSessionRange(start, end)
 
-  // `sessions` est trié par date croissante : la dernière qui compte est la
+  // `sessions` est trié par date croissante : la dernière du filtre est la
   // plus récente.
-  const previous = useMemo(
-    () => [...sessions].reverse().find(hasCompletedWork) || null,
-    [sessions],
+  const reference = useMemo(
+    () => pickReferenceSession(sessions.filter(hasCompletedWork), { name, parity, dayOfWeek }),
+    [sessions, name, parity, dayOfWeek],
   )
 
   const totals = useMemo(() => sessionTotals(session), [session])
-  const previousTotals = useMemo(
-    () => (previous ? sessionTotals(previous) : null),
-    [previous],
+  const referenceTotals = useMemo(
+    () => (reference ? sessionTotals(reference.session) : null),
+    [reference],
   )
 
-  // Les mouvements du jour, dans l'ordre où ils ont été faits, chacun avec sa
-  // meilleure série et son verdict face à la dernière fois.
+  // La dernière trace de CHAQUE mouvement dans la fenêtre, séance par séance.
+  const previousByExercise = useMemo(() => latestByExercise(sessions), [sessions])
+
   const rows = useMemo(() => {
-    const today = workByExercise(session)
-    const before = previous ? workByExercise(previous) : {}
-    return Object.values(today)
+    return Object.values(workByExercise(session))
       .sort((a, b) => a.order - b.order)
       .map((item) => {
         const exercise = exerciseById?.[item.exerciseId] || null
         const best = bestSet(item.sets, exercise)
-        const past = before[item.exerciseId]
+        const past = previousByExercise[item.exerciseId]
         return {
           key: item.exerciseId,
-          name: exerciseById?.[item.exerciseId]?.name || item.name,
+          name: exercise?.name || item.name,
           best: best ? formatSets([best], exercise) : null,
           // Sans passage précédent, il n'y a pas de verdict à rendre.
-          trend: past ? compare(bestScore(item.sets, exercise), bestScore(past.sets, exercise)) : null,
+          trend: past
+            ? compare(bestScore(item.sets, exercise), bestScore(past.sets, exercise))
+            : null,
         }
       })
-  }, [session, previous, exerciseById])
+  }, [session, previousByExercise, exerciseById])
 
   return (
     <section className="slide-up mb-4 rounded-2xl border border-accent/40 bg-accent/[0.06] overflow-hidden">
@@ -74,14 +84,10 @@ export default function SessionSummary({ session, dateKey, exerciseById, onSeePr
           <Trophy size={18} strokeWidth={2.4} />
         </span>
         <div className="flex-1 min-w-0">
-          <p className="text-[15px] font-semibold text-fg">Séance terminée</p>
-          <p className="text-xs text-muted mt-0.5">
-            {isLoading
-              ? 'Comparaison en cours…'
-              : previous
-                ? `Comparé au ${formatDateFr(fromLocalDateKey(previous.date))}`
-                : 'Première séance enregistrée'}
+          <p className="text-[15px] font-semibold text-fg truncate">
+            {name ? `${name} — terminée` : 'Séance terminée'}
           </p>
+          <p className="text-xs text-muted mt-0.5 truncate">{caption(isLoading, reference, name)}</p>
         </div>
       </div>
 
@@ -90,27 +96,35 @@ export default function SessionSummary({ session, dateKey, exerciseById, onSeePr
             corps : « 0 kg » se lirait comme une perte, pas comme une absence. */}
         {totals.volume > 0 && (
           <Stat label="Volume" value={formatKg(totals.volume)} unit="kg"
-            delta={diff(totals.volume, previousTotals?.volume)} format={formatKg} />
+            delta={diff(totals.volume, referenceTotals?.volume)} format={formatKg} />
         )}
         <Stat label="Séries" value={totals.sets}
-          delta={diff(totals.sets, previousTotals?.sets)} />
+          delta={diff(totals.sets, referenceTotals?.sets)} />
         <Stat label="Reps" value={totals.reps}
-          delta={diff(totals.reps, previousTotals?.reps)} />
+          delta={diff(totals.reps, referenceTotals?.reps)} />
       </div>
 
       {rows.length > 0 && (
-        <ul className="mt-4 border-t border-accent/15">
-          {rows.map((row) => (
-            <li
-              key={row.key}
-              className="flex items-center gap-3 px-4 py-2.5 border-b border-accent/10 last:border-0"
-            >
-              <Trend trend={row.trend} />
-              <span className="flex-1 min-w-0 text-[13px] text-fg truncate">{row.name}</span>
-              <span className="shrink-0 text-[12px] text-muted tabular">{row.best}</span>
-            </li>
-          ))}
-        </ul>
+        <>
+          {/* Les flèches ne suivent pas la séance de référence mais chaque
+              mouvement pris à part : le dire évite de lire un écart pour un
+              autre. */}
+          <p className="px-4 mt-4 text-[10px] uppercase tracking-[0.14em] text-faint">
+            Chaque exercice face à la dernière fois
+          </p>
+          <ul className="mt-2 border-t border-accent/15">
+            {rows.map((row) => (
+              <li
+                key={row.key}
+                className="flex items-center gap-3 px-4 py-2.5 border-b border-accent/10 last:border-0"
+              >
+                <Trend trend={row.trend} />
+                <span className="flex-1 min-w-0 text-[13px] text-fg truncate">{row.name}</span>
+                <span className="shrink-0 text-[12px] text-muted tabular">{row.best}</span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       <div className="px-4 pb-4 pt-3">
@@ -120,6 +134,18 @@ export default function SessionSummary({ session, dateKey, exerciseById, onSeePr
       </div>
     </section>
   )
+}
+
+// Dire À QUOI on compare, sinon les écarts ne veulent rien dire.
+function caption(isLoading, reference, name) {
+  if (isLoading) return 'Comparaison en cours…'
+  if (!reference) {
+    return name ? `Première séance « ${name} »` : 'Première séance enregistrée'
+  }
+  const when = formatDateFr(fromLocalDateKey(reference.session.date))
+  return reference.by === 'name'
+    ? `Comparé à « ${name} » du ${when}`
+    : `Comparé au même jour, le ${when}`
 }
 
 function Stat({ label, value, unit, delta, format = String }) {
@@ -153,7 +179,7 @@ function Trend({ trend }) {
     return <Minus size={14} strokeWidth={2.8} className="shrink-0 text-faint" aria-label="Identique" />
   }
   // Premier passage : un point neutre, pas une flèche qui mentirait.
-  return <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-border-strong ml-[6px] mr-[6px]" />
+  return <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-border-strong mx-[6px]" />
 }
 
 function compare(now, before) {

@@ -187,6 +187,39 @@ export function bestSet(sets, exercise) {
 }
 
 /**
+ * À QUELLE séance passée comparer celle qu'on vient de finir ?
+ *
+ * Par son NOM d'abord. C'est la seule identité stable d'une séance : « Push »
+ * reste « Push » qu'on le fasse le dimanche ou le mardi, qu'on en change
+ * l'ordre ou qu'on y ajoute un exercice.
+ *
+ * À défaut de nom, par la même CASE du programme — même parité, même jour. En
+ * alternance paire/impaire, c'est la séance d'il y a deux semaines, qui est
+ * bien la même. Comparer simplement à la séance précédente, quelle qu'elle
+ * soit, ne mesurait que l'alternance du programme : un jour de jambes pèse
+ * trois fois le volume d'un jour de bras, et l'écart affiché n'apprenait rien.
+ *
+ * Rien de comparable ? On ne compare pas. Un écart inventé vaut moins que pas
+ * d'écart du tout.
+ *
+ * `sessions` est attendu trié par date croissante et déjà filtré sur les
+ * séances qui portent du travail.
+ */
+export function pickReferenceSession(sessions, { name, parity, dayOfWeek }) {
+  const lastOf = (list) => (list.length > 0 ? list[list.length - 1] : null)
+
+  if (name) {
+    const sameName = lastOf(sessions.filter((s) => s.name === name))
+    if (sameName) return { session: sameName, by: 'name' }
+  }
+  const sameSlot = lastOf(
+    sessions.filter((s) => s.parity === parity && s.dayOfWeek === dayOfWeek),
+  )
+  if (sameSlot) return { session: sameSlot, by: 'slot' }
+  return null
+}
+
+/**
  * Historique d'un MOUVEMENT : un point par date, jamais deux.
  *
  * Si le mouvement figure plusieurs fois dans la même séance, les séries de
@@ -195,27 +228,60 @@ export function bestSet(sets, exercise) {
  * somment, Epley prend le maximum.
  */
 /**
- * Dernière séance avec du travail réel, PAR EXERCICE — dérivé de l'historique
- * complet des séances, jamais du cache `lastPerf`.
+ * Index de l'historique PAR MOUVEMENT : combien de fois, et les dernières fois.
  *
- * `lastPerf` est un simple raccourci d'écriture (pré-remplir la saisie du
- * jour sans relire tout l'historique) : il peut se désynchroniser — un
- * exercice supprimé puis recréé en base sans repasser par l'appli, par
- * exemple — et l'écran Progrès ne doit jamais dépendre de sa fraîcheur pour
- * décider ce qui a été fait.
+ * Dérivé de l'historique des séances, jamais du cache `lastPerf`. Ce cache est
+ * un simple raccourci d'écriture (pré-remplir la saisie du jour sans relire
+ * tout l'historique) : il peut se désynchroniser — un exercice supprimé puis
+ * recréé en base sans repasser par l'appli, par exemple — et l'écran Progrès
+ * ne doit jamais dépendre de sa fraîcheur pour décider ce qui a été fait.
+ *
+ * Les occurrences d'un même mouvement DANS UNE MÊME SÉANCE sont mises bout à
+ * bout, comme le font déjà `historyForExercise` et `workByExercise` : un jour
+ * où l'on passe deux fois sur le développé reste un jour, pas deux.
+ *
+ * `keep` borne le nombre de passages conservés, du plus récent au plus ancien.
+ * Deux suffisent pour dire « mieux que la dernière fois » ; l'index ne garde
+ * pas tout l'historique en mémoire pour autant.
  */
-export function latestByExercise(sessions) {
+export function exerciseHistoryIndex(sessions, keep = 2) {
   const out = {}
-  // `sessions` est trié par date croissante : écraser au fil de l'itération
-  // laisse la plus récente occurrence de chaque exercice.
+  // `sessions` est trié par date croissante : on empile en tête, donc le plus
+  // récent finit en première position.
   for (const session of sessions) {
+    const ofDay = {}
     for (const entry of Object.values(session.entries)) {
       if (!entry.exerciseId) continue
       const done = doneSets(entry)
       if (done.length === 0) continue
-      out[entry.exerciseId] = { date: session.date, sets: done }
+      if (!ofDay[entry.exerciseId]) ofDay[entry.exerciseId] = []
+      ofDay[entry.exerciseId].push(...done)
+    }
+    for (const [exerciseId, sets] of Object.entries(ofDay)) {
+      if (!out[exerciseId]) out[exerciseId] = { count: 0, recent: [] }
+      const item = out[exerciseId]
+      item.count += 1
+      item.recent.unshift({ date: session.date, sets })
+      if (item.recent.length > keep) item.recent.length = keep
     }
   }
+  return out
+}
+
+/**
+ * Dernière séance avec du travail réel, par exercice.
+ *
+ * Dérivé de l'index ci-dessus pour qu'il n'existe qu'UNE définition de « la
+ * dernière fois ». Elle agrège désormais les passages multiples d'un même jour,
+ * ce que cette fonction ne faisait pas : le bilan de fin de séance comparait
+ * alors un total agrégé (aujourd'hui) à un total qui ne l'était pas (avant),
+ * et annonçait un progrès dès qu'on avait fait l'exercice deux fois la fois
+ * précédente.
+ */
+export function latestByExercise(sessions) {
+  const index = exerciseHistoryIndex(sessions, 1)
+  const out = {}
+  for (const [exerciseId, item] of Object.entries(index)) out[exerciseId] = item.recent[0]
   return out
 }
 

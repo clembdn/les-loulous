@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import LineChart from '@/shared/ui/LineChart.jsx'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
+import { cn } from '@/shared/lib/utils.js'
 import { Skeleton } from '@/shared/ui/Skeleton.jsx'
 import { formatDateFr, formatDateShortFr, fromLocalDateKey } from '@/shared/lib/dates.js'
 import {
@@ -10,7 +11,19 @@ import {
 import { getExerciseType, weightHint } from '../config/exercises.js'
 import ExerciseNote from '../components/session/ExerciseNote.jsx'
 
-export default function ExerciseDetailView({ exercise, sessions, isLoading, note, onSaveNote, onBack }) {
+/**
+ * La progression d'un mouvement.
+ *
+ * `embedded` rend le composant DANS UNE MODALE : il perd son enveloppe pleine
+ * page, son retour arrière (la croix de la modale s'en charge) et son titre
+ * (celui de la modale le porte déjà — l'afficher deux fois pousserait la
+ * courbe hors de l'écran). Le défilement appartient au corps de la modale, pas
+ * à l'historique : deux ascenseurs imbriqués et on ne sait plus lequel on
+ * pousse.
+ */
+export default function ExerciseDetailView({
+  exercise, sessions, isLoading, note, onSaveNote, onBack, embedded = false,
+}) {
   const available = metricsFor(exercise)
   const [metricId, setMetricId] = useState(() => defaultMetricId(exercise))
   // On choisit dans les métriques VALABLES pour cet exercice, pas dans toutes.
@@ -28,27 +41,35 @@ export default function ExerciseDetailView({ exercise, sessions, isLoading, note
   )
 
   return (
-    <div className="max-w-xl mx-auto px-4 pt-5 pb-28 lg:pb-10 lg:pt-8 lg:px-6">
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-fg transition mb-4"
-      >
-        <ArrowLeft size={16} /> Tous les exercices
-      </button>
+    <div className={embedded ? '' : 'max-w-xl mx-auto px-4 pt-5 pb-28 lg:pb-10 lg:pt-8 lg:px-6'}>
+      {!embedded && (
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-fg transition mb-4"
+        >
+          <ArrowLeft size={16} /> Tous les exercices
+        </button>
+      )}
 
       <header className="mb-4">
-        <h1 className="text-2xl font-semibold tracking-[-0.02em] text-fg">{exercise.name}</h1>
-        <p className="text-xs text-muted mt-1">{getExerciseType(exercise.type).label}</p>
+        {!embedded && (
+          <h1 className="text-2xl font-semibold tracking-[-0.02em] text-fg">{exercise.name}</h1>
+        )}
+        <p className={cn('text-xs text-muted', !embedded && 'mt-1')}>
+          {getExerciseType(exercise.type).label}
+        </p>
       </header>
 
       <ExerciseNote note={note} onSave={(text) => onSaveNote(exercise.id, text)} />
 
+      {/* Deux segments n'ont pas besoin de 670 px : borné dès qu'il y a de la
+          place, plein largeur sur un téléphone étroit où le pouce vise mal. */}
       <SegmentedTabs
         items={available}
         active={metric.id}
         onChange={setMetricId}
         desktopHidden={false}
-        className="mb-4"
+        className="mb-4 sm:max-w-xs"
       />
 
       <div className="rounded-2xl border border-border bg-surface p-4 mb-6">

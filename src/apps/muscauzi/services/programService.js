@@ -76,18 +76,57 @@ function normalizeDays(raw, parity) {
   return days
 }
 
+/**
+ * Nom de la séance d'un jour — « Push », « Jambes », « Haut du corps ».
+ *
+ * Rangé À CÔTÉ des lignes (`dayNames`), pas dedans. Les jours sont stockés
+ * comme des tableaux de lignes depuis le début ; les transformer en objets
+ * pour y loger un titre aurait obligé à migrer tous les programmes existants,
+ * pour une information qui ne concerne pas les lignes.
+ *
+ * C'est ce nom qui rend deux séances comparables : sans lui, on ne peut que
+ * rapprocher une séance de la précédente, quelle qu'elle soit — et comparer un
+ * jour de jambes à un jour de pectoraux ne dit rien de rien.
+ */
+export const MAX_DAY_NAME = 40
+
+function normalizeNames(raw) {
+  const names = {}
+  for (const dow of DOWS) {
+    const value = raw?.[dow] ?? raw?.[String(dow)]
+    const text = typeof value === 'string' ? value.trim().slice(0, MAX_DAY_NAME) : ''
+    if (text) names[dow] = text
+  }
+  return names
+}
+
 export function emptyProgram() {
-  return normalizeDays(null, 'even')
+  return { days: normalizeDays(null, 'even'), names: {} }
 }
 
 export function subscribeToProgram(uid, parity, callback, onError) {
   return onSnapshot(programDoc(uid, parity), (snap) => {
-    callback(normalizeDays(snap.exists() ? snap.data()?.days : null, parity))
+    const data = snap.exists() ? snap.data() : null
+    callback({
+      days: normalizeDays(data?.days, parity),
+      names: normalizeNames(data?.dayNames),
+    })
   }, (err) => {
     console.error('[MuscAuzi] program error:', err)
     onError?.(err)
     callback(emptyProgram())
   })
+}
+
+// Renommer un jour ne touche pas ses lignes, et inversement : deux écritures
+// distinctes sur deux champs distincts, jamais un document réécrit en entier.
+export function saveProgramDayName(uid, parity, dayOfWeek, name, currentUid) {
+  const trimmed = String(name || '').trim().slice(0, MAX_DAY_NAME)
+  return setDoc(programDoc(uid, parity), {
+    dayNames: { [dayOfWeek]: trimmed },
+    updatedAt: new Date().toISOString(),
+    updatedBy: currentUid,
+  }, { merge: true })
 }
 
 /**

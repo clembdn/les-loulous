@@ -3,6 +3,7 @@ import { getAccount, getSplitLabel } from '../config/accounts.js'
 import { getTransferKind } from './ledger.js'
 import { RECURRENCES_BY_ID } from './recurrence.js'
 import { todayISO } from './dates.js'
+import { downloadText } from '@/shared/lib/download.js'
 
 const HEADERS = [
   'Date',
@@ -74,16 +75,10 @@ export function buildTransactionsCsv(transactions) {
   return lines.join('\n')
 }
 
+// La marque d'ordre des octets est CONSERVÉE ici : cet export-là s'ouvre dans
+// Excel, qui sans elle mange les accents.
 export function downloadCsv(filename, content) {
-  const blob = new Blob(['﻿', content], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
+  downloadText(filename, content, { type: 'text/csv;charset=utf-8;', bom: true })
 }
 
 export function downloadTransactionsCsv(transactions) {
