@@ -10,7 +10,7 @@
 // raccourcis « ce mois-ci » pour les écrans qui n'ont pas besoin de plus.
 
 import { startOfMonth, endOfMonth } from './forecast.js'
-import { getSpendingByCategory, summarizePeriod } from './ledger.js'
+import { getSpendingByCategory } from './ledger.js'
 
 const DAY_MS = 86400000
 
@@ -25,11 +25,6 @@ export function getMonthRange(refDate = new Date()) {
 export function getMonthSpendingByCategory(transactions, { rate, accountId = null, currency = 'EUR', refDate = new Date() } = {}) {
   const { from, to } = getMonthRange(refDate)
   return getSpendingByCategory(transactions, { accountId, from, to, rate, currency })
-}
-
-export function getMonthSummary(transactions, { rate, accountId = null, refDate = new Date() } = {}) {
-  const { from, to } = getMonthRange(refDate)
-  return summarizePeriod(transactions, { accountId, from, to, rate })
 }
 
 // ─── Formatage ────────────────────────────────────────────────────────────

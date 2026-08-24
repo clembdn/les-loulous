@@ -247,3 +247,74 @@ export function expandOccurrences(transactions, { accountId = null, from, to }) 
   events.sort((a, b) => a.timestamp - b.timestamp)
   return events
 }
+
+// Le détail derrière un total : toutes les échéances qui composent les entrées
+// (`flow: 'in'`) ou les sorties (`flow: 'out'`) d'une période.
+//
+// C'est la contrepartie ligne à ligne de `summarizePeriod` — la somme des
+// montants rendus ici retombe exactement sur `inflow` / `outflow`, virements
+// compris quand on regarde un compte. Une récurrence produit une entrée par
+// échéance, avec sa vraie date : un loyer sur six mois, c'est six lignes.
+export function getFlowEntries(transactions, { accountId = null, from, to, rate, currency = 'EUR', flow = 'out' }) {
+  const entries = []
+
+  for (const tx of transactions) {
+    if (tx.isActive === false) continue
+    if (accountId && !touchesAccount(tx, accountId)) continue
+
+    const kind = normalizeKind(tx.kind)
+
+    // Un virement ne compte que dans la vue d'un compte — sur le total
+    // consolidé, il ne fait que déplacer de l'argent déjà compté.
+    if (kind === 'transfer' && !accountId) continue
+
+    if (accountId && kind !== 'transfer') {
+      if (kind === 'expense' && tx.fromAccount !== accountId) continue
+      if (kind === 'income' && tx.toAccount !== accountId) continue
+    }
+
+    // Signé : positif = ça entre, négatif = ça sort. Un même virement peut
+    // être une entrée sur un compte et une sortie sur l'autre.
+    const signed = kind === 'transfer'
+      ? getAccountDelta(tx, accountId, rate)
+      : (kind === 'income' ? 1 : -1) * convert(Number(tx.amount) || 0, tx.currency, currency, txRate(tx, rate))
+
+    if (signed === 0) continue
+    if (flow === 'in' ? signed < 0 : signed > 0) continue
+
+    for (const date of getOccurrences(tx, from, to)) {
+      entries.push({ tx, date, kind, amount: Math.abs(signed) })
+    }
+  }
+
+  entries.sort((a, b) => b.date - a.date)
+  return entries
+}
+
+// Regroupe des échéances par catégorie, du plus gros au plus petit.
+// Un virement n'a pas de catégorie de dépense : il est rangé sous sa nature
+// (apport, retrait, règlement) plutôt que dilué dans « Autre ».
+export function groupEntriesByCategory(entries) {
+  const groups = new Map()
+  for (const entry of entries) {
+    const key = entry.kind === 'transfer'
+      ? (getTransferKind(entry.tx)?.id || 'transfer')
+      : (entry.tx.category || (entry.kind === 'income' ? 'other-income' : 'other-expense'))
+    const group = groups.get(key)
+    if (group) {
+      group.amount += entry.amount
+      group.entries.push(entry)
+    } else {
+      groups.set(key, {
+        key,
+        kind: entry.kind,
+        // Une catégorie sert toujours à colorer la part : les virements
+        // empruntent celle de leur nature, faute d'en avoir une à eux.
+        categoryId: entry.kind === 'transfer' ? (entry.tx.category || 'transfer') : key,
+        amount: entry.amount,
+        entries: [entry],
+      })
+    }
+  }
+  return [...groups.values()].sort((a, b) => b.amount - a.amount)
+}

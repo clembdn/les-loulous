@@ -9,12 +9,14 @@ import { getOrderedAccounts, getAccount } from '../config/accounts.js'
 import { getOpeningBalance } from '../services/settingsService.js'
 import { getAllBalances, getNetWorthEUR } from '../utils/ledger.js'
 import { buildAccountSeries, addMonths } from '../utils/forecast.js'
-import { getMonthSummary } from '../utils/cashflow.js'
+import { summarizePeriod } from '../utils/ledger.js'
+import { DEFAULT_RANGE_ID, getRangeById, getRangePeriod } from '../config/ranges.js'
 import TradeChart from '../components/chart/TradeChart.jsx'
 import CapitalHero from '../components/dashboard/CapitalHero.jsx'
-import RangeSelector, { getRangeById } from '../components/dashboard/RangeSelector.jsx'
+import RangeSelector from '../components/dashboard/RangeSelector.jsx'
 import QuickStats from '../components/dashboard/QuickStats.jsx'
-import MonthBreakdown from '../components/dashboard/MonthBreakdown.jsx'
+import SpendingBreakdown from '../components/dashboard/SpendingBreakdown.jsx'
+import FlowDetailModal from '../components/dashboard/FlowDetailModal.jsx'
 
 const TOTAL_VIEW = 'all'
 
@@ -24,8 +26,10 @@ export default function DashboardView() {
   const { openForm, openSettings } = useUI()
   const me = getPerson(currentUser?.uid, settings.userColors)
   const [accountView, setAccountView] = useState(TOTAL_VIEW)
-  const [rangeId, setRangeId] = useState('6M')
+  const [rangeId, setRangeId] = useState(DEFAULT_RANGE_ID)
   const [hovered, setHovered] = useState(null)
+  // Quel flux est ouvert en détail : 'in', 'out', ou rien.
+  const [detailFlow, setDetailFlow] = useState(null)
 
   const rate = settings.eurToAud
   const orderedAccounts = useMemo(() => getOrderedAccounts(currentUser?.uid), [currentUser?.uid])
@@ -41,25 +45,41 @@ export default function DashboardView() {
   const isTotal = accountView === TOTAL_VIEW
   const selectedAccount = isTotal ? null : getAccount(accountView)
 
-  const monthSummary = useMemo(
-    () => getMonthSummary(transactions, { rate, accountId: isTotal ? null : accountView }),
-    [transactions, rate, accountView, isTotal],
+  // Une seule durée pour tout l'écran : la courbe, les totaux et la
+  // répartition regardent la même fenêtre de temps.
+  const range = getRangeById(rangeId)
+  const mode = range.mode
+  const period = useMemo(
+    () => getRangePeriod(rangeId, { transactions }),
+    [rangeId, transactions],
+  )
+
+  const summary = useMemo(
+    () => summarizePeriod(transactions, {
+      accountId: isTotal ? null : accountView,
+      from: period.from,
+      to: period.to,
+      rate,
+    }),
+    [transactions, rate, accountView, isTotal, period],
   )
 
   // La courbe n'a de sens que compte par compte : additionner un solde en A$
   // et deux soldes en € donnerait une ligne dépendante du taux du jour.
   const series = useMemo(() => {
     if (isTotal) return []
-    const range = getRangeById(rangeId)
     const now = new Date()
-    const from = range.mode === 'future' ? now : addMonths(now, -(range.pastMonths || 12))
-    const to = range.mode === 'past' ? now : addMonths(now, 12)
+    // La courbe part du début de la période choisie — sauf « Prévision »,
+    // qui commence aujourd'hui — et va jusqu'à un an devant dès qu'on
+    // regarde l'avenir.
+    const from = mode === 'future' ? now : period.from
+    const to = mode === 'past' ? now : addMonths(now, 12)
     return buildAccountSeries(transactions, accountView, getOpeningBalance(settings, accountView), {
-      from: range.mode === 'all' ? addMonths(now, -24) : from,
+      from,
       to,
       rate,
     })
-  }, [transactions, settings, accountView, rangeId, rate, isTotal])
+  }, [transactions, settings, accountView, mode, period, rate, isTotal])
 
   if (isLoading) return <Loader />
 
@@ -111,30 +131,35 @@ export default function DashboardView() {
         {isTotal ? (
           <AccountGrid accounts={orderedAccounts} balances={balances} onSelect={setAccountView} />
         ) : (
-          <>
-            <div className="mt-4">
-              <TradeChart data={series} onHover={setHovered} height={260} baselineIndex={0} />
-            </div>
-            <div className="mt-4">
-              <RangeSelector value={rangeId} onChange={setRangeId} />
-            </div>
-          </>
+          <div className="mt-4">
+            <TradeChart data={series} onHover={setHovered} height={260} baselineIndex={0} />
+          </div>
         )}
+
+        <div className="mt-4">
+          <RangeSelector value={rangeId} onChange={setRangeId} />
+        </div>
 
         <div className="mt-8 lg:mt-10 lg:grid lg:grid-cols-2 lg:gap-8 xl:gap-12">
           <div>
             <p className="text-xs uppercase tracking-[0.18em] text-white/30 mb-3">
-              Ce mois-ci
+              {range.periodLabel}
               {!isTotal && <span className="text-white/50"> · {selectedAccount.label.toLowerCase()}</span>}
             </p>
             <QuickStats
-              summary={monthSummary}
+              summary={summary}
               currency={isTotal ? null : selectedAccount.currency}
+              onSelectFlow={setDetailFlow}
             />
           </div>
 
           <div className="mt-8 lg:mt-0">
-            <MonthBreakdown accountId={isTotal ? null : accountView} />
+            <SpendingBreakdown
+              accountId={isTotal ? null : accountView}
+              from={period.from}
+              to={period.to}
+              periodLabel={range.periodLabel}
+            />
           </div>
         </div>
       </div>
@@ -146,6 +171,16 @@ export default function DashboardView() {
       >
         <Plus size={22} strokeWidth={2.5} />
       </button>
+
+      <FlowDetailModal
+        open={detailFlow !== null}
+        onClose={() => setDetailFlow(null)}
+        flow={detailFlow || 'out'}
+        periodLabel={range.periodLabel}
+        accountId={isTotal ? null : accountView}
+        from={period.from}
+        to={period.to}
+      />
     </div>
   )
 }
