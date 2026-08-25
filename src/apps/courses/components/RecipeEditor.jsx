@@ -7,7 +7,7 @@ import { readQuantity, toNumber } from '../utils/quantity.js'
 import { cleanName } from '../utils/aisleGuess.js'
 import ImagePickerSheet from './ImagePickerSheet.jsx'
 
-const EMPTY_ING = { name: '', quantity: '', unit: '' }
+const EMPTY_ING = { name: '', quantity: '', unit: '', foodId: null, gramsOverride: null }
 const TEXTAREA_CLS =
   'w-full px-4 py-2.5 rounded-xl bg-surface-2 border border-border text-sm text-fg placeholder:text-faint focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus:border-transparent transition resize-none'
 
@@ -30,7 +30,16 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
         recipe.ingredients.length
           ? recipe.ingredients.map((i) => {
             const q = readQuantity(i)
-            return { name: i.name, quantity: q.quantity != null ? String(q.quantity) : '', unit: q.unit || '' }
+            return {
+              name: i.name,
+              quantity: q.quantity != null ? String(q.quantity) : '',
+              unit: q.unit || '',
+              // Le lien nutritionnel se pose depuis la fiche recette : on le
+              // transporte tel quel, sinon une simple correction de titre
+              // effacerait tous les aliments deja associes.
+              foodId: i.foodId || null,
+              gramsOverride: i.gramsOverride ?? null,
+            }
           })
           : [{ ...EMPTY_ING }],
       )
@@ -71,7 +80,13 @@ export default function RecipeEditor({ recipe, onCancel, onSave }) {
       imageUrl: image || null,
       ingredients: ingredients
         .filter((i) => i.name.trim())
-        .map((i) => ({ name: cleanName(i.name), quantity: toNumber(i.quantity), unit: i.unit || null })),
+        .map((i) => ({
+          name: cleanName(i.name),
+          quantity: toNumber(i.quantity),
+          unit: i.unit || null,
+          foodId: i.foodId || null,
+          gramsOverride: i.gramsOverride ?? null,
+        })),
       steps: steps.map((s) => s.trim()).filter(Boolean),
       servings: toNumber(servings),
       prepMinutes: toNumber(prepMinutes),

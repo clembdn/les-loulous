@@ -1,15 +1,19 @@
 import { useState, useMemo, useEffect } from 'react'
-import { ArrowLeft, Pencil, Copy, Trash2, Plus, Clock, Users } from 'lucide-react'
+import { ArrowLeft, Pencil, Copy, Trash2, Plus, Clock, Users, AlertCircle } from 'lucide-react'
 import { Button } from '@/shared/ui/Button.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { buildStockIndex, getStockStatus, getStatusMeta } from '../config/pantryStatus.js'
 import { scaleQuantity, formatQuantity } from '../utils/quantity.js'
+import { sumIngredients } from '../utils/nutrition.js'
 import { formatPrepTime } from '../utils/recipeMeta.js'
 import ConfirmDialog from './ConfirmDialog.jsx'
 import AddIngredientsSheet from './AddIngredientsSheet.jsx'
+import NutritionSummary from './NutritionSummary.jsx'
+import IngredientLinkSheet from './IngredientLinkSheet.jsx'
 
-export default function RecipeDetail({ recipe, items, catalog, pantry = [], activeListId, onBack, onEdit, onDuplicate, onDelete, onAdded }) {
+export default function RecipeDetail({ recipe, items, catalog, pantry = [], foods = [], foodById, activeListId, onBack, onEdit, onDuplicate, onDelete, onAdded, onLinkIngredient }) {
   const [addOpen, setAddOpen] = useState(false)
+  const [linking, setLinking] = useState(null)
   const [confirmDel, setConfirmDel] = useState(false)
   const stockIndex = useMemo(() => buildStockIndex(pantry), [pantry])
 
@@ -28,6 +32,15 @@ export default function RecipeDetail({ recipe, items, catalog, pantry = [], acti
     [recipe.ingredients, factor],
   )
   const inStockCount = scaledIngredients.filter((ing) => getStockStatus(ing.name, stockIndex) === 'ok').length
+
+  // Nutrition : on part des ingredients BRUTS et on passe le facteur de portions
+  // au calcul. Sommer les ingredients deja mis a l'echelle laisserait les poids
+  // saisis a la main (gramsOverride) figes quand on change le nombre de portions.
+  const nutrition = useMemo(
+    () => sumIngredients(recipe.ingredients, foodById, factor),
+    [recipe.ingredients, foodById, factor],
+  )
+
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-bg">
@@ -85,6 +98,16 @@ export default function RecipeDetail({ recipe, items, catalog, pantry = [], acti
           <p className="text-xs text-accent mt-2">Quantités ajustées pour {targetServings} portions (recette de base : {baseServings}).</p>
         )}
 
+        <NutritionSummary
+          className="mt-5"
+          totals={nutrition.totals}
+          unresolved={nutrition.unresolved}
+          label={`pour ${targetServings} portion${targetServings > 1 ? 's' : ''}`}
+          onFix={nutrition.unresolved.length
+            ? () => setLinking(nutrition.unresolved[0].index)
+            : null}
+        />
+
         <section className="mt-6">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
             Ingrédients ({recipe.ingredients.length})
@@ -99,18 +122,29 @@ export default function RecipeDetail({ recipe, items, catalog, pantry = [], acti
               {scaledIngredients.map((ing, i) => {
                 const stock = getStockStatus(ing.name, stockIndex)
                 const meta = stock ? getStatusMeta(stock) : null
+                // Un ingredient que le calcul n'a pas su estimer est signale ici :
+                // c'est le seul endroit ou l'utilisateur peut le corriger.
+                const missing = nutrition.unresolved.find((u) => u.index === i)
                 return (
-                  <li key={i} className="flex items-center justify-between gap-3 py-2.5">
-                    <span className="text-[15px] text-fg">{ing.name}</span>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {ing.quantityLabel && <span className="text-sm text-muted">{ing.quantityLabel}</span>}
-                      {meta && (
-                        <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border', meta.pillClass)}>
-                          <span className={cn('h-1.5 w-1.5 rounded-full', meta.dotClass)} />
-                          {meta.label}
-                        </span>
-                      )}
-                    </div>
+                  <li key={i}>
+                    <button
+                      onClick={() => setLinking(i)}
+                      className="w-full flex items-center justify-between gap-3 py-2.5 text-left hover:bg-surface-2 -mx-2 px-2 rounded-lg transition"
+                    >
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[15px] text-fg truncate">{ing.name}</span>
+                        {missing && <AlertCircle size={13} className="text-warning shrink-0" />}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {ing.quantityLabel && <span className="text-sm text-muted">{ing.quantityLabel}</span>}
+                        {meta && (
+                          <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border', meta.pillClass)}>
+                            <span className={cn('h-1.5 w-1.5 rounded-full', meta.dotClass)} />
+                            {meta.label}
+                          </span>
+                        )}
+                      </div>
+                    </button>
                   </li>
                 )
               })}
@@ -142,6 +176,15 @@ export default function RecipeDetail({ recipe, items, catalog, pantry = [], acti
           </Button>
         </div>
       </div>
+
+      <IngredientLinkSheet
+        open={linking != null}
+        ingredient={linking != null ? recipe.ingredients[linking] : null}
+        foods={foods}
+        foodById={foodById}
+        onClose={() => setLinking(null)}
+        onSave={(patch) => onLinkIngredient?.(recipe, linking, patch)}
+      />
 
       <AddIngredientsSheet
         open={addOpen}

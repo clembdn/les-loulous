@@ -3,13 +3,19 @@ import { useAppTheme } from '@/shared/theme/useAppTheme.js'
 import { useCoursesData } from './hooks/useCoursesData.js'
 import { useRecipes } from './hooks/useRecipes.js'
 import { usePantry } from './hooks/usePantry.js'
+import { useFoods } from './hooks/useFoods.js'
+import { useNutritionGoals } from './hooks/useNutritionGoals.js'
 import { useShoppingLists, itemBelongsToList } from './hooks/useShoppingLists.js'
 import Shell from './components/layout/Shell.jsx'
-import { DEFAULT_TAB } from './config/navigation.js'
+import { DEFAULT_TAB, NUTRITION_IDS } from './config/navigation.js'
 import ListView from './views/ListView.jsx'
 import RecipesView from './views/RecipesView.jsx'
 import PlanningView from './views/PlanningView.jsx'
 import FrigoView from './views/FrigoView.jsx'
+import FoodsView from './views/FoodsView.jsx'
+import JournalView from './views/JournalView.jsx'
+import GoalsView from './views/GoalsView.jsx'
+import NutritionTabs from './components/NutritionTabs.jsx'
 import ManageListsSheet from './components/ManageListsSheet.jsx'
 
 export default function CoursesApp() {
@@ -19,6 +25,8 @@ export default function CoursesApp() {
   const { items, catalog, isLoading } = useCoursesData()
   const { recipes, isLoading: recipesLoading } = useRecipes()
   const { pantry, isLoading: pantryLoading } = usePantry()
+  const { foods, foodById, isLoading: foodsLoading } = useFoods()
+  const { goals } = useNutritionGoals()
   const lists = useShoppingLists()
   const { activeListId, defaultListId } = lists
   const goToList = () => setTab('liste')
@@ -72,9 +80,23 @@ export default function CoursesApp() {
           items={activeItems}
           catalog={catalog}
           pantry={pantry}
+          foods={foods}
+          foodById={foodById}
           activeListId={activeListId}
           onGoToList={goToList}
         />
+      )}
+      {NUTRITION_IDS.includes(tab) && (
+        <>
+          {/* Sur mobile le groupe Nutrition se replie en un seul onglet : sans ce
+              sélecteur, Journal et Objectifs seraient inatteignables au doigt. */}
+          <NutritionTabs active={tab} onChange={setTab} />
+          {tab === 'journal' && (
+            <JournalView foods={foods} recipes={recipes} foodById={foodById} goals={goals} />
+          )}
+          {tab === 'aliments' && <FoodsView foods={foods} isLoading={foodsLoading} />}
+          {tab === 'objectifs' && <GoalsView goals={goals} />}
+        </>
       )}
       {tab === 'planning' && (
         <PlanningView

@@ -9,7 +9,7 @@ import RecipeEditor from '../components/RecipeEditor.jsx'
 import { addRecipe, updateRecipe, deleteRecipe } from '../services/recipesService.js'
 import { normalizeName } from '../utils/aisleGuess.js'
 
-export default function RecipesView({ recipes, recipesLoading, items, catalog, pantry, activeListId, onGoToList }) {
+export default function RecipesView({ recipes, recipesLoading, items, catalog, pantry, foods, foodById, activeListId, onGoToList }) {
   const { currentUid } = useAuth()
   const [mode, setMode] = useState('browse') // 'browse' | 'detail' | 'edit'
   const [selectedId, setSelectedId] = useState(null)
@@ -61,6 +61,14 @@ export default function RecipesView({ recipes, recipesLoading, items, catalog, p
     )
   }
 
+  // Lie un ingredient a un aliment. On reecrit la liste complete (Firestore ne
+  // sait pas modifier un element de tableau par index) sans rien perdre d'autre.
+  function handleLinkIngredient(recipe, index, patch) {
+    const ingredients = recipe.ingredients.map((ing, i) => (i === index ? { ...ing, ...patch } : ing))
+    updateRecipe(recipe.id, { ...recipe, ingredients }, currentUid)
+      .catch((err) => console.error('[Courses] link ingredient error:', err))
+  }
+
   if (mode === 'detail' && selected) {
     return (
       <RecipeDetail
@@ -68,8 +76,11 @@ export default function RecipesView({ recipes, recipesLoading, items, catalog, p
         items={items}
         catalog={catalog}
         pantry={pantry}
+        foods={foods}
+        foodById={foodById}
         activeListId={activeListId}
         onBack={backToBrowse}
+        onLinkIngredient={handleLinkIngredient}
         onEdit={() => setMode('edit')}
         onDuplicate={handleDuplicate}
         onDelete={handleDelete}

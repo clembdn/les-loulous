@@ -248,6 +248,40 @@ service cloud.firestore {
       allow delete: if isAuthorizedUser();
     }
 
+    function hasValidFoodShape(data) {
+      return data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 160
+        && data.source in ['off', 'ciqual', 'manual']
+        && data.per100 is map
+        && data.per100.kcal is number
+        && data.per100.kcal >= 0
+        && data.per100.kcal <= 1000
+        && (!('brand' in data) || data.brand == null || (data.brand is string && data.brand.size() <= 120))
+        && (!('barcode' in data) || data.barcode == null || (data.barcode is string && data.barcode.size() <= 20))
+        && (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1000))
+        && (!('gramsPerPiece' in data) || data.gramsPerPiece == null || (data.gramsPerPiece is number && data.gramsPerPiece > 0))
+        && (!('densityGPerMl' in data) || data.densityGPerMl == null || (data.densityGPerMl is number && data.densityGPerMl > 0))
+        && (!('servingGrams' in data) || data.servingGrams == null || (data.servingGrams is number && data.servingGrams > 0));
+    }
+
+    // Bibliotheque d'aliments : fiches nutritionnelles scannees, importees ou
+    // saisies a la main. Partagee dans le couple, comme le catalogue de courses.
+    match /couples/main/foods/{foodId} {
+      allow read: if isAuthorizedUser();
+
+      allow create: if isAuthorizedUser()
+        && hasValidFoodShape(request.resource.data)
+        && hasValidMetadata(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isAuthorizedUser()
+        && hasValidFoodShape(request.resource.data)
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isAuthorizedUser();
+    }
+
     function hasValidMealPlanShape(data) {
       return data.date is string
         && data.date.size() == 10
@@ -388,6 +422,30 @@ service cloud.firestore {
       allow create, update: if isOwner(uid)
         && (!("byInstance" in request.resource.data) || request.resource.data.byInstance is map)
         && (!("byExercise" in request.resource.data) || request.resource.data.byExercise is map);
+      allow delete: if isOwner(uid);
+    }
+
+    // Journal alimentaire, un document par jour et par personne. Les macros sont
+    // figees dans chaque entree a l'ajout : l'historique ne bouge plus ensuite.
+    match /users/{uid}/foodLog/{dateId} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.date is string
+        && request.resource.data.date.size() == 10
+        && request.resource.data.entries is list
+        && request.resource.data.entries.size() <= 60;
+      allow delete: if isOwner(uid);
+    }
+
+    // Objectifs nutritionnels, par personne (kcal + macros, saisis ou estimes).
+    match /users/{uid}/meta/nutritionGoals {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && (!("kcal" in request.resource.data) || request.resource.data.kcal == null
+            || (request.resource.data.kcal is number && request.resource.data.kcal >= 0 && request.resource.data.kcal <= 20000))
+        && (!("mode" in request.resource.data) || request.resource.data.mode in ['manual', 'computed'])
+        && (!("profile" in request.resource.data) || request.resource.data.profile == null
+            || request.resource.data.profile is map);
       allow delete: if isOwner(uid);
     }
 

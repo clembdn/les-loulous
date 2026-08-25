@@ -16,7 +16,16 @@ function normalizeIngredient(raw) {
   const quantityLabel = structured
     ? (formatQuantity(quantity, unit) || null)
     : (raw?.quantityLabel ? String(raw.quantityLabel).trim() : null)
-  return { name: cleanName(raw?.name), quantity, unit, quantityLabel }
+  return {
+    name: cleanName(raw?.name),
+    quantity,
+    unit,
+    quantityLabel,
+    // Lien vers la bibliotheque d'aliments (calcul nutritionnel). `gramsOverride`
+    // sert quand l'unite ne se convertit pas toute seule (2 tranches, 1 pincee).
+    foodId: raw?.foodId || null,
+    gramsOverride: typeof raw?.gramsOverride === 'number' && raw.gramsOverride > 0 ? raw.gramsOverride : null,
+  }
 }
 
 function normalize(raw) {

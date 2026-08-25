@@ -1,6 +1,11 @@
-import { ShoppingCart, ChefHat, CalendarDays, Refrigerator } from 'lucide-react'
+import { ShoppingCart, ChefHat, CalendarDays, Refrigerator, Flame, Apple, NotebookPen, Target } from 'lucide-react'
 
-// Sous-features de l'app Courses. Pilotent la sidebar (desktop) et la bottom-nav (mobile).
+// Sous-features de l'app Courses.
+// Sidebar desktop et bottom-nav mobile ne sont plus identiques : le bloc
+// Nutrition compte plusieurs écrans, qu'on ne peut pas empiler dans la barre
+// du bas sans la saturer. Desktop → un groupe déplié ; mobile → un onglet
+// unique, et un SegmentedTabs dans la vue pour passer d'un écran à l'autre.
+
 export const COURSES_TABS = [
   { id: 'liste',    label: 'Liste',    icon: ShoppingCart },
   { id: 'frigo',    label: 'Frigo',    icon: Refrigerator },
@@ -8,11 +13,29 @@ export const COURSES_TABS = [
   { id: 'planning', label: 'Planning', icon: CalendarDays },
 ]
 
+export const NUTRITION_TABS = [
+  { id: 'journal',   label: 'Journal',   icon: NotebookPen },
+  { id: 'aliments',  label: 'Aliments',  icon: Apple },
+  { id: 'objectifs', label: 'Objectifs', icon: Target },
+]
+
+export const NUTRITION_IDS = NUTRITION_TABS.map((t) => t.id)
+export const NUTRITION_DEFAULT = 'journal'
+
+const ALL_TABS = [...COURSES_TABS, ...NUTRITION_TABS]
+
 export const DEFAULT_TAB = 'liste'
 
 export function getTab(id) {
-  return COURSES_TABS.find((t) => t.id === id) || COURSES_TABS[0]
+  return ALL_TABS.find((t) => t.id === id) || ALL_TABS[0]
 }
 
-// Sidebar desktop : l'app Courses est à plat, une seule section d'items.
-export const SIDEBAR_SECTIONS = [{ type: 'items', items: COURSES_TABS }]
+export const SIDEBAR_SECTIONS = [
+  { type: 'items', items: COURSES_TABS },
+  { type: 'group', label: 'Nutrition', icon: Flame, accentClass: 'text-orange-500', items: NUTRITION_TABS },
+]
+
+export const MOBILE_TABS = [
+  ...COURSES_TABS,
+  { id: 'nutrition', label: 'Nutrition', icon: Flame, activeFor: NUTRITION_IDS, route: NUTRITION_DEFAULT },
+]
