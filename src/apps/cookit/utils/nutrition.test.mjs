@@ -67,7 +67,7 @@ test('le total par portion divise bien', () => {
 
 // --- Répartition entre les deux personnes ---
 
-import { shareFor, gramsForShare, splitFromGrams, sumIngredientsForPerson } from './nutrition.js'
+import { shareFor, gramsForShare, splitFromGrams, sumIngredientsForPerson, personFactor } from './nutrition.js'
 import { CLEMENT_UID, LISE_UID } from '../../../shared/config/people.js'
 
 const PATES = { name: 'Pâtes', quantity: 250, unit: 'g', foodId: 'p' }
@@ -129,4 +129,41 @@ test('une répartition incohérente est renormalisée au lieu de fausser le tota
   const ing = { ...PATES, split: { [CLEMENT_UID]: 3, [LISE_UID]: 1 } }
   assert.equal(shareFor(ing, CLEMENT_UID), 0.75)
   assert.equal(gramsForShare(ing, CLEMENT_UID) + gramsForShare(ing, LISE_UID), 250)
+})
+
+// --- Une portion par personne, quel que soit le format de la recette ---
+
+test('la part d’une personne, c’est UNE portion — pas la moitié de la casserole', () => {
+  // Le bug signalé : crème chocolat prévue pour 4, 1 000 kcal au total, la fiche
+  // affichait 500 kcal pour Clément là où il en mange 250.
+  const creme = [{ name: 'Base', quantity: 500, unit: 'g', foodId: 'c' }]
+  const by = new Map([['c', { per100: { kcal: 200, proteins: 4, carbs: 30, fat: 8 } }]])
+
+  assert.equal(sumIngredients(creme, by).totals.kcal, 1000)
+  assert.equal(sumIngredientsForPerson(creme, by, CLEMENT_UID, personFactor(4)).totals.kcal, 250)
+
+  // Une recette « pour 2 » se mange entièrement à deux : rien ne change pour elle.
+  const ing = { ...PATES, split: splitFromGrams(PATES, CLEMENT_UID, 150) }
+  assert.equal(sumIngredientsForPerson([ing], BY, CLEMENT_UID, personFactor(2)).totals.kcal, 525)
+  assert.equal(sumIngredientsForPerson([ing], BY, LISE_UID, personFactor(2)).totals.kcal, 350)
+})
+
+test('changer le curseur de portions ne change pas la part d’une personne', () => {
+  // Servir 6 parts au lieu de 4 fait grossir le total, pas l'assiette de chacun.
+  const creme = [{ name: 'Base', quantity: 500, unit: 'g', foodId: 'c' }]
+  const by = new Map([['c', { per100: { kcal: 200, proteins: 4, carbs: 30, fat: 8 } }]])
+  const at = (cible) => {
+    const facteur = cible / 4
+    return sumIngredientsForPerson(creme, by, CLEMENT_UID, facteur * personFactor(cible)).totals.kcal
+  }
+  assert.equal(at(4), 250)
+  assert.equal(at(6), 250)
+  assert.equal(at(2), 250)
+})
+
+test('un nombre de portions inconnu ne divise rien', () => {
+  assert.equal(personFactor(null), 1)
+  assert.equal(personFactor(0), 1)
+  assert.equal(personFactor(2), 1)
+  assert.equal(personFactor(4), 0.5)
 })

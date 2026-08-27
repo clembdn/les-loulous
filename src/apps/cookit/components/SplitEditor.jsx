@@ -18,9 +18,17 @@ import { unitLabel, toNumber } from '../utils/quantity.js'
 //
 // Repliée par défaut : dans la majorité des cas le 50/50 convient et il n'y a
 // rien à faire.
-
+//
+// ATTENTION au champ focalisé. La première version affichait en permanence la
+// valeur DÉRIVÉE (`gramsForShare`), recalculée à chaque frappe. Sur 250 g, le
+// champ montrait « 125 », le curseur se posait à la fin, et taper « 150 »
+// donnait « 125150 » — écrêté au maximum, 250. Le partenaire tombait à zéro et
+// toute frappe suivante repartait de 250 : c'était tout ou rien. D'où le
+// brouillon local ci-dessous, et la sélection intégrale au focus.
 export default function SplitEditor({ ingredients, onChange }) {
   const [open, setOpen] = useState(false)
+  // { index, uid, text } — le champ en cours de saisie, et lui seul.
+  const [draft, setDraft] = useState(null)
   const people = AUTHORIZED_UIDS.map((uid) => ({ uid, person: getPerson(uid) }))
 
   // Seuls les ingrédients avec une quantité chiffrée sont partageables.
@@ -30,10 +38,28 @@ export default function SplitEditor({ ingredients, onChange }) {
 
   const customCount = rows.filter(({ ing }) => ing.split).length
 
-  function setGrams(index, uid, value) {
+  const isDrafting = (index, uid) => draft?.index === index && draft?.uid === uid
+
+  // Ce qu'affiche un champ : le brouillon s'il est en cours de saisie, sinon la
+  // valeur dérivée — c'est ainsi que l'autre case bouge pendant qu'on tape.
+  function displayed(index, uid, ing, quantity) {
+    if (isDrafting(index, uid)) return draft.text
+    const g = gramsForShare({ ...ing, quantity }, uid)
+    return g == null ? '' : String(g)
+  }
+
+  // Hors bornes → on ne touche pas à la répartition, on le signale.
+  function outOfRange(text, quantity) {
+    const n = toNumber(text)
+    if (text.trim() === '') return false
+    return n == null || n < 0 || n > quantity
+  }
+
+  function type(index, uid, text, quantity) {
+    setDraft({ index, uid, text })
+    if (text.trim() === '' || outOfRange(text, quantity)) return
     const ing = ingredients[index]
-    const quantity = toNumber(ing.quantity)
-    onChange(index, splitFromGrams({ ...ing, quantity }, uid, toNumber(value)))
+    onChange(index, splitFromGrams({ ...ing, quantity }, uid, toNumber(text)))
   }
 
   if (rows.length === 0) return null
@@ -58,7 +84,7 @@ export default function SplitEditor({ ingredients, onChange }) {
 
       {open && (
         <div className="border-t border-border px-3 py-3 space-y-3">
-          <div className="flex items-center gap-2 pl-[max(0px,0px)]">
+          <div className="flex items-center gap-2">
             <span className="flex-1" />
             {people.map(({ uid, person }) => (
               <span key={uid} className="w-[4.5rem] text-center text-[11px] font-medium">
@@ -80,20 +106,31 @@ export default function SplitEditor({ ingredients, onChange }) {
                   </span>
                 </span>
 
-                {people.map(({ uid }) => (
-                  <Input
-                    key={uid}
-                    value={String(gramsForShare({ ...ing, quantity }, uid) ?? '')}
-                    onChange={(e) => setGrams(index, uid, e.target.value)}
-                    inputMode="decimal"
-                    aria-label={`Part de ${getPerson(uid)?.label} pour ${ing.name}`}
-                    className={cn(
-                      'w-[4.5rem] h-9 px-2 text-center tabular text-sm',
-                      // Le gris clair dit « c'est le défaut, personne n'y a touché ».
-                      !custom && 'text-faint',
-                    )}
-                  />
-                ))}
+                {people.map(({ uid }) => {
+                  const text = displayed(index, uid, ing, quantity)
+                  const bad = isDrafting(index, uid) && outOfRange(text, quantity)
+                  return (
+                    <Input
+                      key={uid}
+                      value={text}
+                      // Sélection intégrale : taper REMPLACE la valeur affichée
+                      // au lieu de s'y ajouter. C'est ce seul point qui faisait
+                      // sauter le champ au maximum.
+                      onFocus={(e) => { setDraft({ index, uid, text: e.target.value }); e.target.select() }}
+                      onChange={(e) => type(index, uid, e.target.value, quantity)}
+                      onBlur={() => setDraft(null)}
+                      inputMode="decimal"
+                      aria-label={`Part de ${getPerson(uid)?.label} pour ${ing.name}`}
+                      aria-invalid={bad || undefined}
+                      className={cn(
+                        'w-[4.5rem] h-9 px-2 text-center tabular text-sm',
+                        // Le gris clair dit « c'est le défaut, personne n'y a touché ».
+                        !custom && !isDrafting(index, uid) && 'text-faint',
+                        bad && 'border-warning text-warning',
+                      )}
+                    />
+                  )
+                })}
 
                 <button
                   onClick={() => onChange(index, null)}

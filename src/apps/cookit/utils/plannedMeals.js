@@ -19,15 +19,27 @@ import { AUTHORIZED_UIDS } from '../../../shared/config/people.js'
 // se contente de lire la part de la personne connectée.
 
 // Nutrition par personne d'une recette planifiée, à figer dans le repas.
-// `who` désigne pour qui est le plat : une personne seule le mange en entier,
-// « nous deux » se partage selon la répartition des ingrédients.
-// `portions` est un MULTIPLICATEUR de la recette : 1 = le plat entier tel qu'il
-// est enregistré, 0,5 = la moitié. Volontairement pas « nombre de parts
-// mangées » : au planning on note « on mange une carbonara », pas « j'ai mangé
-// 2 des 2 portions ». Diviser par recipe.servings comptait le plat de moitié.
+//
+// `portions` est le NOMBRE DE PARTS SERVIES à ce repas, au sens où la recette
+// l'entend : une recette « pour 4 » dont on sert 2 parts compte la moitié.
+// C'est aussi ce qui permet à « nous deux » de valoir 2 parts par défaut — une
+// pour chacun — et à un plat « pour Clément » d'en valoir 1.
+//
+// (La version précédente traitait `portions` comme un multiplicateur de la
+// casserole entière : une crème prévue pour 4 comptait alors 500 kcal par
+// personne au lieu de 250. La division par `recipe.servings` était bonne, c'est
+// la valeur par défaut — 1 au lieu de 2 — qui était fausse.)
+//
+// `who` désigne pour qui est le plat : une personne seule mange toutes les parts
+// servies, « nous deux » les partage selon la répartition des ingrédients.
 export function buildMealNutrition(recipe, portions, who, foodById) {
   if (!recipe) return null
-  const factor = portions > 0 ? portions : 1
+  const served = portions > 0 ? portions : 1
+  // Nombre de portions non renseigné : on suppose que la recette nourrit la
+  // tablée, comme le fait la fiche recette. Retomber sur 1 aurait compté la
+  // casserole entière pour chacun.
+  const servings = recipe.servings > 0 ? recipe.servings : AUTHORIZED_UIDS.length
+  const factor = served / servings
 
   const pick = (uid) => {
     const r = who === WHO_BOTH

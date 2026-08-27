@@ -19,7 +19,7 @@ async function getWorker(onProgress) {
   if (workerPromise) return workerPromise
   workerPromise = (async () => {
     const { createWorker } = await import('tesseract.js')
-    return createWorker('eng', 1, {
+    const worker = await createWorker('eng', 1, {
       workerPath: `${BASE}/worker.min.js`,
       corePath: BASE,
       langPath: BASE,
@@ -30,6 +30,14 @@ async function getWorker(onProgress) {
         else onProgress?.(null, m.status)
       },
     })
+    // Une photo n'a pas de DPI : sans indication, Tesseract en devine un et
+    // désaligne les deux colonnes du tableau. `preserve_interword_spaces` garde
+    // les blancs qui séparent « per serving » de « per 100 g ».
+    await worker.setParameters({
+      user_defined_dpi: '300',
+      preserve_interword_spaces: '1',
+    })
+    return worker
   })().catch((err) => {
     // Un échec ne doit pas condamner les essais suivants (réseau coupé au
     // premier téléchargement, par exemple).

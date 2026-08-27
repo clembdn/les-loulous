@@ -22,27 +22,45 @@ const CARBONARA = {
   ],
 }
 
+// Crème chocolat « pour 4 » : 1 000 kcal en tout, donc 250 par portion.
+const CREME = {
+  id: 'r3',
+  title: 'Crème chocolat',
+  servings: 4,
+  ingredients: [{ name: 'Base', quantity: 500, unit: 'g', foodId: 'c' }],
+}
+const BY4 = new Map([['c', { per100: { kcal: 200, proteins: 4, carbs: 30, fat: 8 } }]])
+
 test('« nous deux » fige une nutrition différente pour chacun', () => {
-  // portions = 1 ⇒ le plat entier (et non « une part sur deux »).
-  const n = buildMealNutrition(CARBONARA, 1, WHO_BOTH, BY)
-  // 150 g et 100 g de pâtes à 350 kcal/100 g.
+  // 2 parts servies : une pour chacun. La carbonara est prévue pour 2, donc
+  // c'est tout le plat — réparti 150 / 100 g de pâtes à 350 kcal/100 g.
+  const n = buildMealNutrition(CARBONARA, 2, WHO_BOTH, BY)
   assert.equal(Math.round(n[CLEMENT_UID].kcal), 525)
   assert.equal(Math.round(n[LISE_UID].kcal), 350)
   assert.equal(Math.round(n[CLEMENT_UID].kcal + n[LISE_UID].kcal), 875)
 })
 
+test('une recette pour 4 ne compte pas une demi-casserole par personne', () => {
+  // Le bug signalé : 1 000 kcal pour 4 portions donnaient 500 kcal à chacun.
+  const n = buildMealNutrition(CREME, 2, WHO_BOTH, BY4)
+  assert.equal(Math.round(n[CLEMENT_UID].kcal), 250)
+  assert.equal(Math.round(n[LISE_UID].kcal), 250)
+})
+
 test('un plat pour une seule personne lui revient en entier', () => {
-  const n = buildMealNutrition(CARBONARA, 1, CLEMENT_UID, BY)
-  // Tout le plat, pas seulement sa part habituelle.
-  assert.equal(Math.round(n[CLEMENT_UID].kcal), 875)
+  // Une seule part servie, pour lui : il la mange toute, sans partage.
+  const n = buildMealNutrition(CREME, 1, CLEMENT_UID, BY4)
+  assert.equal(Math.round(n[CLEMENT_UID].kcal), 250)
   assert.equal(n[LISE_UID], undefined)
+  // Et s'il finit la casserole, il prend les 4 parts.
+  assert.equal(Math.round(buildMealNutrition(CREME, 4, CLEMENT_UID, BY4)[CLEMENT_UID].kcal), 1000)
 })
 
 test('un plat non estimable ne fige pas des zéros', () => {
   const vide = { id: 'r2', title: 'X', servings: 2, ingredients: [{ name: 'Sel', quantity: 1, unit: 'pincee', foodId: null }] }
   // Figer 0 kcal ferait compter un vrai repas comme nul dans le journal.
-  assert.equal(buildMealNutrition(vide, 1, WHO_BOTH, BY), null)
-  assert.equal(buildMealNutrition(null, 1, WHO_BOTH, BY), null)
+  assert.equal(buildMealNutrition(vide, 2, WHO_BOTH, BY), null)
+  assert.equal(buildMealNutrition(null, 2, WHO_BOTH, BY), null)
 })
 
 const DAY = {
@@ -99,10 +117,17 @@ test('les lignes dérivées portent un id stable et distinct', () => {
   assert.ok(a.every((e) => e.id.startsWith('planned:') && e.planned === true))
 })
 
-test('la quantité multiplie bien le plat entier', () => {
-  const plein = buildMealNutrition(CARBONARA, 1, WHO_BOTH, BY)
-  const moitie = buildMealNutrition(CARBONARA, 0.5, WHO_BOTH, BY)
-  assert.equal(Math.round(moitie[CLEMENT_UID].kcal * 2), Math.round(plein[CLEMENT_UID].kcal))
+test('le nombre de parts servies met le repas à l’échelle', () => {
+  const deux = buildMealNutrition(CREME, 2, WHO_BOTH, BY4)
+  const quatre = buildMealNutrition(CREME, 4, WHO_BOTH, BY4)
+  assert.equal(Math.round(deux[CLEMENT_UID].kcal * 2), Math.round(quatre[CLEMENT_UID].kcal))
+})
+
+test('une recette sans nombre de portions vaut une tablée', () => {
+  // Rien à diviser : on ne va pas inventer un découpage.
+  const sans = { id: 'r4', title: 'Y', ingredients: CARBONARA.ingredients }
+  const n = buildMealNutrition(sans, 2, WHO_BOTH, BY)
+  assert.equal(Math.round(n[CLEMENT_UID].kcal + n[LISE_UID].kcal), 875)
 })
 
 test('une journée vide ne produit rien', () => {

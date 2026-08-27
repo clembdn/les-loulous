@@ -77,3 +77,47 @@ test('les pluriels français ne régressent pas', () => {
   assert.equal(guessAisle('Lardons fumés'), 'boucherie')
   assert.equal(guessAisle('Pâtes'), 'epicerie-salee')
 })
+
+// --- Nom principal, boulangerie, poissonnerie ---
+
+test('le complément ne décide plus du rayon à la place du produit', () => {
+  // « eau » est un mot-clé « boissons » : le maquereau en boîte finissait au
+  // rayon Boissons à cause de son propre jus.
+  assert.equal(guessAisle('Maquereaux à l’eau'), 'boucherie')
+  assert.equal(guessAisle('Thon à l’huile'), 'boucherie')
+  assert.equal(guessAisle('Yaourt à la grecque'), 'cremerie')
+  assert.equal(guessAisle('Tarte au citron'), 'epicerie-sucree')
+  // …sans casser les noms dont la tête ne dit rien.
+  assert.equal(guessAisle('Filet de saumon'), 'boucherie')
+})
+
+test('la boulangerie existe enfin', () => {
+  const expected = {
+    'Pain à hot dog': 'boulangerie',
+    'Pain de mie': 'boulangerie',
+    Baguette: 'boulangerie',
+    'Hot dog rolls': 'boulangerie',
+    'Sourdough Bread': 'boulangerie',
+    Brioche: 'boulangerie',
+  }
+  for (const [name, aisle] of Object.entries(expected)) {
+    assert.equal(guessAisle(name), aisle, name)
+  }
+  // Le mot « roll » ne doit pas emporter le papier toilette avec lui.
+  assert.equal(guessAisle('Toilet Rolls'), 'hygiene')
+})
+
+test('les poissons courants ne sont plus des inconnus', () => {
+  for (const name of ['Maquereaux', 'Sardines', 'Cabillaud', 'Mackerel', 'Barramundi', 'Mussels']) {
+    assert.equal(guessAisle(name), 'boucherie', name)
+  }
+})
+
+test('un groupe fourre-tout cède devant un nom précis', () => {
+  // « Cereals and potatoes » range aussi bien les pâtes que le pain : il ne peut
+  // pas trancher seul. Les groupes spécifiques, eux, gardent la priorité.
+  assert.equal(resolveFoodAisle({ name: 'Hot dog rolls', group: 'Cereals and potatoes' }), 'boulangerie')
+  assert.equal(resolveFoodAisle({ name: 'Barilla Spaghetti', group: 'Cereals and potatoes' }), 'epicerie-salee')
+  assert.equal(resolveFoodAisle({ name: 'Produit sans nom parlant', group: 'Composite foods' }), 'epicerie-salee')
+  assert.equal(resolveFoodAisle({ name: 'Cheddar cheese', group: 'Milk and dairy products' }), 'cremerie')
+})

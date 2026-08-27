@@ -93,3 +93,76 @@ test('une photo illisible ne renvoie pas des zéros, mais du vide', () => {
   assert.equal(r.per100.proteins, null)
   assert.equal(r.confidence, 0)
 })
+
+// --- Les confusions d'unité de l'OCR, mesurées sur de vraies photos ---
+
+// Sortie brute de Tesseract sur un panneau australien photographié de travers,
+// flou et sous-exposé. Les chiffres sont bons, les unités cassées : c'est ce qui
+// vidait systématiquement les calories et gonflait les grammes.
+const OCR_REEL = `NUTRITION INFORMATION
+Servings per package: 4
+Serving size: 125g
+Avg Qty                Avg Qty
+per Serving            per 100g
+Energy                            745k)                   596k)
+Protein                            8.69                    6.9g
+Fat, total                       9.29                   7.49
+- saturated                       3.89                    3.09
+Carbohydrate                    21.49                   17.19
+- sugars                           21g                     1.7g
+Dietary Fibre                     2.6g                    2.1g
+Sodium                            268mg                 214mg`
+
+test('le kJ lu « k) » reste de l’énergie', () => {
+  const r = parseNutritionLabel(OCR_REEL)
+  // 596 kJ / 4,184. Sans ça, la ligne d'énergie était purement et simplement
+  // perdue et l'écran ne proposait jamais de calories.
+  assert.equal(r.per100.kcal, 142)
+  assert.equal(r.confidence, 1)
+})
+
+test('le « g » lu comme un 9 collé est rendu à son chiffre', () => {
+  const r = parseNutritionLabel(OCR_REEL)
+  assert.equal(r.per100.proteins, 6.9)   // lu « 6.99 »
+  assert.equal(r.per100.carbs, 17.1)     // lu « 17.19 »
+  assert.equal(r.per100.fat, 7.4)        // lu « 7.49 »
+  assert.equal(r.per100.satFat, 3)       // lu « 3.09 »
+  assert.equal(r.per100.sugars, 1.7)
+  assert.equal(r.per100.fiber, 2.1)
+  assert.equal(r.per100.salt, 0.535)     // 214 mg de sodium
+  assert.deepEqual(r.suspect, [])
+})
+
+test('une vraie valeur à deux décimales n’est pas amputée', () => {
+  // Le garde-fou : « 0,09 g » ne doit pas devenir 0 sous prétexte qu'il finit
+  // par un 9.
+  const r = parseNutritionLabel('Protein 0.09\nCarbohydrate 12.4g\nFat 1.2g')
+  assert.equal(r.per100.proteins, 0.09)
+})
+
+test('une valeur physiquement impossible est désignée, pas silencieuse', () => {
+  // Point décimal perdu : « 2.1g » de sucres lu « 21g », soit plus que les
+  // glucides qui les contiennent.
+  const r = parseNutritionLabel([
+    'Energy 596kJ', 'Protein 6.9g', 'Fat 7.4g', 'Carbohydrate 17.1g', '- sugars 21g',
+  ].join('\n'))
+  assert.ok(r.suspect.includes('sugars'))
+  // …et la valeur est quand même proposée : on corrige d'un geste, on ne retape pas tout.
+  assert.equal(r.per100.sugars, 21)
+})
+
+test('des macros incompatibles avec l’énergie lue sont signalées', () => {
+  // 4×10 + 4×80 + 9×30 = 630 kcal annoncés contre 100 : incohérent.
+  const r = parseNutritionLabel([
+    'Energy 100kcal', 'Protein 10g', 'Carbohydrate 80g', 'Fat 30g',
+  ].join('\n'))
+  for (const k of ['kcal', 'proteins', 'carbs', 'fat']) assert.ok(r.suspect.includes(k), k)
+})
+
+test('une étiquette cohérente ne déclenche aucune alerte', () => {
+  const r = parseNutritionLabel([
+    'Energy 2210kJ', 'Protein 6.3g', 'Fat 30.9g', '- saturated 10.6g',
+    'Carbohydrate 57.5g', '- sugars 56.3g', 'Sodium 42mg',
+  ].join('\n'))
+  assert.deepEqual(r.suspect, [])
+})

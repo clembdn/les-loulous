@@ -84,6 +84,10 @@ export default function LabelScanner({ open, onClose, onApply }) {
   if (!open) return null
 
   const weak = result && result.confidence < 1
+  // Champs qui violent une borne physique (un « dont sucres » plus grand que les
+  // glucides, des macros incompatibles avec l'énergie…). On les montre au lieu
+  // de les taire : c'est là que l'OCR s'est trompé.
+  const suspect = new Set(result?.suspect || [])
 
   return (
     <div className="fixed inset-0 z-[65] bg-bg flex flex-col">
@@ -152,17 +156,31 @@ export default function LabelScanner({ open, onClose, onApply }) {
                 </p>
               )}
 
+              {suspect.size > 0 && (
+                <p className="flex items-start gap-2 text-xs text-warning">
+                  <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                  {suspect.size === 1 ? 'Une valeur semble incohérente' : `${suspect.size} valeurs semblent incohérentes`}
+                  {' '}(surlignée{suspect.size > 1 ? 's' : ''} ci-dessous) — l’OCR a dû perdre une virgule.
+                </p>
+              )}
+
               <div className="grid grid-cols-2 gap-2">
                 {FIELDS.map((f) => (
                   <label key={f.key} className="block">
-                    <span className="block text-[11px] text-faint mb-1">{f.label}</span>
+                    <span className={cn('block text-[11px] mb-1', suspect.has(f.key) ? 'text-warning' : 'text-faint')}>
+                      {f.label}
+                    </span>
                     <div className="relative">
                       <Input
                         value={values[f.key] ?? ''}
                         onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                         inputMode="decimal"
                         placeholder="—"
-                        className={cn('pr-12 tabular', !values[f.key] && 'border-warning/40')}
+                        className={cn(
+                          'pr-12 tabular',
+                          !values[f.key] && 'border-warning/40',
+                          suspect.has(f.key) && 'border-warning text-warning',
+                        )}
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-faint pointer-events-none">
                         {f.suffix}

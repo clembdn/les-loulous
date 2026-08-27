@@ -41,7 +41,7 @@ export function slugify(name) {
   return base || 'item'
 }
 
-// Devine le rayon depuis le nom via le dictionnaire de mots-clés (premier match).
+// Devine le rayon depuis le nom via le dictionnaire de mots-clés.
 //
 // Le rapprochement se fait sur des MOTS ENTIERS, jamais sur une sous-chaîne :
 // un `includes` brut classait « Southern Fried Chicken » en épicerie sucrée
@@ -67,11 +67,6 @@ function wordRegex(word) {
   return re
 }
 
-// Les mots-clés COMPOSÉS sont testés avant les simples : « peanut butter » doit
-// l'emporter sur « butter », sinon le beurre de cacahuète finit en crémerie.
-// À spécificité égale, l'ordre de déclaration tranche (cf. AISLE_KEYWORDS, où
-// « boissons » passe avant « fruits & légumes » pour que « jus d'orange » soit
-// une boisson et non un fruit).
 function scan(n, multiWord) {
   for (const entry of AISLE_KEYWORDS) {
     for (const w of entry.words) {
@@ -82,8 +77,35 @@ function scan(n, multiWord) {
   return null
 }
 
+// Nom PRINCIPAL : ce qui précède le premier complément. « maquereaux à l'eau »
+// a pour nom principal « maquereau ».
+//
+// Sans cette coupe, le mot-clé du complément l'emporte sur celui du produit :
+// « eau » est un mot-clé « boissons », et le maquereau en boîte finissait donc
+// au rayon Boissons. Même piège pour « thon à l'huile » (épicerie salée) ou
+// « yaourt à la grecque ».
+const CONNECTOR_RE = /\b(?:a|au|aux|de|du|des|en|avec|sauce|in|with)\b|\b[dl]'/
+
+function headOf(n) {
+  const m = CONNECTOR_RE.exec(n)
+  if (!m || m.index <= 0) return null
+  const head = n.slice(0, m.index).trim()
+  return head && head !== n ? head : null
+}
+
+// Trois passes, de la plus spécifique à la plus large :
+//   1. mots-clés COMPOSÉS sur le nom entier — « peanut butter » doit l'emporter
+//      sur « butter », et « pomme de terre » enjambe le connecteur « de » ;
+//   2. mots-clés simples sur le NOM PRINCIPAL — c'est le produit, pas sa sauce ;
+//   3. mots-clés simples sur le nom entier — « filet de saumon » n'a pas de tête
+//      reconnaissable, il faut bien aller chercher « saumon » dans la suite.
+// À spécificité égale, l'ordre de déclaration tranche (cf. AISLE_KEYWORDS).
 export function guessAisle(name) {
   const n = normalizeName(name)
   if (!n) return DEFAULT_AISLE
-  return scan(n, true) || scan(n, false) || DEFAULT_AISLE
+  const head = headOf(n)
+  return scan(n, true)
+    || (head ? scan(head, false) : null)
+    || scan(n, false)
+    || DEFAULT_AISLE
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link2Off } from 'lucide-react'
 import { Sheet } from './Sheet.jsx'
 import { Input } from '@/shared/ui/Input.jsx'
@@ -18,14 +18,31 @@ export default function IngredientLinkSheet({ ingredient, foods, foodById, open,
   const [picked, setPicked] = useState(null)
   const [grams, setGrams] = useState('')
 
+  // Les props les plus récentes, lues SANS relancer la réinitialisation.
+  const latest = useRef(null)
+  latest.current = { ingredient, foodById }
+
+  // Réinitialiser À L'OUVERTURE seulement, jamais sur un changement d'identité
+  // de props.
+  //
+  // C'est ce qui rendait le choix d'un aliment impossible : choisir un aliment
+  // appelle `recordFoodUsage`, dont l'écho immédiat du cache Firestore fabrique
+  // une NOUVELLE Map `foodById`. Avec `foodById` en dépendance, l'effet se
+  // rejouait et remettait aussitôt `foodId` à sa valeur d'origine — la feuille
+  // se refermait sur « Choisir un aliment », comme si rien ne s'était passé.
+  // `ingredient` a le même défaut : c'est `recipe.ingredients[i]`, une identité
+  // neuve à chaque réémission des recettes.
   useEffect(() => {
     if (!open) return
-    setFoodId(ingredient?.foodId || null)
-    setPicked(ingredient?.foodId ? foodById.get(ingredient.foodId) || null : null)
-    setGrams(ingredient?.gramsOverride != null ? String(ingredient.gramsOverride) : '')
-  }, [ingredient, open, foodById])
+    const { ingredient: ing, foodById: index } = latest.current
+    setFoodId(ing?.foodId || null)
+    setPicked(ing?.foodId ? index.get(ing.foodId) || null : null)
+    setGrams(ing?.gramsOverride != null ? String(ing.gramsOverride) : '')
+  }, [open])
 
-  const food = picked
+  // L'aliment affiché reste à jour (la fiche a pu changer entre-temps) ; `picked`
+  // ne sert que de repli le temps qu'un aliment tout juste créé arrive en base.
+  const food = (foodId && foodById.get(foodId)) || picked
   const conv = food ? toGrams(ingredient?.quantity, ingredient?.unit, food) : { grams: null, reason: null }
   const override = toNumber(grams)
   const effective = override > 0 ? override : conv.grams

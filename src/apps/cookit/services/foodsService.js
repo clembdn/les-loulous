@@ -4,7 +4,6 @@ import {
 import { db } from '@/shared/lib/firebase.js'
 import { slugify, normalizeName, cleanName } from '../utils/aisleGuess.js'
 import { resolveFoodAisle } from '../utils/foodAisle.js'
-import { AISLE_BY_ID } from '../config/aisles.js'
 
 // Bibliothèque d'aliments du couple : tout ce qui a été scanné, cherché ou saisi.
 //
@@ -59,10 +58,17 @@ function normalize(raw) {
     brand: raw.brand || null,
     barcode: raw.barcode || null,
     source: ['off', 'ciqual', 'manual'].includes(raw.source) ? raw.source : 'manual',
-    // Deviner a la LECTURE quand le rayon est absent : les aliments enregistres
-    // avant l'existence du champ s'affichent aussitot au bon rayon, sans
-    // migration, et se corrigent en base a la prochaine ecriture.
-    aisle: raw.aisle && AISLE_BY_ID[raw.aisle] ? raw.aisle : resolveFoodAisle(raw),
+    // Le rayon est TOUJOURS recalcule a la lecture, jamais repris tel quel.
+    //
+    // La version precedente gardait `raw.aisle` des qu'il etait un id valide —
+    // et « autres » en est un. Un aliment range par defaut dans « Autres » y
+    // restait donc a vie, meme apres l'amelioration du classement : c'est ce qui
+    // laissait le pain scanne dans « Autres ». `resolveFoodAisle` sait deja
+    // s'arreter sur un choix delibere (`aisleManual`), c'est lui l'autorite.
+    //
+    // Effet de bord voulu : tous les aliments deja enregistres se rangent au bon
+    // rayon des le prochain chargement, sans migration.
+    aisle: resolveFoodAisle(raw),
     aisleManual: raw.aisleManual === true,
     group: raw.group || null,
     per100: normalizePer100(raw.per100),

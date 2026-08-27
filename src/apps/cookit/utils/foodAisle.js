@@ -39,6 +39,19 @@ const AISLE_BY_OFF_GROUP = {
   'composite foods': 'epicerie-salee',
 }
 
+// Quatre des neuf groupes PNNS sont des paniers FOURRE-TOUT : ils tombent tous
+// au même rayon (épicerie salée) et ne disent donc presque rien. Un pain scanné
+// est rangé « Cereals and potatoes » — se fier au groupe l'enverrait en épicerie
+// salée alors que son nom dit clairement « Boulangerie ». Ceux-là cèdent le pas
+// dès que le nom donne une réponse plus précise ; les groupes spécifiques
+// (laitages, boissons, viandes/poissons…) gardent la priorité.
+const BROAD_OFF_GROUPS = new Set([
+  'cereals and potatoes',
+  'composite foods',
+  'salty snacks',
+  'fat and sauces',
+])
+
 export function resolveAisle(id) {
   return AISLE_BY_ID[id] ? id : DEFAULT_AISLE
 }
@@ -52,8 +65,11 @@ export function resolveAisle(id) {
 // tous les produits scannés dans « Autres ».
 export function resolveFoodAisle(food) {
   if (food?.aisleManual && AISLE_BY_ID[food.aisle]) return food.aisle
+
   const g = String(food?.group || '').toLowerCase()
   const fromGroup = g ? (AISLE_BY_CIQUAL_GROUP[g] || AISLE_BY_OFF_GROUP[g]) : null
-  if (fromGroup) return fromGroup
-  return guessAisle(food?.name || '')
+  const fromName = guessAisle(food?.name || '')
+
+  if (fromGroup && BROAD_OFF_GROUPS.has(g) && fromName !== DEFAULT_AISLE) return fromName
+  return fromGroup || fromName
 }

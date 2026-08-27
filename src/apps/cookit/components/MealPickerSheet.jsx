@@ -1,20 +1,35 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Plus } from 'lucide-react'
 import { Sheet } from './Sheet.jsx'
 import { Input } from '@/shared/ui/Input.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { normalizeName } from '../utils/aisleGuess.js'
 import { WHO_OPTIONS, WHO_BOTH } from '../utils/who.js'
+import { AUTHORIZED_UIDS } from '@/shared/config/people.js'
 
 export default function MealPickerSheet({ open, onClose, recipes, onSubmit }) {
   const [who, setWho] = useState(WHO_BOTH)
-  const [portions, setPortions] = useState(1)
+  // Parts SERVIES à ce repas. « Nous deux » en vaut deux — une chacun — et non
+  // une, sinon un plat prévu pour 4 ne comptait qu'une demi-portion par personne.
+  const [portions, setPortions] = useState(AUTHORIZED_UIDS.length)
   const [q, setQ] = useState('')
+  // Une fois la quantité réglée à la main, changer « pour qui » ne la réécrit plus.
+  const touched = useRef(false)
 
   // Reset à chaque ouverture.
   useEffect(() => {
-    if (open) { setWho(WHO_BOTH); setQ(''); setPortions(1) }
+    if (open) { setWho(WHO_BOTH); setQ(''); setPortions(AUTHORIZED_UIDS.length); touched.current = false }
   }, [open])
+
+  function chooseWho(value) {
+    setWho(value)
+    if (!touched.current) setPortions(value === WHO_BOTH ? AUTHORIZED_UIDS.length : 1)
+  }
+
+  function bump(delta) {
+    touched.current = true
+    setPortions((p) => Math.max(0.5, Math.round((p + delta) * 2) / 2))
+  }
 
   const filtered = useMemo(() => {
     const base = [...recipes].sort((a, b) => a.title.localeCompare(b.title))
@@ -37,13 +52,15 @@ export default function MealPickerSheet({ open, onClose, recipes, onSubmit }) {
     <Sheet open={open} onOpenChange={(o) => !o && onClose()} title="Ajouter un repas">
       <div className="space-y-4">
         <div>
-          <label className="block text-xs text-muted mb-1.5">Quantité</label>
+          <label className="block text-xs text-muted mb-1.5">Parts servies</label>
           <div className="inline-flex items-center rounded-xl border border-border overflow-hidden">
-            <button onClick={() => setPortions((p) => Math.max(0.5, p - 0.5))} className="px-3.5 py-2 text-fg hover:bg-surface-2 transition" aria-label="Moins de portions">−</button>
+            <button onClick={() => bump(-0.5)} className="px-3.5 py-2 text-fg hover:bg-surface-2 transition" aria-label="Moins de parts">−</button>
             <span className="px-3 min-w-[3rem] text-center tabular text-fg">{portions}</span>
-            <button onClick={() => setPortions((p) => p + 0.5)} className="px-3.5 py-2 text-fg hover:bg-surface-2 transition" aria-label="Plus de portions">+</button>
+            <button onClick={() => bump(0.5)} className="px-3.5 py-2 text-fg hover:bg-surface-2 transition" aria-label="Plus de parts">+</button>
           </div>
-          <p className="text-[11px] text-faint mt-1.5">1 = le plat entier, tel qu’il est enregistré.</p>
+          <p className="text-[11px] text-faint mt-1.5">
+            Au sens de la recette : {AUTHORIZED_UIDS.length} = une portion pour chacun.
+          </p>
         </div>
 
         <div>
@@ -52,7 +69,7 @@ export default function MealPickerSheet({ open, onClose, recipes, onSubmit }) {
             {WHO_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
-                onClick={() => setWho(opt.value)}
+                onClick={() => chooseWho(opt.value)}
                 className={cn(
                   'flex-1 px-3 py-1.5 rounded-lg text-sm border transition',
                   who === opt.value

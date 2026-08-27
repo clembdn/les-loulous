@@ -4,7 +4,7 @@ import { Button } from '@/shared/ui/Button.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { buildStockIndex, getStockStatus, getStatusMeta } from '../config/pantryStatus.js'
 import { scaleQuantity, formatQuantity } from '../utils/quantity.js'
-import { sumIngredients, sumIngredientsForPerson } from '../utils/nutrition.js'
+import { sumIngredients, sumIngredientsForPerson, personFactor } from '../utils/nutrition.js'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
 import { AUTHORIZED_UIDS, getPerson } from '@/shared/config/people.js'
 import { formatPrepTime } from '../utils/recipeMeta.js'
@@ -40,11 +40,17 @@ export default function RecipeDetail({ recipe, items, catalog, pantry = [], food
   // Nutrition : on part des ingredients BRUTS et on passe le facteur de portions
   // au calcul. Sommer les ingredients deja mis a l'echelle laisserait les poids
   // saisis a la main (gramsOverride) figes quand on change le nombre de portions.
+  //
+  // Une personne voit SA portion, pas la moitié de la casserole : sur une
+  // recette pour 4, l'onglet Clément affichait 500 kcal là où il en mange 250.
+  // `personFactor` ramène le plat à une portion par personne, la répartition des
+  // ingrédients faisant le reste (150 g de pâtes pour l'un, 100 pour l'autre).
+  const perPerson = factor * personFactor(baseServings ? targetServings : null)
   const nutrition = useMemo(
     () => (view === 'total'
       ? sumIngredients(recipe.ingredients, foodById, factor)
-      : sumIngredientsForPerson(recipe.ingredients, foodById, view, factor)),
-    [recipe.ingredients, foodById, factor, view],
+      : sumIngredientsForPerson(recipe.ingredients, foodById, view, perPerson)),
+    [recipe.ingredients, foodById, factor, perPerson, view],
   )
 
   const viewTabs = useMemo(() => [
@@ -126,7 +132,7 @@ export default function RecipeDetail({ recipe, items, catalog, pantry = [], food
           resolvedCount={nutrition.resolvedCount}
           label={view === 'total'
             ? `pour ${targetServings} portion${targetServings > 1 ? 's' : ''}`
-            : `part de ${getPerson(view)?.label}`}
+            : `${getPerson(view)?.label} · 1 portion`}
           onFix={nutrition.unresolved.length
             ? () => setLinking(nutrition.unresolved[0].index)
             : null}

@@ -171,6 +171,24 @@ export function sumIngredientsForPerson(ingredients, foodById, uid, factor = 1) 
   return sumIngredients(weighted, foodById, factor)
 }
 
+// Facteur ramenant les totaux d'une recette à UNE PORTION POUR CHACUN.
+//
+// `shareFor` partage une TABLÉE entre les deux personnes (ses parts font 1) : il
+// faut donc d'abord ramener la casserole à ce qu'on sert d'un coup. Une recette
+// « pour 2 » se mange entièrement à deux — facteur 1. Une recette « pour 4 » en
+// fait deux fois trop — facteur 0,5, et chacun retrouve sa portion.
+//
+// C'est ce facteur qui manquait : une crème chocolat « pour 4 » à 1 000 kcal
+// comptait 500 kcal par personne au lieu de 250.
+//
+// Nombre de portions inconnu ⇒ 1 : on suppose que le plat est fait pour la
+// tablée, plutôt que d'inventer une division.
+export function personFactor(servings) {
+  const s = Number(servings)
+  if (!(s > 0)) return 1
+  return AUTHORIZED_UIDS.length / s
+}
+
 // Totaux d'une recette ramenés à une portion (null si le nombre de portions est inconnu).
 export function perServing(totals, servings) {
   if (!servings || servings <= 0) return null
