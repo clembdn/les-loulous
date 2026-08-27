@@ -6,7 +6,7 @@ import LoginView from '@/platform/LoginView.jsx'
 import DashboardView from '@/platform/DashboardView.jsx'
 
 const FinauziApp = lazy(() => import('@/apps/finauzi/FinauziApp.jsx'))
-const CoursesApp = lazy(() => import('@/apps/courses/CoursesApp.jsx'))
+const CookItApp = lazy(() => import('@/apps/cookit/CookItApp.jsx'))
 const MuscauziApp = lazy(() => import('@/apps/muscauzi/MuscauziApp.jsx'))
 
 export default function App() {
@@ -24,13 +24,16 @@ export default function App() {
           }
         />
         <Route
-          path="/courses"
+          path="/cookit"
           element={
             <Suspense fallback={<Splash />}>
-              <CoursesApp />
+              <CookItApp />
             </Suspense>
           }
         />
+        {/* L'app s'appelait « Liste de courses » : leur PWA installée et leurs
+            marque-pages pointent encore sur /courses. */}
+        <Route path="/courses" element={<Navigate to="/cookit" replace />} />
         <Route
           path="/muscauzi"
           element={

@@ -1,4 +1,4 @@
-// Génère src/apps/courses/data/ciqual.json depuis la table CIQUAL 2020 de l'ANSES.
+// Génère src/apps/cookit/data/ciqual.json depuis la table CIQUAL 2020 de l'ANSES.
 //
 // À lancer UNE SEULE FOIS (le JSON produit est commité) :
 //   node scripts/build-ciqual.mjs
@@ -16,7 +16,7 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const XLS_URL = 'https://ciqual.anses.fr/cms/sites/default/files/inline-files/Table%20Ciqual%202020_FR_2020%2007%2007.xls'
-const OUT = join(dirname(fileURLToPath(import.meta.url)), '../src/apps/courses/data/ciqual.json')
+const OUT = join(dirname(fileURLToPath(import.meta.url)), '../src/apps/cookit/data/ciqual.json')
 
 // Index de colonnes dans le CSV converti (cf. en-tête de la table CIQUAL 2020).
 const COL = {

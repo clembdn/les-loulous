@@ -120,6 +120,7 @@ service cloud.firestore {
         && (!('quantity' in data) || data.quantity == null || (data.quantity is number && data.quantity >= 0))
         && (!('unit' in data) || data.unit == null || (data.unit is string && data.unit.size() <= 20))
         && (!('listId' in data) || data.listId == null || (data.listId is string && data.listId.size() <= 120))
+        && (!('foodId' in data) || data.foodId == null || (data.foodId is string && data.foodId.size() <= 200))
         && (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 500));
     }
 
@@ -259,6 +260,8 @@ service cloud.firestore {
         && data.per100.kcal <= 1000
         && (!('brand' in data) || data.brand == null || (data.brand is string && data.brand.size() <= 120))
         && (!('barcode' in data) || data.barcode == null || (data.barcode is string && data.barcode.size() <= 20))
+        && (!('aisle' in data) || data.aisle is string)
+        && (!('group' in data) || data.group == null || (data.group is string && data.group.size() <= 120))
         && (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1000))
         && (!('gramsPerPiece' in data) || data.gramsPerPiece == null || (data.gramsPerPiece is number && data.gramsPerPiece > 0))
         && (!('densityGPerMl' in data) || data.densityGPerMl == null || (data.densityGPerMl is number && data.densityGPerMl > 0))

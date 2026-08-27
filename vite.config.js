@@ -12,7 +12,7 @@ export default defineConfig({
       manifest: {
         name: 'Clément & Lise',
         short_name: 'C&L',
-        description: 'Notre espace à deux — courses & budget',
+        description: 'Notre espace à deux — cuisine, budget et séances',
         lang: 'fr',
         theme_color: '#0B0E13',
         background_color: '#0B0E13',
@@ -29,7 +29,27 @@ export default defineConfig({
       workbox: {
         // Fonts auto-hébergées → précachées comme le reste, plus besoin de runtime caching.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+        // Tesseract pèse ~6 Mo : hors de question de l'imposer à l'installation
+        // à quelqu'un qui ne scannera jamais d'étiquette. Il est mis en cache
+        // au premier usage (voir runtimeCaching), pas avant.
+        globIgnores: ['**/tesseract/**'],
         navigateFallback: '/index.html',
+        // Le service worker ne doit pas intercepter les requêtes du worker OCR
+        // vers ses propres fichiers autrement que par la règle ci-dessous.
+        navigateFallbackDenylist: [/^\/tesseract\//],
+        runtimeCaching: [
+          {
+            // Une fois téléchargé, le moteur reste disponible hors-ligne — c'est
+            // le cas qui compte : scanner une étiquette dans un magasin sans réseau.
+            urlPattern: ({ url }) => url.pathname.startsWith('/tesseract/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'ocr-tesseract',
+              expiration: { maxEntries: 12, maxAgeSeconds: 60 * 60 * 24 * 180 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
       devOptions: { enabled: false },
     }),

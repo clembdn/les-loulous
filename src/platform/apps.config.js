@@ -14,10 +14,10 @@ export const APPS = [
     status: 'live',    // 'live' | 'soon'
   },
   {
-    id: 'courses',
-    name: 'Liste de courses',
-    description: 'Nos courses partagées',
-    path: '/courses',
+    id: 'cookit',
+    name: 'Cook’It',
+    description: 'Nos courses, nos recettes, nos calories',
+    path: '/cookit',
     icon: ShoppingCart,
     accent: 'emerald',
     theme: 'light',
