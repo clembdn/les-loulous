@@ -5,7 +5,7 @@ import { subscribeToDay } from '../services/foodLogService.js'
 // Journal du jour affiché, pour l'utilisateur connecté.
 export function useFoodLog(dateId) {
   const { currentUid } = useAuth()
-  const [day, setDay] = useState({ id: dateId, date: dateId, entries: [] })
+  const [day, setDay] = useState({ id: dateId, date: dateId, entries: [], plannedOverrides: {} })
   const [isReady, setReady] = useState(false)
 
   useEffect(() => {
@@ -18,5 +18,5 @@ export function useFoodLog(dateId) {
     )
   }, [currentUid, dateId])
 
-  return { day, entries: day.entries, isLoading: !isReady }
+  return { day, entries: day.entries, plannedOverrides: day.plannedOverrides || {}, isLoading: !isReady }
 }

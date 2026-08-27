@@ -9,6 +9,17 @@ const RECIPES_PATH = 'couples/main/recipes'
 function recipesCol() { return collection(db, RECIPES_PATH) }
 function recipeDoc(id) { return doc(db, RECIPES_PATH, id) }
 
+// { uid: fraction } ; on ne garde que des nombres > 0, sinon null.
+function normalizeSplit(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const out = {}
+  for (const [uid, v] of Object.entries(raw)) {
+    const n = Number(v)
+    if (Number.isFinite(n) && n >= 0) out[uid] = Math.round(n * 1000) / 1000
+  }
+  return Object.keys(out).length ? out : null
+}
+
 function normalizeIngredient(raw) {
   const quantity = typeof raw?.quantity === 'number' ? raw.quantity : null
   const unit = raw?.unit || null
@@ -25,6 +36,9 @@ function normalizeIngredient(raw) {
     // sert quand l'unite ne se convertit pas toute seule (2 tranches, 1 pincee).
     foodId: raw?.foodId || null,
     gramsOverride: typeof raw?.gramsOverride === 'number' && raw.gramsOverride > 0 ? raw.gramsOverride : null,
+    // Repartition entre les deux personnes, en FRACTIONS (null = parts egales).
+    // Doit etre transporte ici, sinon il serait efface au premier enregistrement.
+    split: normalizeSplit(raw?.split),
   }
 }
 

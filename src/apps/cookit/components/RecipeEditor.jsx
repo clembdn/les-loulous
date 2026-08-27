@@ -8,8 +8,16 @@ import { readQuantity, toNumber } from '../utils/quantity.js'
 import { cleanName } from '../utils/aisleGuess.js'
 import ImagePickerSheet from './ImagePickerSheet.jsx'
 import FoodPickerSheet from './FoodPickerSheet.jsx'
+import SplitEditor from './SplitEditor.jsx'
 
-const EMPTY_ING = { name: '', quantity: '', unit: '', foodId: null, gramsOverride: null }
+const EMPTY_ING = { name: '', quantity: '', unit: '', foodId: null, gramsOverride: null, split: null }
+
+// Quantité pré-remplie quand on pioche un aliment : la portion de l'emballage si
+// elle est connue, sinon le poids d'une pièce, sinon 100 g (la base des valeurs
+// nutritionnelles, donc un repère qu'on lit sans calculer).
+function defaultGrams(food) {
+  return food?.servingGrams > 0 ? food.servingGrams : (food?.gramsPerPiece > 0 ? food.gramsPerPiece : 100)
+}
 const TEXTAREA_CLS =
   'w-full px-4 py-2.5 rounded-xl bg-surface-2 border border-border text-sm text-fg placeholder:text-faint focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus:border-transparent transition resize-none'
 
@@ -43,6 +51,7 @@ export default function RecipeEditor({ recipe, foods = [], foodById, onCancel, o
               // effacerait tous les aliments deja associes.
               foodId: i.foodId || null,
               gramsOverride: i.gramsOverride ?? null,
+              split: i.split || null,
             }
           })
           : [{ ...EMPTY_ING }],
@@ -90,6 +99,7 @@ export default function RecipeEditor({ recipe, foods = [], foodById, onCancel, o
           unit: i.unit || null,
           foodId: i.foodId || null,
           gramsOverride: i.gramsOverride ?? null,
+          split: i.split || null,
         })),
       steps: steps.map((s) => s.trim()).filter(Boolean),
       servings: toNumber(servings),
@@ -189,7 +199,14 @@ export default function RecipeEditor({ recipe, foods = [], foodById, onCancel, o
               </div>
             ))}
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-4">
+          <div className="mt-3">
+            <SplitEditor
+              ingredients={ingredients}
+              onChange={(i, split) => setIngredients((arr) => arr.map((it, j) => (j === i ? { ...it, split } : it)))}
+            />
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-4">
             <button onClick={addIngredient} className="inline-flex items-center gap-1.5 text-sm text-accent hover:opacity-80 transition">
               <Plus size={16} /> Ajouter un ingrédient
             </button>
@@ -230,16 +247,28 @@ export default function RecipeEditor({ recipe, foods = [], foodById, onCancel, o
             // « new » ajoute une ligne ; un index remplace l'aliment de cette ligne
             // en gardant la quantite deja saisie.
             if (pickingFor === 'new') {
-              const row = { name: food.name, quantity: '', unit: '', foodId: food.id, gramsOverride: null }
+              // Poser d'emblée une quantité en grammes : sans unité ni quantité,
+              // la recette affichait « non estimé » à la seconde même où on
+              // venait de choisir l'aliment. La famille « masse » est la seule
+              // qui se convertisse sans donnée supplémentaire sur l'aliment.
+              const row = { name: food.name, quantity: String(defaultGrams(food)), unit: 'g', foodId: food.id, gramsOverride: null, split: null }
               const last = arr[arr.length - 1]
               // On remplit la derniere ligne si elle est encore vierge, sinon on en ajoute une.
               return last && !last.name.trim() ? [...arr.slice(0, -1), row] : [...arr, row]
             }
-            return arr.map((it, j) => (
-              j === pickingFor
-                ? { ...it, name: it.name.trim() || food.name, foodId: food.id, gramsOverride: null }
-                : it
-            ))
+            return arr.map((it, j) => {
+              if (j !== pickingFor) return it
+              const hasQty = String(it.quantity).trim() !== ''
+              return {
+                ...it,
+                name: it.name.trim() || food.name,
+                foodId: food.id,
+                // Ne remplir que ce qui est vide : corriger l'aliment d'une ligne
+                // ne doit effacer ni la quantité saisie ni le poids saisi à la main.
+                quantity: hasQty ? it.quantity : String(defaultGrams(food)),
+                unit: hasQty ? it.unit : (it.unit || 'g'),
+              }
+            })
           })
           setPickingFor(null)
         }}

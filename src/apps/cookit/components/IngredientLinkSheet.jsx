@@ -29,14 +29,21 @@ export default function IngredientLinkSheet({ ingredient, foods, foodById, open,
   const conv = food ? toGrams(ingredient?.quantity, ingredient?.unit, food) : { grams: null, reason: null }
   const override = toNumber(grams)
   const effective = override > 0 ? override : conv.grams
+  // On demande un poids dès que la conversion échoue, quelle qu'en soit la raison
+  // (unité non convertible OU quantité absente).
   const needsGrams = !!food && conv.grams == null
   const preview = food && effective != null ? nutrientsForGrams(food, effective) : null
 
   function save() {
-    onSave({
-      foodId: foodId || null,
-      gramsOverride: override > 0 ? override : null,
-    })
+    const patch = { foodId: foodId || null, gramsOverride: override > 0 ? override : null }
+    // Un ingrédient sans quantité ne pouvait être réparé qu'en rouvrant tout
+    // l'éditeur : on pose ici la quantité manquante, en grammes.
+    if (ingredient?.quantity == null && override > 0) {
+      patch.quantity = override
+      patch.unit = 'g'
+      patch.gramsOverride = null
+    }
+    onSave(patch)
     onClose()
   }
 

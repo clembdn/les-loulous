@@ -261,6 +261,7 @@ service cloud.firestore {
         && (!('brand' in data) || data.brand == null || (data.brand is string && data.brand.size() <= 120))
         && (!('barcode' in data) || data.barcode == null || (data.barcode is string && data.barcode.size() <= 20))
         && (!('aisle' in data) || data.aisle is string)
+        && (!('aisleManual' in data) || data.aisleManual is bool)
         && (!('group' in data) || data.group == null || (data.group is string && data.group.size() <= 120))
         && (!('imageUrl' in data) || data.imageUrl == null || (data.imageUrl is string && data.imageUrl.size() <= 1000))
         && (!('gramsPerPiece' in data) || data.gramsPerPiece == null || (data.gramsPerPiece is number && data.gramsPerPiece > 0))

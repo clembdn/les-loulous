@@ -37,6 +37,9 @@ export default function FoodEditSheet({ food, open, onClose, onSave, onDelete })
   const [gramsPerPiece, setGramsPerPiece] = useState('')
   const [densityGPerMl, setDensity] = useState('')
   const [aisle, setAisle] = useState('autres')
+  // Vrai seulement si l'utilisateur a touché le sélecteur : un rayon deviné doit
+  // rester re-devinable quand la classification s'améliore.
+  const [aisleManual, setAisleManual] = useState(false)
   const [labelOpen, setLabelOpen] = useState(false)
   const [servingGrams, setServingGrams] = useState(null)
 
@@ -50,6 +53,7 @@ export default function FoodEditSheet({ food, open, onClose, onSave, onDelete })
     // Rayon propose d'office : il est presque toujours bon, on ne demande a
     // l'utilisateur que de le corriger quand il se trompe.
     setAisle(food ? resolveFoodAisle(food) : 'autres')
+    setAisleManual(food?.aisleManual === true)
     setServingGrams(food?.servingGrams ?? null)
   }, [food, open])
 
@@ -127,7 +131,7 @@ export default function FoodEditSheet({ food, open, onClose, onSave, onDelete })
             {AISLES.map((a) => (
               <button
                 key={a.id}
-                onClick={() => setAisle(a.id)}
+                onClick={() => { setAisle(a.id); setAisleManual(true) }}
                 className={cn(
                   'px-3 py-1.5 rounded-full text-xs border transition',
                   aisle === a.id

@@ -8,11 +8,12 @@ import { WHO_OPTIONS, WHO_BOTH } from '../utils/who.js'
 
 export default function MealPickerSheet({ open, onClose, recipes, onSubmit }) {
   const [who, setWho] = useState(WHO_BOTH)
+  const [portions, setPortions] = useState(1)
   const [q, setQ] = useState('')
 
   // Reset à chaque ouverture.
   useEffect(() => {
-    if (open) { setWho(WHO_BOTH); setQ('') }
+    if (open) { setWho(WHO_BOTH); setQ(''); setPortions(1) }
   }, [open])
 
   const filtered = useMemo(() => {
@@ -22,19 +23,29 @@ export default function MealPickerSheet({ open, onClose, recipes, onSubmit }) {
   }, [recipes, q])
 
   function pickRecipe(r) {
-    onSubmit({ recipeId: r.id, title: r.title, who })
+    onSubmit({ recipeId: r.id, title: r.title, who, portions })
     onClose()
   }
   function addFree() {
     const t = q.trim()
     if (!t) return
-    onSubmit({ recipeId: null, title: t, who })
+    onSubmit({ recipeId: null, title: t, who, portions })
     onClose()
   }
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()} title="Ajouter un repas">
       <div className="space-y-4">
+        <div>
+          <label className="block text-xs text-muted mb-1.5">Quantité</label>
+          <div className="inline-flex items-center rounded-xl border border-border overflow-hidden">
+            <button onClick={() => setPortions((p) => Math.max(0.5, p - 0.5))} className="px-3.5 py-2 text-fg hover:bg-surface-2 transition" aria-label="Moins de portions">−</button>
+            <span className="px-3 min-w-[3rem] text-center tabular text-fg">{portions}</span>
+            <button onClick={() => setPortions((p) => p + 0.5)} className="px-3.5 py-2 text-fg hover:bg-surface-2 transition" aria-label="Plus de portions">+</button>
+          </div>
+          <p className="text-[11px] text-faint mt-1.5">1 = le plat entier, tel qu’il est enregistré.</p>
+        </div>
+
         <div>
           <label className="block text-xs text-muted mb-1.5">Pour qui ?</label>
           <div className="flex gap-2">

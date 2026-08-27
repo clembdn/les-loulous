@@ -1,18 +1,21 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Search } from 'lucide-react'
 import { Sheet } from './Sheet.jsx'
 import { Input } from '@/shared/ui/Input.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
 import { normalizeName } from '../utils/aisleGuess.js'
 import { sumIngredients, formatKcal } from '../utils/nutrition.js'
+import { SLOTS } from '../services/foodLogService.js'
+import { cn } from '@/shared/lib/utils.js'
 
 // Inscrire un plat maison au journal : on choisit la recette, puis le nombre
 // de portions réellement mangées (rarement la recette entière).
 
-export default function RecipePortionSheet({ open, recipes, foodById, onClose, onAdd }) {
+export default function RecipePortionSheet({ open, recipes, foodById, slot, onClose, onAdd }) {
   const [q, setQ] = useState('')
   const [selected, setSelected] = useState(null)
   const [portions, setPortions] = useState(1)
+  const [chosenSlot, setChosenSlot] = useState(slot || 'midi')
 
   const filtered = useMemo(() => {
     const n = normalizeName(q)
@@ -27,6 +30,8 @@ export default function RecipePortionSheet({ open, recipes, foodById, onClose, o
   )
   const base = selected?.servings > 0 ? selected.servings : 1
   const kcalPerPortion = nutrition ? nutrition.totals.kcal / base : 0
+
+  useEffect(() => { if (open) setChosenSlot(slot || 'midi') }, [open, slot])
 
   function close() { setSelected(null); setQ(''); setPortions(1); onClose() }
 
@@ -62,6 +67,26 @@ export default function RecipePortionSheet({ open, recipes, foodById, onClose, o
           )}
 
           <div>
+            <label className="block text-xs text-muted mb-1.5">Repas</label>
+            <div className="flex gap-2">
+              {SLOTS.map((sl) => (
+                <button
+                  key={sl.id}
+                  onClick={() => setChosenSlot(sl.id)}
+                  className={cn(
+                    'flex-1 px-2 py-2 rounded-xl text-xs border transition',
+                    chosenSlot === sl.id
+                      ? 'bg-accent text-accent-fg border-accent'
+                      : 'bg-surface-2 text-muted border-border hover:text-fg',
+                  )}
+                >
+                  {sl.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
             <label className="block text-xs text-muted mb-1.5">Portions mangées</label>
             <div className="inline-flex items-center rounded-xl border border-border overflow-hidden">
               <button onClick={() => setPortions((p) => Math.max(0.5, p - 0.5))} className="px-3.5 py-2 text-fg hover:bg-surface-2 transition" aria-label="Moins">−</button>
@@ -79,7 +104,7 @@ export default function RecipePortionSheet({ open, recipes, foodById, onClose, o
 
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setSelected(null)}>Retour</Button>
-            <Button className="flex-1" onClick={() => { onAdd(selected, portions); close() }}>
+            <Button className="flex-1" onClick={() => { onAdd(selected, portions, chosenSlot); close() }}>
               Ajouter au journal
             </Button>
           </div>

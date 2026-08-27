@@ -48,11 +48,27 @@ function normalizeEntry(raw) {
   }
 }
 
+// Surcharges appliquées aux repas VENUS DU PLANNING. Le planning est partagé,
+// donc on ne peut pas y écrire « Lise n'a pas mangé ça » sans toucher aussi
+// l'affichage de Clément : la décision de chacun vit dans son propre journal.
+function normalizeOverrides(raw) {
+  if (!raw || typeof raw !== 'object') return {}
+  const out = {}
+  for (const [mealId, v] of Object.entries(raw)) {
+    if (!v || typeof v !== 'object') continue
+    out[mealId] = v.skipped === true
+      ? { skipped: true }
+      : { nutrition: v.nutrition || null }
+  }
+  return out
+}
+
 function normalizeDay(raw) {
   return {
     id: raw.id,
     date: raw.date || raw.id,
     entries: Array.isArray(raw.entries) ? raw.entries.map(normalizeEntry) : [],
+    plannedOverrides: normalizeOverrides(raw.plannedOverrides),
   }
 }
 
@@ -101,6 +117,23 @@ export function addEntry(uid, dateId, entry) {
   return writeEntries(uid, dateId, (cur) => [...cur, e]).catch((err) => {
     console.error('[Cook’It] addEntry error:', err)
   })
+}
+
+// Retirer de SON journal un repas venu du planning : le plat reste au planning
+// et dans le journal de l'autre personne.
+export function skipPlannedMeal(uid, dateId, mealId) {
+  const ref = dayDoc(uid, dateId)
+  const now = new Date().toISOString()
+  return getDoc(ref).then((snap) => {
+    const prev = snap.exists() ? (snap.data().plannedOverrides || {}) : {}
+    const next = { ...prev, [mealId]: { skipped: true } }
+    return snap.exists()
+      ? updateDoc(ref, { plannedOverrides: next, updatedAt: now, updatedBy: uid })
+      : setDoc(ref, {
+        date: dateId, entries: [], plannedOverrides: next,
+        createdAt: now, createdBy: uid, updatedAt: now, updatedBy: uid,
+      })
+  }).catch((err) => console.error('[Cook’It] skipPlannedMeal error:', err))
 }
 
 export function removeEntry(uid, dateId, entryId) {

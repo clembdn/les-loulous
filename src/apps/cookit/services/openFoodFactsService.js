@@ -23,6 +23,11 @@ const TIMEOUT_MS = 6000
 const FIELDS = [
   'code', 'product_name', 'product_name_fr', 'brands', 'quantity', 'serving_quantity',
   'nutriments', 'nutriscore_grade', 'nova_group', 'image_front_small_url',
+  // Classification : `pnns_groups_1` est une taxonomie fermée et bien remplie
+  // (« Milk and dairy products », « Beverages »…). C'est de loin le meilleur
+  // signal pour ranger un produit dans un rayon — deviner depuis un nom anglais
+  // comme « Vegemite » ou « Weet-Bix » ne mène nulle part.
+  'pnns_groups_1', 'food_groups_tags',
 ].join(',')
 
 const memo = new Map()
@@ -43,6 +48,14 @@ async function fetchJson(url) {
   } finally {
     clearTimeout(timer)
   }
+}
+
+// « en:milk-and-dairy-products » et « unknown » ne nous apprennent rien : on ne
+// garde que les libellés PNNS exploitables.
+function normalizeGroup(v) {
+  const raw = String(v || '').trim()
+  if (!raw || /^unknown$/i.test(raw)) return null
+  return raw.startsWith('en:') ? raw.slice(3).replace(/-/g, ' ') : raw
 }
 
 function num(v) {
@@ -85,6 +98,9 @@ export function toPartialFood(product) {
       salt: num(n.salt_100g),
     },
     servingGrams: num(product.serving_quantity),
+    // Repris tel quel dans le champ `group` de l'aliment, à côté des groupes
+    // CIQUAL — les deux alimentent la même table de correspondance des rayons.
+    group: normalizeGroup(product.pnns_groups_1) || normalizeGroup(product.food_groups_tags?.[0]),
     imageUrl: product.image_front_small_url || null,
     nutriscore: product.nutriscore_grade || null,
     novaGroup: Number.isFinite(Number(product.nova_group)) ? Number(product.nova_group) : null,

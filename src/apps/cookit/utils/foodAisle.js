@@ -24,15 +24,36 @@ const AISLE_BY_CIQUAL_GROUP = {
   'aliments infantiles': 'autres',
 }
 
+// Groupes PNNS d'Open Food Facts (taxonomie fermée, neuf valeurs). Clés en
+// minuscules : `pnns_groups_1` et `food_groups_tags` ne s'accordent pas sur la
+// casse (« Milk and dairy products » vs « milk and dairy products »).
+const AISLE_BY_OFF_GROUP = {
+  'fruits and vegetables': 'fruits-legumes',
+  'milk and dairy products': 'cremerie',
+  'fish meat eggs': 'boucherie',
+  'beverages': 'boissons',
+  'sugary snacks': 'epicerie-sucree',
+  'cereals and potatoes': 'epicerie-salee',
+  'salty snacks': 'epicerie-salee',
+  'fat and sauces': 'epicerie-salee',
+  'composite foods': 'epicerie-salee',
+}
+
 export function resolveAisle(id) {
   return AISLE_BY_ID[id] ? id : DEFAULT_AISLE
 }
 
-// Rayon à poser sur un aliment qu'on enregistre. Un rayon déjà choisi à la main
-// n'est jamais écrasé.
+// Rayon d'un aliment.
+//
+// Seul un rayon EXPLICITEMENT choisi par l'utilisateur (`aisleManual`) est
+// respecté. Se fier à la simple présence de `food.aisle` ne marchait pas :
+// « autres » est un id valide, donc le rayon par défaut fabriqué à la lecture
+// passait pour un choix délibéré et se figeait à vie — c'est ce qui bloquait
+// tous les produits scannés dans « Autres ».
 export function resolveFoodAisle(food) {
-  if (food?.aisle && AISLE_BY_ID[food.aisle]) return food.aisle
-  const fromGroup = food?.group ? AISLE_BY_CIQUAL_GROUP[food.group] : null
+  if (food?.aisleManual && AISLE_BY_ID[food.aisle]) return food.aisle
+  const g = String(food?.group || '').toLowerCase()
+  const fromGroup = g ? (AISLE_BY_CIQUAL_GROUP[g] || AISLE_BY_OFF_GROUP[g]) : null
   if (fromGroup) return fromGroup
   return guessAisle(food?.name || '')
 }

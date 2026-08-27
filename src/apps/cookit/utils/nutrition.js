@@ -7,6 +7,7 @@
 // silencieusement inexactes.
 
 import { getUnit } from './quantity.js'
+import { AUTHORIZED_UIDS } from '../../../shared/config/people.js'
 
 // Volumes conventionnels des cuillères (famille `spoon`, sans facteur propre).
 const SPOON_ML = { cas: 15, cac: 5 }
@@ -54,8 +55,10 @@ export function toGrams(quantity, unit, food) {
     return { grams: ml * density, reason: null }
   }
 
-  // count / pack : impossible sans le poids d'une unité, qu'on ne devine pas.
-  const per = Number(food?.gramsPerPiece)
+  // count / pack : il faut le poids d'une unité. À défaut, la portion indiquée
+  // sur l'emballage fait un repère honnête — elle est déjà récupérée d'Open Food
+  // Facts et stockée, elle n'était simplement jamais lue.
+  const per = Number(food?.gramsPerPiece) > 0 ? Number(food.gramsPerPiece) : Number(food?.servingGrams)
   if (per > 0) return { grams: quantity * per, reason: null }
   return { grams: null, reason: UNRESOLVED.NEEDS_PIECE_WEIGHT }
 }
@@ -85,6 +88,46 @@ function addInto(total, part) {
 //   foodById    : Map|objet id → aliment
 //   factor      : mise à l'échelle des portions (RecipeDetail l'a déjà)
 // → { totals, unresolved: [{ index, name, reason }], resolvedCount }
+// Part d'un ingrédient revenant à une personne, en fraction de la quantité
+// totale. Absente ⇒ parts égales.
+//
+// On stocke des FRACTIONS et pas des grammes : une recette dont on change le
+// nombre de portions garde ainsi son partage. Des grammes figés deviendraient
+// faux en silence dès qu'on passe de 2 à 4.
+export function shareFor(ingredient, uid) {
+  const split = ingredient?.split
+  if (!split || typeof split !== 'object') return 1 / AUTHORIZED_UIDS.length
+  const total = AUTHORIZED_UIDS.reduce((sum, u) => sum + (Number(split[u]) || 0), 0)
+  if (!(total > 0)) return 1 / AUTHORIZED_UIDS.length
+  // Renormalisé : deux fractions saisies séparément peuvent ne pas tomber juste.
+  return (Number(split[uid]) || 0) / total
+}
+
+// Fractions → grammes, pour l'affichage et la saisie (l'écran raisonne en
+// grammes, le stockage en fractions).
+export function gramsForShare(ingredient, uid) {
+  const q = Number(ingredient?.quantity)
+  if (!Number.isFinite(q)) return null
+  return Math.round(q * shareFor(ingredient, uid) * 10) / 10
+}
+
+// Fabrique le `split` correspondant à « telle personne prend tant de grammes ».
+// Rend null quand on retombe sur des parts égales, pour ne rien stocker d'inutile.
+export function splitFromGrams(ingredient, uid, grams) {
+  const total = Number(ingredient?.quantity)
+  const g = Number(grams)
+  if (!(total > 0) || !Number.isFinite(g) || g < 0) return null
+  const mine = Math.min(g, total) / total
+  const others = AUTHORIZED_UIDS.filter((u) => u !== uid)
+  if (others.length === 0) return null
+  const rest = (1 - mine) / others.length
+  const equal = 1 / AUTHORIZED_UIDS.length
+  if (Math.abs(mine - equal) < 0.001) return null
+  const out = { [uid]: Math.round(mine * 1000) / 1000 }
+  for (const u of others) out[u] = Math.round(rest * 1000) / 1000
+  return out
+}
+
 export function sumIngredients(ingredients, foodById, factor = 1) {
   const totals = { ...EMPTY_PER100, sugars: null, satFat: null, fiber: null, salt: null }
   const unresolved = []
@@ -111,6 +154,21 @@ export function sumIngredients(ingredients, foodById, factor = 1) {
   })
 
   return { totals, unresolved, resolvedCount }
+}
+
+// Mêmes totaux, mais pour une seule personne : chaque ingrédient est pondéré par
+// sa part. La règle « un ingrédient non estimé ne vaut jamais zéro » vaut ici
+// aussi — une part de rien reste rien, pas zéro.
+export function sumIngredientsForPerson(ingredients, foodById, uid, factor = 1) {
+  const weighted = (ingredients || []).map((ing) => {
+    const share = shareFor(ing, uid)
+    return {
+      ...ing,
+      quantity: ing.quantity == null ? ing.quantity : ing.quantity * share,
+      gramsOverride: ing.gramsOverride == null ? null : ing.gramsOverride * share,
+    }
+  })
+  return sumIngredients(weighted, foodById, factor)
 }
 
 // Totaux d'une recette ramenés à une portion (null si le nombre de portions est inconnu).

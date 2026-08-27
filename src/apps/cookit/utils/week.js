@@ -1,5 +1,7 @@
+// Import relatif et non `@/` : cette couche utils est couverte par des tests
+// `node --test`, qui ne connaît pas l'alias de Vite.
 import { startOfWeek, endOfWeek, addWeeks, eachDayOfInterval } from 'date-fns'
-import { toLocalDateKey, DAY_LABELS, MONTHS } from '@/shared/lib/dates.js'
+import { toLocalDateKey, DAY_LABELS, MONTHS } from '../../../shared/lib/dates.js'
 
 export { toLocalDateKey }
 

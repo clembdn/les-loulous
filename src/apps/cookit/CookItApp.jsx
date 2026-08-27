@@ -124,6 +124,7 @@ export default function CookItApp() {
           catalog={catalog}
           pantry={pantry}
           foods={foods}
+          foodById={foodById}
           activeListId={activeListId}
           onGoToList={goToList}
         />

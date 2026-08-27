@@ -6,13 +6,14 @@ import { cn } from '@/shared/lib/utils.js'
 import MealSlot from '../components/MealSlot.jsx'
 import MealPickerSheet from '../components/MealPickerSheet.jsx'
 import AddIngredientsSheet from '../components/AddIngredientsSheet.jsx'
+import { buildMealNutrition } from '../utils/plannedMeals.js'
 import { useWeekPlan } from '../hooks/useWeekPlan.js'
 import { getWeek } from '../utils/week.js'
 import { addMeal, removeMeal } from '../services/mealPlanService.js'
 import { normalizeName } from '../utils/aisleGuess.js'
 import { readQuantity, mergeQuantity, formatQuantity } from '../utils/quantity.js'
 
-export default function PlanningView({ recipes, items, catalog, pantry, foods = [], activeListId, onGoToList }) {
+export default function PlanningView({ recipes, items, catalog, pantry, foods = [], foodById, activeListId, onGoToList }) {
   const { currentUid } = useAuth()
   const [offset, setOffset] = useState(0)
   const week = useMemo(() => getWeek(offset), [offset])
@@ -60,7 +61,14 @@ export default function PlanningView({ recipes, items, catalog, pantry, foods = 
   }, [week.days, dayMap, recipeById])
 
   function submitMeal(meal) {
-    if (picker) addMeal(picker.date, picker.slot, meal, currentUid)
+    if (!picker) return
+    // On fige la nutrition par personne MAINTENANT, dans le repas lui-même.
+    // C'est ce qui permet au journal de chacun de lire sa part sans écriture
+    // croisée, et qui garantit qu'une recette corrigée plus tard ne réécrira
+    // pas ce qui a été mangé.
+    const recipe = meal.recipeId ? recipeById[meal.recipeId] : null
+    const nutrition = buildMealNutrition(recipe, meal.portions, meal.who, foodById)
+    addMeal(picker.date, picker.slot, { ...meal, nutrition }, currentUid)
   }
   function handleRemove(date, slot, mealId) {
     removeMeal(date, slot, mealId, currentUid)

@@ -3,7 +3,8 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
 import { slugify, normalizeName, cleanName } from '../utils/aisleGuess.js'
-import { resolveFoodAisle, resolveAisle } from '../utils/foodAisle.js'
+import { resolveFoodAisle } from '../utils/foodAisle.js'
+import { AISLE_BY_ID } from '../config/aisles.js'
 
 // Bibliothèque d'aliments du couple : tout ce qui a été scanné, cherché ou saisi.
 //
@@ -58,7 +59,11 @@ function normalize(raw) {
     brand: raw.brand || null,
     barcode: raw.barcode || null,
     source: ['off', 'ciqual', 'manual'].includes(raw.source) ? raw.source : 'manual',
-    aisle: resolveAisle(raw.aisle),
+    // Deviner a la LECTURE quand le rayon est absent : les aliments enregistres
+    // avant l'existence du champ s'affichent aussitot au bon rayon, sans
+    // migration, et se corrigent en base a la prochaine ecriture.
+    aisle: raw.aisle && AISLE_BY_ID[raw.aisle] ? raw.aisle : resolveFoodAisle(raw),
+    aisleManual: raw.aisleManual === true,
     group: raw.group || null,
     per100: normalizePer100(raw.per100),
     gramsPerPiece: positive(raw.gramsPerPiece),
@@ -88,6 +93,7 @@ function toDoc(food) {
     // Le rayon est calcule ici et pas dans l'ecran : tout aliment enregistre en a
     // un, quelle que soit la porte d'entree (scan, CIQUAL, saisie manuelle).
     aisle: resolveFoodAisle(food),
+    aisleManual: food.aisleManual === true,
     // `group` (groupe CIQUAL) n'existe que sur les resultats de recherche ; le
     // persister evite de le perdre et sert de source au rayon plus tard.
     group: food.group || null,

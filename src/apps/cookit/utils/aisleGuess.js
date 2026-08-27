@@ -42,13 +42,48 @@ export function slugify(name) {
 }
 
 // Devine le rayon depuis le nom via le dictionnaire de mots-clés (premier match).
-export function guessAisle(name) {
-  const n = rawNormalize(name)
-  if (!n) return DEFAULT_AISLE
+//
+// Le rapprochement se fait sur des MOTS ENTIERS, jamais sur une sous-chaîne :
+// un `includes` brut classait « Southern Fried Chicken » en épicerie sucrée
+// (« sou-the-rn » contient « the »), « Daily Juice » en fruits & légumes
+// (« d-ail-y »), « Mussels » en épicerie salée (« mus-sel-s ») et « Beautiful
+// Water » en boissons (« b-eau-tiful »). Des réponses fausses et confiantes,
+// pires que pas de réponse du tout.
+//
+// Un mot-clé peut contenir des espaces (« pomme de terre ») : on teste alors la
+// séquence complète, toujours bornée par des frontières de mots.
+const WORD_RE_CACHE = new Map()
+
+function wordRegex(word) {
+  let re = WORD_RE_CACHE.get(word)
+  if (!re) {
+    // Les DEUX côtés passent par normalizeName (dé-pluralisation prudente), sinon
+    // « pommes de terre » ne trouverait pas le mot-clé « pomme de terre ». Le
+    // `s?` final rattrape les pluriels courts que normalizeName laisse passer.
+    const escaped = normalizeName(word).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    re = new RegExp(`\\b${escaped}s?\\b`)
+    WORD_RE_CACHE.set(word, re)
+  }
+  return re
+}
+
+// Les mots-clés COMPOSÉS sont testés avant les simples : « peanut butter » doit
+// l'emporter sur « butter », sinon le beurre de cacahuète finit en crémerie.
+// À spécificité égale, l'ordre de déclaration tranche (cf. AISLE_KEYWORDS, où
+// « boissons » passe avant « fruits & légumes » pour que « jus d'orange » soit
+// une boisson et non un fruit).
+function scan(n, multiWord) {
   for (const entry of AISLE_KEYWORDS) {
     for (const w of entry.words) {
-      if (n.includes(w)) return entry.aisle
+      if (w.includes(' ') !== multiWord) continue
+      if (wordRegex(w).test(n)) return entry.aisle
     }
   }
-  return DEFAULT_AISLE
+  return null
+}
+
+export function guessAisle(name) {
+  const n = normalizeName(name)
+  if (!n) return DEFAULT_AISLE
+  return scan(n, true) || scan(n, false) || DEFAULT_AISLE
 }

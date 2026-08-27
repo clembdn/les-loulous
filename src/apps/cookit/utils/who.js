@@ -1,4 +1,6 @@
-import { CLEMENT_UID, LISE_UID, getPerson } from '@/shared/config/people.js'
+// Import relatif et non `@/` : cette couche utils est couverte par des tests
+// `node --test`, qui ne connaît pas l'alias de Vite.
+import { CLEMENT_UID, LISE_UID, getPerson } from '../../../shared/config/people.js'
 
 export const WHO_BOTH = 'both'
 
