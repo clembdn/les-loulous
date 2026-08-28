@@ -185,4 +185,44 @@ export function exerciseKey(name) {
     .trim()
 }
 
+/**
+ * Les groupes musculaires — l'axe qui manquait.
+ *
+ * La bibliothèque les connaissait déjà (elle est rangée par groupe), mais
+ * l'import ne gardait que le nom et le type : le groupe était affiché puis
+ * jeté. Sans lui, un catalogue de quatre-vingts mouvements est une liste plate
+ * qu'on parcourt à la recherche, et surtout on ne peut pas répondre à la seule
+ * question d'analyse qui compte vraiment sur la durée — « est-ce que je
+ * néglige mes jambes ».
+ *
+ * « Autre » ferme la liste : un mouvement saisi à la main n'a pas à en choisir
+ * un, et un exercice sans groupe ne doit pas disparaître des totaux.
+ */
+export const OTHER_GROUP = 'Autre'
+
+export const MUSCLE_GROUPS = [...EXERCISE_LIBRARY.map((g) => g.group), OTHER_GROUP]
+
+export function isMuscleGroup(value) {
+  return MUSCLE_GROUPS.includes(value)
+}
+
+/**
+ * Le groupe d'un mouvement de la bibliothèque, retrouvé par son NOM.
+ *
+ * C'est ce qui évite toute migration : les exercices déjà au catalogue ont été
+ * importés sans groupe, mais ils portent le nom exact de la bibliothèque. On le
+ * retrouve à la lecture, une fois pour toutes, et seuls les mouvements saisis à
+ * la main ont réellement besoin qu'on choisisse pour eux.
+ *
+ * La clé ignore accents et casse (cf. `exerciseKey`) : « Développé couché » et
+ * « developpe couche » sont le même mouvement.
+ */
+const GROUP_BY_KEY = Object.fromEntries(
+  EXERCISE_LIBRARY.flatMap((g) => g.items.map((item) => [exerciseKey(item.name), g.group])),
+)
+
+export function groupForName(name) {
+  return GROUP_BY_KEY[exerciseKey(name)] || null
+}
+
 export const LIBRARY_COUNT = EXERCISE_LIBRARY.reduce((n, g) => n + g.items.length, 0)

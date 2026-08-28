@@ -4,6 +4,7 @@ import {
   toLocalDateKey, fromLocalDateKey, shiftDateKey, isoDayOfWeek, formatDayFr, MONTHS,
 } from '@/shared/lib/dates.js'
 import { cn } from '@/shared/lib/utils.js'
+import { useMuscData } from '../../context/MuscDataContext.jsx'
 import { useSessionRange } from '../../hooks/useMuscData.js'
 import { hasCompletedWork, doneSets, sessionLineup } from '../../services/sessionsService.js'
 
@@ -29,7 +30,10 @@ function monthGrid(year, month) {
 }
 
 export default function ConsistencyCalendar() {
-  const todayKey = toLocalDateKey(new Date())
+  // La date du jour vient du contexte : recalculée à minuit et au retour de
+  // l'onglet, elle ne peut plus rester figée sur la veille dans une PWA laissée
+  // ouverte — le calendrier surlignerait alors le mauvais jour.
+  const { today: todayKey } = useMuscData()
   const startKey = useMemo(() => shiftDateKey(todayKey, -(WINDOW_DAYS - 1)), [todayKey])
 
   // Une seule requête, bornée par id de document — possible grâce à la

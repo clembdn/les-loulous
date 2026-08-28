@@ -154,4 +154,52 @@ export function saveProgramDay(uid, parity, dayOfWeek, lines, currentUid) {
   }, { merge: true })
 }
 
+/**
+ * Réécrit PLUSIEURS jours d'un coup — la copie d'une semaine entière.
+ *
+ * Sept appels à `saveProgramDay` auraient fait sept écritures sur le même
+ * document, donc sept allers-retours et sept échos du cache : la liste aurait
+ * clignoté jour après jour sous les yeux. Ici, un seul `setDoc`.
+ *
+ * `days` est une map partielle { dayOfWeek: [ligne] } : les jours absents ne
+ * sont pas touchés. Un jour présent mais vide efface bien la prescription de ce
+ * jour-là — c'est ce qu'on attend d'une copie depuis une semaine où il est au
+ * repos.
+ */
+export function saveProgramWeek(uid, parity, days, currentUid) {
+  const cleaned = {}
+  for (const [dow, lines] of Object.entries(days || {})) {
+    cleaned[dow] = (lines || [])
+      .map((line, i) => normalizeLine(line, i, parity, Number(dow)))
+      .filter((l) => l.exerciseId)
+      .map((l, i) => ({ ...l, order: i }))
+  }
+  return setDoc(programDoc(uid, parity), {
+    days: cleaned,
+    updatedAt: new Date().toISOString(),
+    updatedBy: currentUid,
+  }, { merge: true })
+}
+
+/**
+ * Recopie des lignes vers un autre jour ou une autre parité.
+ *
+ * Chaque ligne reçoit un `instanceId` NEUF. C'est une occurrence distincte :
+ * le lundi de la semaine paire et celui de la semaine impaire sont deux cases
+ * différentes du programme, même quand elles contiennent la même chose.
+ *
+ * Sans conséquence sur l'historique : le rappel « la dernière fois » et les
+ * courbes suivent l'`exerciseId`, c'est-à-dire le mouvement, pas l'occurrence.
+ */
+export function copyLines(lines, newInstanceId) {
+  return (lines || []).map((line, i) => ({
+    instanceId: newInstanceId(),
+    exerciseId: line.exerciseId,
+    name: line.name || '',
+    order: i,
+    sets: line.sets,
+    reps: line.reps,
+  }))
+}
+
 export { PARITIES, DOWS }

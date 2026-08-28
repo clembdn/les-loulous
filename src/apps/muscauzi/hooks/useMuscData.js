@@ -1,168 +1,62 @@
-import { useEffect, useState } from 'react'
-import { useAuth } from '@/shared/context/AuthContext.jsx'
-import { subscribeToExercises } from '../services/exercisesService.js'
-import { subscribeToProgram, emptyProgram } from '../services/programService.js'
-import {
-  subscribeToSession, subscribeToSessions, subscribeToSessionRange, subscribeToLastPerf,
-} from '../services/sessionsService.js'
-import { subscribeToWeights } from '../services/weightsService.js'
-import { subscribeToNotes } from '../services/notesService.js'
+import { useMemo } from 'react'
+import { useMuscData } from '../context/MuscDataContext.jsx'
 
-// Catalogue d'exercices du profil connecté — cloisonné comme le reste.
+/**
+ * Les hooks de données de MuscAuzi.
+ *
+ * Ils ouvraient chacun leur propre `onSnapshot`. L'écran de séance restant
+ * monté en permanence, ouvrir Progrès rouvrait par-dessus le catalogue, les
+ * notes et les pesées : sept à huit écoutes simultanées pour cinq jeux de
+ * données, et autant d'occasions de voir deux écrans afficher deux versions de
+ * la même chose.
+ *
+ * Ce ne sont plus que des lectures du contexte (`context/MuscDataContext.jsx`),
+ * qui tient l'unique jeu d'abonnements. Aucun d'eux n'ouvre plus rien.
+ */
+
 export function useExercises() {
-  const { currentUid } = useAuth()
-  const [exercises, setExercises] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    if (!currentUid) return undefined
-    const unsub = subscribeToExercises(
-      currentUid,
-      (x) => { setExercises(x); setIsLoading(false) },
-      () => setIsLoading(false),
-    )
-    return () => unsub()
-  }, [currentUid])
-
-  const byId = Object.fromEntries(exercises.map((e) => [e.id, e]))
-  return { exercises, exerciseById: byId, isLoading }
+  const { exercises, exerciseById, catalogueReady } = useMuscData()
+  return { exercises, exerciseById, isLoading: !catalogueReady }
 }
 
-// Programme du profil connecté pour une parité donnée : les lignes de chaque
-// jour, et le nom de la séance qu'elles composent.
 export function useProgram(parity) {
-  const { currentUid } = useAuth()
-  const [program, setProgram] = useState(emptyProgram)
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    if (!currentUid || !parity) return undefined
-    setIsLoading(true)
-    const unsub = subscribeToProgram(
-      currentUid, parity,
-      (p) => { setProgram(p); setIsLoading(false) },
-      () => setIsLoading(false),
-    )
-    return () => unsub()
-  }, [currentUid, parity])
-
+  const { programs, isLoading } = useMuscData()
+  const program = programs[parity] || programs.odd
   return { days: program.days, names: program.names, isLoading }
 }
 
-export function useSession(dateId) {
-  const { currentUid } = useAuth()
-  const [session, setSession] = useState(null)
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    if (!currentUid || !dateId) return undefined
-    setIsLoading(true)
-    const unsub = subscribeToSession(
-      currentUid, dateId,
-      (s) => { setSession(s); setIsLoading(false) },
-      () => setIsLoading(false),
-    )
-    return () => unsub()
-  }, [currentUid, dateId])
-
-  return { session, isLoading }
-}
-
-// Une seule lecture pour tous les rappels « dernière fois » de la séance.
-// `byInstance` pré-remplit la saisie de l'occurrence, `byExercise` donne
-// l'aperçu du mouvement. C'est un cache : jamais la source des courbes.
-const EMPTY_LAST_PERF = { byInstance: {}, byExercise: {} }
-
-export function useLastPerf() {
-  const { currentUid } = useAuth()
-  const [lastPerf, setLastPerf] = useState(EMPTY_LAST_PERF)
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    if (!currentUid) return undefined
-    const unsub = subscribeToLastPerf(
-      currentUid,
-      (p) => { setLastPerf(p); setIsLoading(false) },
-      () => setIsLoading(false),
-    )
-    return () => unsub()
-  }, [currentUid])
-
-  return { lastPerf, isLoading }
-}
-
-// Historique complet — chargé seulement par l'écran Progrès.
-export function useSessions() {
-  const { currentUid } = useAuth()
-  const [sessions, setSessions] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    if (!currentUid) return undefined
-    const unsub = subscribeToSessions(
-      currentUid,
-      (s) => { setSessions(s); setIsLoading(false) },
-      () => setIsLoading(false),
-    )
-    return () => unsub()
-  }, [currentUid])
-
-  return { sessions, isLoading }
+export function useNotes() {
+  const { notes, isLoading } = useMuscData()
+  return { notes, isLoading }
 }
 
 export function useWeights() {
-  const { currentUid } = useAuth()
-  const [weights, setWeights] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    if (!currentUid) return undefined
-    const unsub = subscribeToWeights(
-      currentUid,
-      (w) => { setWeights(w); setIsLoading(false) },
-      () => setIsLoading(false),
-    )
-    return () => unsub()
-  }, [currentUid])
-
+  const { weights, isLoading } = useMuscData()
   return { weights, isLoading }
 }
 
-// Fenêtre bornée de séances — calendrier de régularité (90 jours).
+/**
+ * Fenêtre bornée de séances.
+ *
+ * Elle se découpe dans celle que le contexte tient déjà (120 jours) plutôt que
+ * d'ouvrir une seconde requête : tous les appelants demandent moins que ça.
+ */
 export function useSessionRange(startKey, endKey) {
-  const { currentUid } = useAuth()
-  const [sessions, setSessions] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    if (!currentUid || !startKey || !endKey) return undefined
-    setIsLoading(true)
-    const unsub = subscribeToSessionRange(
-      currentUid, startKey, endKey,
-      (s) => { setSessions(s); setIsLoading(false) },
-      () => setIsLoading(false),
-    )
-    return () => unsub()
-  }, [currentUid, startKey, endKey])
-
+  const { recentSessions, isLoading } = useMuscData()
+  const sessions = useMemo(
+    () => recentSessions.filter((s) => s.date >= startKey && s.date <= endKey),
+    [recentSessions, startKey, endKey],
+  )
   return { sessions, isLoading }
 }
 
-// Notes de réglages du profil connecté, indexées par exerciceId.
-export function useNotes() {
-  const { currentUid } = useAuth()
-  const [notes, setNotes] = useState({})
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    if (!currentUid) return undefined
-    const unsub = subscribeToNotes(
-      currentUid,
-      (n) => { setNotes(n); setIsLoading(false) },
-      () => setIsLoading(false),
-    )
-    return () => unsub()
-  }, [currentUid])
-
-  return { notes, isLoading }
+// Historique COMPLET — désormais tenu par le contexte, comme le reste.
+//
+// Il ouvrait sa propre écoute non bornée, en plus de la fenêtre glissante du
+// contexte : deux lectures de la même collection, décalées, dont l'une pouvait
+// afficher une séance que l'autre n'avait pas encore. Les records personnels
+// ont demandé l'historique entier partout ; il n'y a plus qu'un tableau.
+export function useSessions() {
+  const { sessions, isLoading } = useMuscData()
+  return { sessions, isLoading }
 }

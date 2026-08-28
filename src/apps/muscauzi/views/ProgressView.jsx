@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { LineChart as LineChartIcon, Download, Dumbbell, CalendarRange } from 'lucide-react'
+import { LineChart as LineChartIcon, Download, Dumbbell, CalendarRange, PersonStanding } from 'lucide-react'
 import { Skeleton } from '@/shared/ui/Skeleton.jsx'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
 import { Dialog, DialogContent, DialogBody } from '@/shared/ui/dialog.jsx'
@@ -7,13 +7,16 @@ import { Button } from '@/shared/ui/Button.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { useMediaQuery } from '@/shared/lib/useMediaQuery.js'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
-import { useExercises, useSessions, useNotes, useWeights } from '../hooks/useMuscData.js'
+import { useSessions } from '../hooks/useMuscData.js'
+import { useMuscData } from '../context/MuscDataContext.jsx'
 import { exerciseHistoryIndex } from '../utils/metrics.js'
 import { saveNote } from '../services/notesService.js'
 import ExerciseDetailView from './ExerciseDetailView.jsx'
 import SessionsProgressView from './SessionsProgressView.jsx'
 import ExerciseTable from '../components/progress/ExerciseTable.jsx'
 import ExportSheet from '../components/progress/ExportSheet.jsx'
+import PageHeader from '../components/layout/PageHeader.jsx'
+import MuscleVolume from '../components/progress/MuscleVolume.jsx'
 
 // Au-delà, le tableau prend toute la largeur et le détail s'ouvre PAR-DESSUS,
 // en modale. En dessous, il n'y a pas la place pour une modale confortable :
@@ -21,10 +24,10 @@ import ExportSheet from '../components/progress/ExportSheet.jsx'
 const MODAL_QUERY = '(min-width: 1024px)'
 
 export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
-  const { exercises, exerciseById, isLoading: exercisesLoading } = useExercises()
+  const { exercises, exerciseById, notes, weights, catalogueReady, today } = useMuscData()
+  // L'historique COMPLET, non borné : c'est le seul écran qui en a besoin, et
+  // c'est lui qui l'ouvre — pas le contexte au démarrage de l'application.
   const { sessions, isLoading: sessionsLoading } = useSessions()
-  const { notes } = useNotes()
-  const { weights } = useWeights()
   const { currentUid } = useAuth()
   const isWide = useMediaQuery(MODAL_QUERY)
 
@@ -35,7 +38,7 @@ export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
   const [exporting, setExporting] = useState(false)
 
   // UNIQUEMENT les exercices que CE profil a réellement travaillés — lu dans
-  // l'historique des séances, jamais dans le cache `lastPerf`.
+  // l'historique des séances lui-même.
   const trained = useMemo(() => {
     const index = exerciseHistoryIndex(sessions, 1)
     return exercises.filter((exercise) => index[exercise.id])
@@ -63,41 +66,44 @@ export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
     )
   }
 
-  const isLoading = (exercisesLoading || sessionsLoading) && trained.length === 0
+  const isLoading = (!catalogueReady || sessionsLoading) && trained.length === 0
 
   return (
     <div className={cn(
       'mx-auto px-4 pt-5 pb-28 lg:pb-10 lg:pt-8 lg:px-6',
       // La largeur ne s'ouvre que pour le tableau : les autres écrans gardent
       // leur colonne de lecture étroite.
-      scope === 'exercices' ? 'max-w-xl lg:max-w-6xl' : 'max-w-xl',
+      scope === 'exercices' ? 'max-w-xl lg:max-w-6xl' : 'max-w-xl lg:max-w-2xl',
     )}>
-      <header className="mb-5 flex items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="text-xs uppercase tracking-[0.18em] text-faint">Progression</p>
-          <h1 className="text-2xl font-semibold tracking-[-0.02em] text-fg mt-1">Mes progrès</h1>
-          <p className="text-sm text-muted mt-1">Ton historique à toi.</p>
-        </div>
-        <Button
-          variant="secondary"
-          size="icon"
-          className="mt-1 shrink-0"
-          aria-label="Exporter mes performances"
-          onClick={() => setExporting(true)}
-        >
-          <Download size={16} />
-        </Button>
-      </header>
+      <PageHeader
+        eyebrow="Progression"
+        title="Mes progrès"
+        subtitle="Ton historique à toi."
+        action={
+          <Button
+            variant="secondary"
+            size="icon"
+            aria-label="Exporter mes performances"
+            onClick={() => setExporting(true)}
+          >
+            <Download size={16} />
+          </Button>
+        }
+      />
 
       <SegmentedTabs
         items={SCOPES}
         active={scope}
         onChange={setScope}
         desktopHidden={false}
-        className="mb-5 lg:max-w-md"
+        className="mb-5 lg:max-w-lg"
       />
 
-      {scope === 'seances' ? (
+      {scope === 'muscles' ? (
+        sessionsLoading && sessions.length === 0
+          ? <Skeleton className="h-[320px]" />
+          : <MuscleVolume sessions={sessions} exerciseById={exerciseById} today={today} />
+      ) : scope === 'seances' ? (
         <SessionsProgressView
           sessions={sessions}
           isLoading={sessionsLoading}
@@ -129,7 +135,7 @@ export default function ProgressView({ focusedExerciseId, onFocusExercise }) {
           // La modale par défaut fait 448 px de large : une courbe et un
           // historique de charges y seraient aussi à l'étroit que dans la
           // colonne qu'on vient de supprimer.
-          className="sm:max-w-2xl sm:max-h-[85vh]"
+          className="sm:max-w-2xl sm:max-h-[85vh] bg-surface border-border"
         >
           <DialogBody>
             {focused && (
@@ -169,7 +175,10 @@ function EmptyExercises() {
   )
 }
 
+// Trois façons de lire sa progression, à trois échelles : le mouvement, la
+// séance, et le corps. La troisième est la seule qui dise ce qu'on néglige.
 const SCOPES = [
   { id: 'exercices', label: 'Exercices', short: 'Exercices', icon: Dumbbell },
   { id: 'seances', label: 'Séances', short: 'Séances', icon: CalendarRange },
+  { id: 'muscles', label: 'Muscles', short: 'Muscles', icon: PersonStanding },
 ]

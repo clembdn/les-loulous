@@ -1,60 +1,96 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import {
-  Dumbbell, Scale, ArrowRight, ChevronLeft, ChevronRight, X, MoveHorizontal,
-} from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ArrowRight, ChevronLeft, ChevronRight, Plus, Scale, X } from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import {
-  toLocalDateKey, fromLocalDateKey, shiftDateKey, weekParity, isoDayOfWeek, formatDayFr,
+  formatDayFr, fromLocalDateKey, isoDayOfWeek, shiftDateKey, toLocalDateKey, weekParity,
 } from '@/shared/lib/dates.js'
 import { cn } from '@/shared/lib/utils.js'
+import { useMediaQuery } from '@/shared/lib/useMediaQuery.js'
+import { Button } from '@/shared/ui/Button.jsx'
 import { ProgressRing } from '@/shared/ui/Progress.jsx'
 import { SkeletonList } from '@/shared/ui/Skeleton.jsx'
-import { Button } from '@/shared/ui/Button.jsx'
-import {
-  useExercises, useProgram, useSession, useLastPerf, useWeights, useNotes,
-} from '../hooks/useMuscData.js'
-import { saveEntry, clearEntry, hasWork, isEntryComplete } from '../services/sessionsService.js'
+import { useMuscData } from '../context/MuscDataContext.jsx'
+import { clearEntry, hasWork, saveEntry } from '../services/sessionsService.js'
 import { withoutOrphans } from '../services/programService.js'
 import { saveNote } from '../services/notesService.js'
-import ExerciseAccordion from '../components/session/ExerciseAccordion.jsx'
-import RestTimer from '../components/session/RestTimer.jsx'
-import SessionSummary from '../components/session/SessionSummary.jsx'
+import { doneSets } from '../utils/sets.js'
+import { buildPreviousIndex } from '../utils/previous.js'
+import { buildRecordIndex } from '../utils/records.js'
+import { setScore } from '../utils/metrics.js'
+import { newInstanceId } from '../utils/ids.js'
+import SessionOverview, { EmptyDay } from '../components/session/SessionOverview.jsx'
+import SessionRail from '../components/session/SessionRail.jsx'
+import ExerciseFocus from '../components/session/ExerciseFocus.jsx'
+import SessionDone from '../components/session/SessionDone.jsx'
+import AddExerciseSheet from '../components/session/AddExerciseSheet.jsx'
+import ExerciseHistorySheet from '../components/session/ExerciseHistorySheet.jsx'
 
 // On peut rattraper une séance oubliée jusqu'à une semaine en arrière. Au-delà,
 // le programme a pu changer : ce qui s'est passé se lit dans Progrès.
 const BACKFILL_DAYS = 6
 
-// Repos par défaut, puis la dernière durée choisie. Réglé une fois pour toutes
-// à la première séance : personne ne veut rouvrir un écran de réglages entre
-// deux séries.
-const REST_KEY = 'muscauzi.restSeconds'
-const REST_DEFAULT = 90
-const REST_MIN = 15
-const REST_MAX = 600
+const WIDE = '(min-width: 1024px)'
 
-const HINT_KEY = 'muscauzi.swipeHintSeen'
-
-// localStorage est indisponible en navigation privée sur certains navigateurs,
-// et lève à la lecture comme à l'écriture. Un réglage de confort ne doit pas
-// pouvoir empêcher une séance de s'afficher.
-function readStored(key, fallback) {
-  try {
-    const raw = window.localStorage.getItem(key)
-    return raw == null ? fallback : raw
-  } catch { return fallback }
-}
-function writeStored(key, value) {
-  try { window.localStorage.setItem(key, String(value)) } catch { /* tant pis */ }
-}
-
+/**
+ * La séance du jour.
+ *
+ * ── Deux temps, pas un seul ─────────────────────────────────────────────────
+ *
+ * L'aperçu dit ce qu'il y a à faire ; l'écran d'un exercice sert à le faire. La
+ * séparation n'est pas cosmétique : c'est elle qui supprime l'accordéon, donc
+ * l'état de saisie caché derrière un repli, donc la moitié des bugs de cet
+ * écran. Un seul exercice est monté à la fois, avec une seule date.
+ *
+ * Sur grand écran les deux tiennent côte à côte — la liste à gauche reste
+ * visible, on saute d'un mouvement à l'autre sans repasser par l'aperçu.
+ *
+ * ── Rien n'est figé dans la séance ──────────────────────────────────────────
+ *
+ * Ce qui s'affiche est la prescription du jour, lue EN DIRECT dans le
+ * programme. Changer de programme dans Réglages change la liste, sans jamais
+ * rien réécrire ici. « Hors programme » rattrape ce qui a été saisi sous une
+ * prescription qui ne correspond plus — pour ne pas perdre de vue du travail
+ * déjà fait.
+ */
 export default function SessionView({ onOpenExercise, onOpenWeight }) {
   const { currentUid } = useAuth()
-  const todayKey = useMemo(() => toLocalDateKey(new Date()), [])
-  const [dateKey, setDateKey] = useState(todayKey)
-  const [openId, setOpenId] = useState(null)
+  const {
+    today, exercises, exerciseById, programs, notes, weights,
+    sessions, recentSessions, catalogueReady, isLoading,
+  } = useMuscData()
 
-  const isToday = dateKey === todayKey
-  const oldestKey = useMemo(() => shiftDateKey(todayKey, -BACKFILL_DAYS), [todayKey])
+  const [dateKey, setDateKey] = useState(today)
+  // null = aperçu · 0..n-1 = un exercice · lines.length = le bilan
+  const [cursor, setCursor] = useState(null)
+  const [adding, setAdding] = useState(false)
+  const [historyFor, setHistoryFor] = useState(null)
+  const isWide = useMediaQuery(WIDE)
+
+  /**
+   * Les mouvements ajoutés à la volée, tant qu'ils sont VIDES.
+   *
+   * Une entrée de séance n'existe dans Firestore qu'une fois qu'on y a saisi
+   * quelque chose. Écrire un document vide à l'ajout aurait laissé traîner des
+   * exercices fantômes chaque fois qu'on en ouvre un pour rien. On les tient
+   * donc ici jusqu'à la première série ; ensuite, ils reviennent d'eux-mêmes
+   * par « hors programme » et cette liste ne fait plus que les dédoublonner.
+   */
+  const [added, setAdded] = useState([])
+  useEffect(() => { setAdded([]) }, [dateKey])
+
+  // La date du jour change à minuit : si on était resté sur « aujourd'hui »,
+  // on suit. Si on était en rattrapage, on y reste — c'était un choix.
+  const [pinned, setPinned] = useState(false)
+  useEffect(() => { if (!pinned) setDateKey(today) }, [today, pinned])
+
+  const isToday = dateKey === today
+  const oldestKey = useMemo(() => shiftDateKey(today, -BACKFILL_DAYS), [today])
+
+  const goToDate = useCallback((next) => {
+    setDateKey(next)
+    setPinned(next !== toLocalDateKey(new Date()))
+    setCursor(null)
+  }, [])
 
   // La date affichée détermine SEULE le jour et la parité — aucun forçage
   // séparé : le programme se change dans Réglages, pas ici.
@@ -63,46 +99,29 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
     return { parity: weekParity(date), dayOfWeek: isoDayOfWeek(date) }
   }, [dateKey])
 
-  useEffect(() => { setOpenId(null) }, [dateKey])
+  // La séance du jour se lit dans la fenêtre déjà ouverte par le contexte :
+  // pas d'écoute supplémentaire pour un document qu'on a déjà.
+  const session = useMemo(
+    () => recentSessions.find((s) => s.date === dateKey) || null,
+    [recentSessions, dateKey],
+  )
 
-  const { exerciseById, isLoading: exercisesLoading } = useExercises()
-  const { session, isLoading: sessionLoading } = useSession(dateKey)
-  const { lastPerf } = useLastPerf()
-  const { notes } = useNotes()
-  const even = useProgram('even')
-  const odd = useProgram('odd')
-
-  const program = parity === 'even' ? even : odd
+  const program = programs[parity]
   const programDays = program.days
   // Le nom du jour au programme : c'est lui qu'on recopie dans la séance et
   // qu'on affiche en tête.
   const sessionName = program.names?.[dayOfWeek] || ''
 
-  // Un mouvement supprimé du catalogue n'a plus rien à faire dans la séance.
-  const catalogueReady = !exercisesLoading
-  const visible = useCallback(
-    (lines) => withoutOrphans(lines, exerciseById, catalogueReady),
-    [exerciseById, catalogueReady],
-  )
-
-  /**
-   * Ce qui s'affiche : la prescription du jour, lue EN DIRECT dans le
-   * programme. Rien n'est figé dans la séance : changer de programme dans
-   * Réglages change simplement la liste, sans jamais rien écrire ici.
-   *
-   * « Hors programme » retrouve ce qui a été saisi sous une prescription qui
-   * ne correspond plus à celle d'aujourd'hui (programme changé en cours de
-   * séance) — pour ne jamais perdre de vue un travail déjà fait.
-   */
   const { lines, extras } = useMemo(() => {
-    const prescribed = visible(programDays?.[dayOfWeek] || []).map((l, i) => ({
-      instanceId: l.instanceId,
-      exerciseId: l.exerciseId,
-      name: exerciseById[l.exerciseId]?.name || l.name || '',
-      order: i,
-      prescribedSets: l.sets,
-      prescribedReps: l.reps,
-    }))
+    const prescribed = withoutOrphans(programDays?.[dayOfWeek] || [], exerciseById, catalogueReady)
+      .map((l, i) => ({
+        instanceId: l.instanceId,
+        exerciseId: l.exerciseId,
+        name: exerciseById[l.exerciseId]?.name || l.name || '',
+        order: i,
+        prescribedSets: l.sets,
+        prescribedReps: l.reps,
+      }))
     const known = new Set(prescribed.map((l) => l.instanceId))
     const off = Object.values(session?.entries || {})
       .filter((e) => !known.has(e.instanceId) && hasWork(e))
@@ -115,182 +134,342 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
         prescribedSets: e.prescribedSets,
         prescribedReps: e.prescribedReps,
       }))
-    return { lines: prescribed, extras: off }
-  }, [programDays, dayOfWeek, exerciseById, session, visible])
+    // Un ajout qui a reçu sa première série est déjà revenu par `off` : on ne
+    // garde de la liste locale que ce qui n'est pas encore enregistré.
+    const saved = new Set(off.map((l) => l.instanceId))
+    return { lines: prescribed, extras: [...off, ...added.filter((l) => !saved.has(l.instanceId))] }
+  }, [programDays, dayOfWeek, exerciseById, session, catalogueReady, added])
+
+  // L'ordre de parcours : la prescription du jour, puis le hors-programme.
+  const walk = useMemo(() => [...lines, ...extras], [lines, extras])
+
+  const previousIndex = useMemo(
+    () => buildPreviousIndex(recentSessions, dateKey),
+    [recentSessions, dateKey],
+  )
+
+  /**
+   * Les records personnels, sur TOUT l'historique et sans la séance du jour.
+   *
+   * Sans cette exclusion, la première série d'aujourd'hui deviendrait le record
+   * et aucune des suivantes ne pourrait plus l'annoncer — exactement le piège
+   * qui vidait le rappel « dernière fois ».
+   */
+  const recordIndex = useMemo(
+    () => buildRecordIndex(sessions, dateKey, (set, exerciseId) => setScore(set, exerciseById[exerciseId])),
+    [sessions, dateKey, exerciseById],
+  )
+
+  /**
+   * Ajouter un mouvement à la séance du jour.
+   *
+   * La prescription se déduit de la dernière fois — même nombre de séries, même
+   * nombre de répétitions. C'est la meilleure hypothèse disponible, et elle
+   * évite d'ouvrir un exercice sur « 3 × 10 » arbitraires quand on en faisait
+   * quatre séries de six la semaine dernière.
+   */
+  const addExerciseToDay = useCallback((exercise) => {
+    const previous = previousIndex[exercise.id]
+    const line = {
+      instanceId: newInstanceId(),
+      exerciseId: exercise.id,
+      name: exercise.name,
+      order: 1000 + added.length,
+      prescribedSets: previous?.sets?.length || 3,
+      prescribedReps: previous?.sets?.[0]?.reps || 10,
+    }
+    setAdded((prev) => [...prev, line])
+    // On ouvre directement le mouvement qu'on vient de choisir : personne
+    // n'ajoute un exercice pour aller le chercher ensuite dans la liste.
+    setCursor(lines.length + extras.length)
+  }, [previousIndex, added.length, lines.length, extras.length])
+
+  /**
+   * Retirer une occurrence hors programme.
+   *
+   * Il faut la retirer des DEUX endroits où elle peut vivre : le document de
+   * séance si elle a déjà reçu une série, et la liste locale si elle n'en a pas
+   * encore. N'effacer que Firestore la faisait réapparaître aussitôt, vide,
+   * puisque l'ajout local, lui, était toujours là.
+   */
+  const removeExtra = useCallback((instanceId) => {
+    clearEntry(currentUid, dateKey, instanceId, currentUid)
+    setAdded((prev) => prev.filter((l) => l.instanceId !== instanceId))
+    // L'exercice qu'on regardait n'existe plus : on revient à la liste plutôt
+    // que de laisser le curseur sur un rang qui a glissé.
+    setCursor(null)
+  }, [currentUid, dateKey])
 
   const save = useCallback((line, { sets, skipped }) => {
     saveEntry(
       currentUid, dateKey,
       { ...line, sets, skipped },
-      { parity, dayOfWeek, name: sessionName }, currentUid, lastPerf,
+      { parity, dayOfWeek, name: sessionName }, currentUid,
     )
-  }, [currentUid, dateKey, parity, dayOfWeek, sessionName, lastPerf])
+  }, [currentUid, dateKey, parity, dayOfWeek, sessionName])
 
-  // ── Minuteur de repos ──────────────────────────────────────────────────────
-  const [restSeconds, setRestSeconds] = useState(
-    () => clampRest(Number(readStored(REST_KEY, REST_DEFAULT))),
-  )
-  const [rest, setRest] = useState(null)
-  const restCount = useRef(0)
+  const total = walk.length
+  const doneCount = walk.filter((l) => {
+    const entry = session?.entries?.[l.instanceId]
+    return entry?.skipped || doneSets(entry).length >= l.prescribedSets
+  }).length
 
-  const startRest = useCallback((label) => {
-    // On ne chronomètre pas un rattrapage : la séance d'hier est déjà finie.
-    if (dateKey !== todayKey) return
-    restCount.current += 1
-    setRest({ id: restCount.current, startedAt: Date.now(), duration: restSeconds, label })
-  }, [dateKey, todayKey, restSeconds])
-
-  // Rallonger le repos en cours vaut aussi pour les suivants : c'est le seul
-  // endroit où l'on découvre que 90 s ne suffisent pas sur cet exercice-là.
-  const adjustRest = useCallback((delta) => {
-    setRest((r) => {
-      if (!r) return r
-      const duration = clampRest(r.duration + delta)
-      setRestSeconds(duration)
-      writeStored(REST_KEY, duration)
-      return { ...r, duration }
+  // « Commencer » ouvre le premier exercice qui reste à faire, pas le premier
+  // de la liste : reprendre une séance interrompue ne doit pas se payer de
+  // quatre appuis sur « Suivant ».
+  const firstUnfinished = useMemo(() => {
+    const i = walk.findIndex((l) => {
+      const entry = session?.entries?.[l.instanceId]
+      return !(entry?.skipped || doneSets(entry).length >= l.prescribedSets)
     })
-  }, [])
+    return i === -1 ? 0 : i
+  }, [walk, session])
 
-  const dismissRest = useCallback(() => setRest(null), [])
+  // Sur grand écran il n'y a pas d'aperçu séparé : le rail tient la liste, donc
+  // il faut toujours quelque chose à droite.
+  const active = isWide && cursor === null ? firstUnfinished : cursor
+  const showFocus = active !== null && total > 0
 
-  // Changer de jour ferme le minuteur : il appartenait à la séance qu'on quitte.
-  useEffect(() => { setRest(null) }, [dateKey])
+  const focusLine = showFocus && active < total ? walk[active] : null
+  const showDone = showFocus && active >= total
 
-  const isLoading = exercisesLoading || sessionLoading || even.isLoading || odd.isLoading
-  const total = lines.length
-  const doneCount = lines.filter(
-    (l) => isEntryComplete(session?.entries?.[l.instanceId], l.prescribedSets),
-  ).length
-  const isSessionDone = total > 0 && doneCount === total
+  const skeleton = isLoading && total === 0
 
-  const renderLine = (line, extra) => (
-    <ExerciseAccordion
+  const header = (
+    <header className="mb-5">
+      <div className="flex items-center gap-2">
+        <DateNav
+          label="Jour précédent"
+          onClick={() => goToDate(shiftDateKey(dateKey, -1))}
+          disabled={dateKey <= oldestKey}
+        >
+          <ChevronLeft size={18} />
+        </DateNav>
+
+        <div className="flex-1 min-w-0 text-center">
+          <p className="text-xs uppercase tracking-[0.18em] text-faint truncate">
+            {/* Le nom passe DEVANT la date : c'est lui qui dit ce qu'on vient
+                faire aujourd'hui, et il rattache la séance à toutes les autres
+                du même nom. */}
+            {sessionName || (isToday ? 'Séance du jour' : 'Rattrapage')}
+          </p>
+          <h1 className="text-2xl font-semibold tracking-[-0.02em] text-fg mt-0.5 first-letter:uppercase truncate">
+            {formatDayFr(fromLocalDateKey(dateKey))}
+          </h1>
+        </div>
+
+        <DateNav
+          label="Jour suivant"
+          onClick={() => goToDate(shiftDateKey(dateKey, 1))}
+          disabled={isToday}
+        >
+          <ChevronRight size={18} />
+        </DateNav>
+      </div>
+
+      {/* L'avancement se lit en une image plutôt qu'en une fraction : on sait
+          où on en est sans lire, téléphone à bout de bras. */}
+      {total > 0 && (
+        <div className="flex items-center justify-center gap-3 mt-3">
+          <ProgressRing size={40} stroke={3.5} value={doneCount} max={total}>
+            <span className="text-[11px] font-semibold text-fg tabular">{doneCount}</span>
+          </ProgressRing>
+          <span className="text-sm text-muted">
+            sur {total} exercice{total > 1 ? 's' : ''}
+          </span>
+        </div>
+      )}
+
+      {!isToday && (
+        <div className="text-center mt-2">
+          <button
+            onClick={() => goToDate(today)}
+            className="text-sm text-accent hover:opacity-80 transition"
+          >
+            Aujourd'hui
+          </button>
+        </div>
+      )}
+    </header>
+  )
+
+  const focus = focusLine && (
+    <ExerciseFocus
       // La date fait partie de l'identité : sans elle, passer d'aujourd'hui à
-      // hier réutilisait le composant avec ses champs de saisie encore chargés.
-      key={`${dateKey}:${line.instanceId}`}
-      line={line}
-      extra={extra}
-      exercise={exerciseById[line.exerciseId] || null}
-      entry={session?.entries?.[line.instanceId] || null}
-      lastPerf={lastPerf.byInstance[line.instanceId] || null}
-      note={notes[line.exerciseId] || ''}
-      expanded={openId === line.instanceId}
-      onToggle={() => setOpenId((id) => (id === line.instanceId ? null : line.instanceId))}
-      onSave={(entry) => save(line, entry)}
-      onClear={() => clearEntry(currentUid, dateKey, line.instanceId, currentUid)}
-      onOpenDetail={onOpenExercise}
+      // hier réutiliserait le composant avec ses champs encore chargés.
+      key={`${dateKey}:${focusLine.instanceId}`}
+      line={focusLine}
+      extra={active >= lines.length}
+      exercise={exerciseById[focusLine.exerciseId] || null}
+      entry={session?.entries?.[focusLine.instanceId] || null}
+      previous={previousIndex[focusLine.exerciseId] || null}
+      record={recordIndex[focusLine.exerciseId] || null}
+      note={notes[focusLine.exerciseId] || ''}
+      index={active}
+      total={total}
+      // Sur grand écran il n'y a pas d'aperçu où revenir : au premier exercice,
+      // le bouton n'a plus de destination, il s'éteint plutôt que de mentir.
+      prevLabel={active > 0 ? 'Précédent' : (isWide ? null : 'Aperçu')}
+      onPrev={() => setCursor(active === 0 ? null : active - 1)}
+      onNext={() => setCursor(active + 1)}
+      onSave={(entry) => save(focusLine, entry)}
+      onClear={() => clearEntry(currentUid, dateKey, focusLine.instanceId, currentUid)}
+      onRemove={() => removeExtra(focusLine.instanceId)}
+      onOpenDetail={(exerciseId) => setHistoryFor(exerciseId)}
       onSaveNote={(exerciseId, text) => saveNote(currentUid, exerciseId, text, currentUid)}
-      onRest={startRest}
     />
   )
 
-  return (
-    <div className="max-w-xl mx-auto px-4 pt-5 pb-28 lg:pb-10 lg:pt-8 lg:px-6">
-      <header className="mb-4">
-        <div className="flex items-center gap-2">
-          <DateNav
-            label="Jour précédent"
-            onClick={() => setDateKey((k) => shiftDateKey(k, -1))}
-            disabled={dateKey <= oldestKey}
-          >
-            <ChevronLeft size={18} />
-          </DateNav>
+  const done = showDone && (
+    <SessionDone
+      session={session}
+      dateKey={dateKey}
+      name={sessionName}
+      parity={parity}
+      dayOfWeek={dayOfWeek}
+      exerciseById={exerciseById}
+      recentSessions={recentSessions}
+      records={recordIndex}
+      onBack={() => setCursor(isWide ? total - 1 : null)}
+      onSeeProgress={() => onOpenExercise(null)}
+    />
+  )
 
-          <div className="flex-1 min-w-0 text-center">
-            <p className="text-xs uppercase tracking-[0.18em] text-faint truncate">
-              {/* Le nom passe DEVANT la date : c'est lui qui dit ce qu'on
-                  vient faire aujourd'hui, et il rattache la séance à toutes
-                  les autres du même nom. */}
-              {sessionName || (isToday ? 'Séance du jour' : 'Rattrapage')}
-            </p>
-            <h1 className="text-2xl font-semibold tracking-[-0.02em] text-fg mt-0.5 first-letter:uppercase truncate">
-              {formatDayFr(fromLocalDateKey(dateKey))}
-            </h1>
+  // ── Grand écran : la liste et l'exercice côte à côte ───────────────────────
+  if (isWide) {
+    return (
+      <div className="max-w-xl lg:max-w-5xl mx-auto px-4 pt-5 pb-10 lg:pt-8 lg:px-6">
+        {header}
+        {skeleton ? (
+          <SkeletonList count={4} className="space-y-2.5" itemClassName="h-[68px] rounded-2xl" />
+        ) : total === 0 ? (
+          <>
+            <EmptyDay />
+            <Button variant="dashed" size="lg" className="w-full mt-4" onClick={() => setAdding(true)}>
+              <Plus size={16} /> Ajouter un exercice
+            </Button>
+          </>
+        ) : (
+          <div className="grid grid-cols-[minmax(0,17rem)_1fr] gap-8 items-start">
+            <SessionRail
+              lines={walk}
+              session={session}
+              activeIndex={active}
+              onSelect={setCursor}
+              onFinish={() => setCursor(total)}
+              onAdd={() => setAdding(true)}
+            />
+            <div className="min-w-0">{done || focus}</div>
           </div>
+        )}
+        <WeighInNudge show={isToday && dayOfWeek === 1} weights={weights} dateKey={dateKey} onGo={onOpenWeight} />
+      <AddExerciseSheet
+        open={adding}
+        onOpenChange={setAdding}
+        exercises={exercises}
+        previousIndex={previousIndex}
+        onPick={addExerciseToDay}
+      />
 
-          <DateNav
-            label="Jour suivant"
-            onClick={() => setDateKey((k) => shiftDateKey(k, 1))}
-            disabled={isToday}
+      <ExerciseHistorySheet
+        open={!!historyFor}
+        onOpenChange={(next) => { if (!next) setHistoryFor(null) }}
+        exercise={exerciseById[historyFor] || null}
+        sessions={sessions}
+        notes={notes}
+        onSaveNote={(exerciseId, text) => saveNote(currentUid, exerciseId, text, currentUid)}
+      />
+      </div>
+    )
+  }
+
+  // ── Téléphone : l'exercice REMPLACE l'aperçu ──────────────────────────────
+  if (showFocus) {
+    return (
+      <div className="max-w-xl mx-auto px-4 pt-4 pb-24">
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={() => setCursor(null)}
+            aria-label="Revenir à la séance"
+            className="h-9 w-9 shrink-0 rounded-lg border border-border flex items-center justify-center
+                       text-muted hover:text-fg transition active:scale-95"
           >
-            <ChevronRight size={18} />
-          </DateNav>
+            <X size={16} />
+          </button>
+          <p className="flex-1 min-w-0 text-sm font-medium text-fg truncate first-letter:uppercase">
+            {sessionName || formatDayFr(fromLocalDateKey(dateKey))}
+          </p>
+          <span className="shrink-0 text-xs text-faint tabular">{doneCount}/{total}</span>
         </div>
+        {done || focus}
+      <AddExerciseSheet
+        open={adding}
+        onOpenChange={setAdding}
+        exercises={exercises}
+        previousIndex={previousIndex}
+        onPick={addExerciseToDay}
+      />
 
-        {/* L'avancement se lit en une image plutôt qu'en une fraction : on sait
-            où on en est sans lire, téléphone à bout de bras. */}
-        {total > 0 && (
-          <div className="flex items-center justify-center gap-3 mt-3">
-            <ProgressRing size={40} stroke={3.5} value={doneCount} max={total}>
-              <span className="text-[11px] font-semibold text-fg tabular">{doneCount}</span>
-            </ProgressRing>
-            <span className="text-sm text-muted">
-              sur {total} exercice{total > 1 ? 's' : ''}
-            </span>
-          </div>
-        )}
+      <ExerciseHistorySheet
+        open={!!historyFor}
+        onOpenChange={(next) => { if (!next) setHistoryFor(null) }}
+        exercise={exerciseById[historyFor] || null}
+        sessions={sessions}
+        notes={notes}
+        onSaveNote={(exerciseId, text) => saveNote(currentUid, exerciseId, text, currentUid)}
+      />
+      </div>
+    )
+  }
 
-        {!isToday && (
-          <div className="text-center mt-2">
-            <button
-              onClick={() => setDateKey(todayKey)}
-              className="text-sm text-accent hover:opacity-80 transition"
-            >
-              Aujourd'hui
-            </button>
-          </div>
-        )}
-      </header>
+  return (
+    <div className="max-w-xl mx-auto px-4 pt-5 pb-24">
+      {header}
 
-      {isToday && dayOfWeek === 1 && <WeighInNudge dateKey={dateKey} onGo={onOpenWeight} />}
-
-      {isSessionDone && (
-        <SessionSummary
+      {skeleton ? (
+        <SkeletonList count={4} className="space-y-2.5" itemClassName="h-[68px] rounded-2xl" />
+      ) : total === 0 ? (
+        <EmptyDay />
+      ) : (
+        <SessionOverview
+          lines={lines}
+          extras={extras}
           session={session}
-          dateKey={dateKey}
-          name={sessionName}
-          parity={parity}
-          dayOfWeek={dayOfWeek}
           exerciseById={exerciseById}
-          onSeeProgress={() => onOpenExercise(null)}
+          onOpen={setCursor}
+          onStart={() => setCursor(doneCount === total ? total : firstUnfinished)}
+          startLabel={doneCount === 0 ? 'Commencer' : doneCount === total ? 'Voir le bilan' : 'Reprendre'}
+          onAdd={() => setAdding(true)}
         />
       )}
 
-      {isLoading && total === 0 ? (
-        <SkeletonList count={4} className="space-y-2.5" itemClassName="h-[68px] rounded-2xl" />
-      ) : total === 0 && extras.length === 0 ? (
-        <EmptyDay />
-      ) : (
-        <>
-          {total > 0 && <SwipeHint />}
-          <div className="space-y-2.5">
-            {lines.map((line) => renderLine(line, false))}
-          </div>
-        </>
+      {/* Un jour de repos aussi peut recevoir une séance improvisée : le bouton
+          d'ajout ne dépend pas du programme. */}
+      {!skeleton && total === 0 && (
+        <Button variant="dashed" size="lg" className="w-full mt-4" onClick={() => setAdding(true)}>
+          <Plus size={16} /> Ajouter un exercice
+        </Button>
       )}
 
-      {extras.length > 0 && (
-        <section className="mt-6">
-          <h2 className="text-xs uppercase tracking-[0.18em] text-faint mb-2">Hors programme</h2>
-          <p className="text-[11px] text-faint mb-2.5 leading-relaxed">
-            Saisi ce jour-là sous une autre prescription — à corriger ou à retirer.
-          </p>
-          <div className="space-y-2.5">
-            {extras.map((line) => renderLine(line, true))}
-          </div>
-        </section>
-      )}
+      <WeighInNudge show={isToday && dayOfWeek === 1} weights={weights} dateKey={dateKey} onGo={onOpenWeight} />
+      <AddExerciseSheet
+        open={adding}
+        onOpenChange={setAdding}
+        exercises={exercises}
+        previousIndex={previousIndex}
+        onPick={addExerciseToDay}
+      />
 
-      <RestTimer rest={rest} onAdjust={adjustRest} onDismiss={dismissRest} />
+      <ExerciseHistorySheet
+        open={!!historyFor}
+        onOpenChange={(next) => { if (!next) setHistoryFor(null) }}
+        exercise={exerciseById[historyFor] || null}
+        sessions={sessions}
+        notes={notes}
+        onSaveNote={(exerciseId, text) => saveNote(currentUid, exerciseId, text, currentUid)}
+      />
     </div>
   )
-}
-
-function clampRest(seconds) {
-  const n = Number(seconds)
-  if (!Number.isFinite(n)) return REST_DEFAULT
-  return Math.min(REST_MAX, Math.max(REST_MIN, Math.round(n)))
 }
 
 function DateNav({ onClick, disabled, label, children }) {
@@ -312,64 +491,26 @@ function DateNav({ onClick, disabled, label, children }) {
 }
 
 /**
- * Le geste ne se devine pas : rien à l'écran ne dit qu'une ligne glisse.
+ * Le lundi, la pesée se fait en début de séance.
  *
- * Un repère montré UNE fois, puis plus jamais — la place d'un mode d'emploi
- * n'est pas au-dessus de la séance qu'on vient ouvrir entre deux séries.
+ * En PIED d'écran, plus en tête : posé au-dessus de la liste, il décalait
+ * chaque lundi tout ce qu'on venait ouvrir. C'est un rappel, pas une étape.
  */
-function SwipeHint() {
-  const [seen, setSeen] = useState(() => readStored(HINT_KEY, '') === '1')
-  if (seen) return null
-
-  const dismiss = () => { writeStored(HINT_KEY, '1'); setSeen(true) }
-
-  return (
-    <div className="mb-3 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border border-dashed border-border-strong">
-      <MoveHorizontal size={15} className="shrink-0 text-accent" />
-      <p className="flex-1 text-[11px] leading-relaxed text-muted">
-        Glisse une série <span className="text-fg">d'un côté ou de l'autre</span> pour la marquer
-        faite — ou touche la pastille.
-      </p>
-      <button
-        onClick={dismiss}
-        aria-label="J'ai compris"
-        className="h-7 w-7 shrink-0 rounded-lg flex items-center justify-center text-faint hover:text-fg transition"
-      >
-        <X size={14} />
-      </button>
-    </div>
-  )
-}
-
-// Le lundi, la pesée se fait en début de séance. Simple rappel, pas un blocage.
-function WeighInNudge({ dateKey, onGo }) {
-  const { weights } = useWeights()
+function WeighInNudge({ show, weights, dateKey, onGo }) {
   const [dismissed, setDismissed] = useState(false)
   useEffect(() => { setDismissed(false) }, [dateKey])
 
-  if (dismissed) return null
+  if (!show || dismissed) return null
   if (weights.some((w) => w.date === dateKey)) return null
 
   return (
     <button
       onClick={() => { setDismissed(true); onGo?.() }}
-      className="w-full mb-4 flex items-center gap-3 px-4 py-3 rounded-2xl border border-accent/30 bg-accent/5 text-left"
+      className="w-full mt-6 flex items-center gap-3 px-4 py-3 rounded-2xl border border-accent/30 bg-accent/5 text-left"
     >
       <Scale size={18} className="shrink-0 text-accent" />
       <span className="flex-1 text-sm text-fg">Pesée du lundi — c'est le moment</span>
       <ArrowRight size={16} className="shrink-0 text-accent" />
     </button>
-  )
-}
-
-function EmptyDay() {
-  return (
-    <div className="text-center py-14 px-6 rounded-2xl border border-dashed border-border">
-      <Dumbbell size={28} className="mx-auto text-faint" />
-      <p className="text-base font-medium text-fg mt-3">Rien de prévu ce jour-là</p>
-      <p className="text-sm text-muted mt-1">
-        Repos — ou ajoute des exercices à ce jour dans les réglages.
-      </p>
-    </div>
   )
 }

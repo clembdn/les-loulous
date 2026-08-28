@@ -1,9 +1,9 @@
-import { useState, useCallback, lazy, Suspense } from 'react'
-import { Dumbbell } from 'lucide-react'
+import { Suspense, lazy, useCallback, useState } from 'react'
+import { Play } from 'lucide-react'
 import { useAppTheme } from '@/shared/theme/useAppTheme.js'
-import AppShell from '@/shared/ui/AppShell.jsx'
-import { Toaster } from '@/shared/ui/sonner.jsx'
-import { MUSC_TABS, SIDEBAR_SECTIONS, DEFAULT_TAB, getTab } from './config/navigation.js'
+import { MuscDataProvider } from './context/MuscDataContext.jsx'
+import { DEFAULT_TAB } from './config/navigation.js'
+import Shell from './components/layout/Shell.jsx'
 import SessionView from './views/SessionView.jsx'
 
 // Les écrans hors salle sont chargés à la demande : la séance du jour doit
@@ -23,6 +23,14 @@ function Loader() {
 
 export default function MuscauziApp() {
   useAppTheme('dark', 'red')
+  return (
+    <MuscDataProvider>
+      <MuscauziScreens />
+    </MuscDataProvider>
+  )
+}
+
+function MuscauziScreens() {
   const [tab, setTab] = useState(DEFAULT_TAB)
   // Exercice ouvert dans l'écran Progrès (null = liste des exercices).
   const [focusedExerciseId, setFocusedExerciseId] = useState(null)
@@ -37,41 +45,43 @@ export default function MuscauziApp() {
     setTab(next)
   }, [])
 
+  /**
+   * Chaque écran est démonté quand on le quitte.
+   *
+   * La séance restait montée derrière un `hidden`, pour ne pas perdre
+   * l'accordéon ouvert et les champs à moitié remplis. Il n'y a plus ni
+   * accordéon ni brouillon à préserver : ce qui est saisi est écrit, et
+   * Firestore le rend depuis son cache local en revenant. Rester monté ne
+   * gardait plus rien — mais gardait la date du jour figée au montage, et
+   * dédoublait les écoutes de l'écran par-dessus lequel on naviguait.
+   */
   return (
-    <>
-      <AppShell
-        title="MuscAuzi"
-        icon={Dumbbell}
-        heading={getTab(tab).label}
-        active={tab}
-        onChange={changeTab}
-        sections={SIDEBAR_SECTIONS}
-        tabs={MUSC_TABS}
-      >
-        {/* La séance reste montée : on y revient entre deux séries, elle ne
-            doit pas se recharger ni perdre l'accordéon ouvert. */}
-        <div className={tab === 'seance' ? '' : 'hidden'}>
+    <Shell
+      active={tab}
+      onChange={changeTab}
+      sidebarAction={
+        tab === 'seance'
+          ? null
+          : { label: 'La séance du jour', icon: Play, onClick: () => changeTab('seance') }
+      }
+    >
+      <Suspense fallback={<Loader />}>
+        {tab === 'seance' && (
           <SessionView
             onOpenExercise={openExercise}
             onOpenWeight={() => changeTab('poids')}
           />
-        </div>
-
-        {tab !== 'seance' && (
-          <Suspense fallback={<Loader />}>
-            {tab === 'progres' && (
-              <ProgressView
-                focusedExerciseId={focusedExerciseId}
-                onFocusExercise={setFocusedExerciseId}
-              />
-            )}
-            {tab === 'poids' && <TrackingView />}
-            {tab === 'programme' && <ProgramView onNavigate={changeTab} />}
-            {tab === 'catalogue' && <CatalogueView onNavigate={changeTab} />}
-          </Suspense>
         )}
-      </AppShell>
-      <Toaster />
-    </>
+        {tab === 'progres' && (
+          <ProgressView
+            focusedExerciseId={focusedExerciseId}
+            onFocusExercise={setFocusedExerciseId}
+          />
+        )}
+        {tab === 'poids' && <TrackingView />}
+        {tab === 'programme' && <ProgramView onNavigate={changeTab} />}
+        {tab === 'catalogue' && <CatalogueView onNavigate={changeTab} />}
+      </Suspense>
+    </Shell>
   )
 }

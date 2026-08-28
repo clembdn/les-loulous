@@ -1,22 +1,22 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Check } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/shared/ui/sonner.jsx'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
 import LineChart from '@/shared/ui/LineChart.jsx'
 import { Skeleton } from '@/shared/ui/Skeleton.jsx'
-import { toLocalDateKey, fromLocalDateKey, formatDayFr, formatDateShortFr, formatDateFr } from '@/shared/lib/dates.js'
-import { useWeights } from '../hooks/useMuscData.js'
+import { fromLocalDateKey, formatDayFr, formatDateShortFr, formatDateFr } from '@/shared/lib/dates.js'
+import { useMuscData } from '../context/MuscDataContext.jsx'
 import { recordWeight } from '../services/weightsService.js'
 import WeightScale from '../components/weight/WeightScale.jsx'
 import ConsistencyCalendar from '../components/tracking/ConsistencyCalendar.jsx'
+import PageHeader from '../components/layout/PageHeader.jsx'
 
 const FALLBACK_KG = 70
 
 export default function TrackingView() {
   const { currentUid } = useAuth()
-  const { weights, isLoading } = useWeights()
-  const todayId = toLocalDateKey(new Date())
+  const { weights, today: todayId, isLoading } = useMuscData()
 
   const last = weights.length > 0 ? weights[weights.length - 1] : null
 
@@ -68,13 +68,14 @@ export default function TrackingView() {
   )
 
   return (
-    <div className="max-w-xl mx-auto px-4 pt-5 pb-28 lg:pb-10 lg:pt-8 lg:px-6">
-      <header className="mb-5">
-        <p className="text-xs uppercase tracking-[0.18em] text-faint">Suivi</p>
-        <h1 className="text-2xl font-semibold tracking-[-0.02em] text-fg mt-1">Poids et régularité</h1>
-      </header>
+    <div className="max-w-xl lg:max-w-4xl mx-auto px-4 pt-5 pb-28 lg:pb-10 lg:pt-8 lg:px-6">
+      <PageHeader eyebrow="Suivi" title="Poids et régularité" />
 
-      <div className="rounded-2xl border border-border bg-surface p-4 mb-6">
+      {/* Sur grand écran la courbe et la pesée tiennent côte à côte : on voit
+          la tendance en réglant la molette, au lieu de faire défiler entre les
+          deux. En dessous, elles s'empilent — il n'y a pas la place. */}
+      <div className="lg:grid lg:grid-cols-2 lg:gap-5 lg:items-start">
+      <div className="rounded-2xl border border-border bg-surface p-4 mb-6 lg:mb-0">
         {isLoading && series.length === 0 ? (
           <Skeleton className="h-[220px] border-0 bg-surface-2" />
         ) : series.length === 0 ? (
@@ -90,7 +91,7 @@ export default function TrackingView() {
         )}
       </div>
 
-      <section className="rounded-2xl border border-border bg-surface p-5 mb-6">
+      <section className="rounded-2xl border border-border bg-surface p-5 mb-6 lg:mb-0">
         <div className="flex items-baseline justify-between mb-1">
           <h2 className="text-sm font-semibold text-fg inline-flex items-center gap-2">
             Nouvelle pesée
@@ -133,10 +134,11 @@ export default function TrackingView() {
         )}
       </section>
 
-      <div className="mb-6">
-        <ConsistencyCalendar />
       </div>
 
+      <div className="mt-6">
+        <ConsistencyCalendar />
+      </div>
     </div>
   )
 }

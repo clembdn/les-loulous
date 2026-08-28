@@ -8,6 +8,7 @@ import { fromLocalDateKey, formatDateFr, formatDateShortFr } from '@/shared/lib/
 import {
   groupSessions, SESSION_METRICS, sessionMetric, formatSessionMetric,
 } from '../utils/sessionGroups.js'
+import { compare } from '../utils/trend.js'
 import { workByExercise, bestSet, formatSets } from '../utils/metrics.js'
 
 /**
@@ -226,18 +227,19 @@ function Delta({ now, before }) {
   )
 }
 
+// La bande morte de 1 % vient de `utils/trend.js` — une seule définition pour
+// le tableau des exercices, le bilan de séance et cet écran.
 function Trend({ now, before }) {
-  if (before == null || before <= 0) {
-    return <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-border-strong mx-[6px]" />
-  }
-  // Même marge de 1 % qu'ailleurs : un arrondi ne doit pas passer pour un
-  // progrès.
-  if (now > before * 1.01) {
+  const trend = before == null ? null : compare(now, before)
+  if (trend?.direction === 'up') {
     return <ArrowUp size={14} strokeWidth={2.8} className="shrink-0 text-accent" aria-label="En progrès" />
   }
-  if (now < before * 0.99) {
+  if (trend?.direction === 'down') {
     return <ArrowDown size={14} strokeWidth={2.8} className="shrink-0 text-muted" aria-label="En retrait" />
   }
-  return <Minus size={14} strokeWidth={2.8} className="shrink-0 text-faint" aria-label="Stable" />
+  if (trend?.direction === 'flat') {
+    return <Minus size={14} strokeWidth={2.8} className="shrink-0 text-faint" aria-label="Stable" />
+  }
+  return <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-border-strong mx-[6px]" />
 }
 

@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
 import { DEFAULT_TYPE, EXERCISE_TYPE_BY_ID } from '../config/exercises.js'
+import { OTHER_GROUP, groupForName, isMuscleGroup } from '../config/exerciseLibrary.js'
 import { normalizeSession } from './sessionsService.js'
 import { PARITIES } from './programService.js'
 
@@ -33,11 +34,25 @@ function resolveType(raw) {
 // (cf. `isBodyweight`). Aucun champ `bodyweight` n'est stocké ni dérivé ici —
 // il dupliquait le type et pouvait le contredire. Les anciens documents en
 // portent encore un : il est simplement ignoré.
+/**
+ * Le groupe musculaire, avec un repli sur la bibliothèque.
+ *
+ * Les exercices importés avant que ce champ n'existe n'en portent pas — mais
+ * ils portent le nom exact de la bibliothèque, qui le connaît. On le retrouve à
+ * la lecture plutôt que de réécrire tout le catalogue : aucune migration, et
+ * l'axe « par groupe musculaire » fonctionne dès le premier chargement.
+ */
+function resolveGroup(raw) {
+  if (isMuscleGroup(raw?.group)) return raw.group
+  return groupForName(raw?.name) || OTHER_GROUP
+}
+
 function normalize(raw) {
   return {
     id: raw.id,
     name: raw.name || '',
     type: resolveType(raw.type),
+    group: resolveGroup(raw),
   }
 }
 
@@ -56,6 +71,7 @@ export function addExercise(uid, input, currentUid) {
   return addDoc(exercisesCol(uid), {
     name: String(input.name || '').trim(),
     type,
+    group: isMuscleGroup(input.group) ? input.group : OTHER_GROUP,
     createdAt: now,
     createdBy: currentUid,
     updatedAt: now,
@@ -81,6 +97,9 @@ export function addExercises(uid, drafts, currentUid) {
     batch.set(doc(exercisesCol(uid)), {
       name: String(draft.name || '').trim(),
       type: resolveType(draft.type),
+      // La bibliothèque connaît le groupe de chacun de ses mouvements : il est
+      // enfin gardé au lieu d'être affiché puis jeté.
+      group: isMuscleGroup(draft.group) ? draft.group : (groupForName(draft.name) || OTHER_GROUP),
       createdAt: now,
       createdBy: currentUid,
       updatedAt: now,
@@ -94,6 +113,7 @@ export function updateExercise(uid, id, updates, currentUid) {
   const payload = { updatedAt: new Date().toISOString(), updatedBy: currentUid }
   if (updates.name != null) payload.name = String(updates.name).trim()
   if (updates.type != null) payload.type = resolveType(updates.type)
+  if (updates.group != null) payload.group = isMuscleGroup(updates.group) ? updates.group : OTHER_GROUP
   return updateDoc(exerciseDoc(uid, id), payload)
 }
 

@@ -230,11 +230,10 @@ export function pickReferenceSession(sessions, { name, parity, dayOfWeek }) {
 /**
  * Index de l'historique PAR MOUVEMENT : combien de fois, et les dernières fois.
  *
- * Dérivé de l'historique des séances, jamais du cache `lastPerf`. Ce cache est
- * un simple raccourci d'écriture (pré-remplir la saisie du jour sans relire
- * tout l'historique) : il peut se désynchroniser — un exercice supprimé puis
- * recréé en base sans repasser par l'appli, par exemple — et l'écran Progrès
- * ne doit jamais dépendre de sa fraîcheur pour décider ce qui a été fait.
+ * Dérivé de l'historique des séances lui-même. Un cache dénormalisé a existé
+ * pour éviter cette relecture ; il était réécrit au fil de la saisie et
+ * contenait donc déjà les chiffres du jour au moment où on l'interrogeait. Ce
+ * qui a été fait ne se lit que dans les séances.
  *
  * Les occurrences d'un même mouvement DANS UNE MÊME SÉANCE sont mises bout à
  * bout, comme le font déjà `historyForExercise` et `workByExercise` : un jour

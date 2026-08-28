@@ -7,6 +7,7 @@ import { cn } from '@/shared/lib/utils.js'
 import { fromLocalDateKey, formatDateFr } from '@/shared/lib/dates.js'
 import { getExerciseType } from '../../config/exercises.js'
 import { exerciseHistoryIndex, bestSet, bestScore, formatSets } from '../../utils/metrics.js'
+import { compare } from '../../utils/trend.js'
 
 /**
  * Les exercices travaillés, en tableau.
@@ -163,18 +164,13 @@ function SortIcon({ active, dir }) {
     : <ArrowDown size={11} aria-hidden="true" />
 }
 
+// La bande morte de 1 % et le sens de la comparaison viennent de
+// `utils/trend.js` : la même règle pour le tableau, le bilan de séance et la
+// progression par séance, écrite une seule fois.
 function Trend({ trend }) {
-  if (trend === 'up') return <ArrowUp size={13} strokeWidth={2.8} className="text-accent" aria-label="En progrès" />
-  if (trend === 'down') return <ArrowDown size={13} strokeWidth={2.8} className="text-muted" aria-label="En retrait" />
-  if (trend === 'same') return <Minus size={13} strokeWidth={2.8} className="text-faint" aria-label="Stable" />
+  if (trend?.direction === 'up') return <ArrowUp size={13} strokeWidth={2.8} className="text-accent" aria-label="En progrès" />
+  if (trend?.direction === 'down') return <ArrowDown size={13} strokeWidth={2.8} className="text-muted" aria-label="En retrait" />
+  if (trend?.direction === 'flat') return <Minus size={13} strokeWidth={2.8} className="text-faint" aria-label="Stable" />
   // Un seul passage : rien à comparer, donc pas de flèche qui mentirait.
   return <span aria-hidden="true" className="block h-1.5 w-1.5 rounded-full bg-border-strong" />
-}
-
-function compare(now, before) {
-  if (before <= 0) return null
-  // Même marge de 1 % qu'ailleurs : un arrondi ne doit pas passer pour un gain.
-  if (now > before * 1.01) return 'up'
-  if (now < before * 0.99) return 'down'
-  return 'same'
 }

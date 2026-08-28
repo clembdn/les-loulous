@@ -2,6 +2,7 @@ import {
   collection, doc, onSnapshot, setDoc, deleteField, query, where, documentId,
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
+import { doneSets } from '../utils/sets.js'
 
 /**
  * Séances : un document par jour et par profil, `users/{uid}/sessions/{date}`.
@@ -27,6 +28,20 @@ import { db } from '@/shared/lib/firebase.js'
  *     skipped,
  *   }
  *
+ * ── Plus de cache « dernière performance » ──────────────────────────────────
+ *
+ * Un document `meta/lastPerf` dénormalisait la dernière série de chaque
+ * occurrence, pour n'avoir qu'une lecture à faire en ouvrant la séance. Il
+ * était réécrit à CHAQUE série enregistrée, y compris celles du jour : le
+ * rappel « dernière fois : 60 kg × 8 » se changeait en la série qu'on venait
+ * de taper, dès qu'on la validait. Le repère disparaissait exactement au
+ * moment où l'on s'en servait.
+ *
+ * Il n'est plus ni écrit ni lu. « La dernière fois » se calcule dans
+ * `utils/previous.js`, sur la fenêtre de séances récentes déjà ouverte par le
+ * contexte, et strictement AVANT la date affichée. Le document existant est
+ * laissé en place : il ne coûte rien et ne sert plus à rien.
+ *
  * `sets` est un TABLEAU, jamais une map. Firestore fusionne les maps clé par
  * clé : effacer une série d'une map laissait son ancienne clé dans le document,
  * qui revenait à l'affichage. Un tableau est remplacé en bloc.
@@ -37,11 +52,6 @@ import { db } from '@/shared/lib/firebase.js'
  */
 function sessionsCol(uid) { return collection(db, 'users', uid, 'sessions') }
 function sessionDoc(uid, dateKey) { return doc(db, 'users', uid, 'sessions', dateKey) }
-
-// Cache de la DERNIÈRE performance, dénormalisé dans UN document : ouvrir la
-// séance du jour coûte une seule lecture pour tous les rappels. Ce n'est jamais
-// la source des courbes — elles se calculent sur l'historique.
-function lastPerfDoc(uid) { return doc(db, 'users', uid, 'meta', 'lastPerf') }
 
 function toNumber(value) {
   const n = Number(value)
@@ -123,11 +133,10 @@ export function normalizeSession(id, raw) {
   }
 }
 
-/** Les séries qui comptent : celles où des répétitions ont été faites. */
-export function doneSets(entry) {
-  if (!entry || entry.skipped) return []
-  return entry.sets.filter((s) => s.reps > 0)
-}
+// La règle « une série compte si elle porte des répétitions » vit dans
+// `utils/sets.js` : elle est arithmétique, elle n'a pas besoin de Firestore, et
+// tout le reste en dépend. Ré-exportée ici pour ne rien changer aux appelants.
+export { doneSets } from '../utils/sets.js'
 
 /** L'entrée porte-t-elle quelque chose qu'on ne doit pas perdre de vue ? */
 export function hasWork(entry) {
@@ -202,43 +211,6 @@ export function subscribeToSessionRange(uid, startKey, endKey, callback, onError
   })
 }
 
-export function subscribeToLastPerf(uid, callback, onError) {
-  return onSnapshot(lastPerfDoc(uid), (snap) => {
-    const data = snap.exists() ? snap.data() : null
-    callback({
-      byInstance: data?.byInstance || {},
-      byExercise: data?.byExercise || {},
-    })
-  }, (err) => {
-    console.error('[MuscAuzi] lastPerf error:', err)
-    onError?.(err)
-    callback({ byInstance: {}, byExercise: {} })
-  })
-}
-
-function isAtLeastAsRecent(dateKey, previous) {
-  return !previous?.date || dateKey >= previous.date
-}
-
-/**
- * Rafraîchit le cache de dernière perf — jamais avec une séance plus ancienne
- * que ce qu'il contient déjà, sinon rattraper la séance d'hier ferait reculer
- * les rappels de toute l'appli.
- */
-function refreshLastPerf(uid, dateKey, entry, done, lastPerf) {
-  const perf = { date: dateKey, sets: done.map((s) => ({ weightKg: s.weightKg, reps: s.reps })) }
-  const payload = {}
-  if (isAtLeastAsRecent(dateKey, lastPerf?.byInstance?.[entry.instanceId])) {
-    payload.byInstance = { [entry.instanceId]: perf }
-  }
-  if (entry.exerciseId && isAtLeastAsRecent(dateKey, lastPerf?.byExercise?.[entry.exerciseId])) {
-    payload.byExercise = { [entry.exerciseId]: perf }
-  }
-  if (Object.keys(payload).length === 0) return
-  setDoc(lastPerfDoc(uid), { ...payload, updatedAt: new Date().toISOString() }, { merge: true })
-    .catch((err) => console.error('[MuscAuzi] lastPerf write failed:', err))
-}
-
 /**
  * Écrit une entrée dans la séance d'une date.
  *
@@ -249,7 +221,7 @@ function refreshLastPerf(uid, dateKey, entry, done, lastPerf) {
  * Aucun `await` côté UI : le cache Firestore encaisse l'écriture et la
  * synchronise au retour du réseau — la salle capte mal.
  */
-export function saveEntry(uid, dateKey, entry, plan, currentUid, lastPerf) {
+export function saveEntry(uid, dateKey, entry, plan, currentUid) {
   const now = new Date().toISOString()
   const clean = {
     exerciseId: entry.exerciseId || '',
@@ -272,10 +244,6 @@ export function saveEntry(uid, dateKey, entry, plan, currentUid, lastPerf) {
     console.error('[MuscAuzi] saveEntry failed:', err)
   })
 
-  // Le cache ne retient que du travail réel. S'il n'y en a plus, on le laisse
-  // tel quel : rendre le rappel précédent demanderait de relire l'historique.
-  const done = clean.sets.filter((s) => s.reps > 0)
-  if (done.length > 0) refreshLastPerf(uid, dateKey, { ...clean, instanceId: entry.instanceId }, done, lastPerf)
 }
 
 /** Retire une occurrence de la séance (annule un « non fait » ou une saisie). */

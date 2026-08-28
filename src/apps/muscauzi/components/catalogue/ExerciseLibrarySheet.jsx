@@ -32,9 +32,11 @@ export default function ExerciseLibrarySheet({ open, onOpenChange, existing, onA
 
   const selected = useMemo(() => Object.values(picked).filter(Boolean), [picked])
 
-  const toggle = (item) => {
+  // L'item retenu emporte le GROUPE de la section d'où il vient : la
+  // bibliothèque le connaît, et c'est le seul endroit où on l'a sous la main.
+  const toggle = (item, group) => {
     const key = exerciseKey(item.name)
-    setPicked((prev) => ({ ...prev, [key]: prev[key] ? null : item }))
+    setPicked((prev) => ({ ...prev, [key]: prev[key] ? null : { ...item, group } }))
   }
 
   // Le panneau se rouvre vierge : une sélection laissée d'une fois sur l'autre
@@ -46,7 +48,7 @@ export default function ExerciseLibrarySheet({ open, onOpenChange, existing, onA
 
   return (
     <Sheet open={open} onOpenChange={close}>
-      <SheetContent side="bottom" desktopSide="right" title="Bibliothèque d'exercices" className="max-h-[88vh]">
+      <SheetContent side="bottom" desktopSide="right" title="Bibliothèque d'exercices" className="max-h-[88vh] bg-surface border-border">
         <div className="px-5 pt-4 shrink-0">
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
@@ -81,7 +83,7 @@ export default function ExerciseLibrarySheet({ open, onOpenChange, existing, onA
                         key={key}
                         type="button"
                         disabled={already}
-                        onClick={() => toggle(item)}
+                        onClick={() => toggle(item, group.group)}
                         aria-pressed={isPicked}
                         className={cn(
                           'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition',
@@ -89,7 +91,7 @@ export default function ExerciseLibrarySheet({ open, onOpenChange, existing, onA
                             ? 'opacity-40 cursor-default'
                             : isPicked
                               ? 'bg-accent/10 ring-1 ring-inset ring-accent/30'
-                              : 'hover:bg-white/5',
+                              : 'hover:bg-surface-2',
                         )}
                       >
                         <span className={cn(
