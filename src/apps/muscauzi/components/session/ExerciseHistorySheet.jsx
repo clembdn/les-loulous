@@ -22,7 +22,7 @@ export default function ExerciseHistorySheet({
         side="bottom"
         desktopSide="right"
         title={exercise?.name || 'Progression'}
-        className="max-h-[88vh] sm:max-w-xl bg-surface border-border"
+        className="sm:max-w-xl bg-surface border-border"
       >
         <SheetBody>
           {exercise && (

@@ -48,7 +48,7 @@ export default function ExerciseLibrarySheet({ open, onOpenChange, existing, onA
 
   return (
     <Sheet open={open} onOpenChange={close}>
-      <SheetContent side="bottom" desktopSide="right" title="Bibliothèque d'exercices" className="max-h-[88vh] bg-surface border-border">
+      <SheetContent side="bottom" desktopSide="right" title="Bibliothèque d'exercices" className="bg-surface border-border">
         <div className="px-5 pt-4 shrink-0">
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />

@@ -67,7 +67,7 @@ export default function AddExerciseSheet({ open, onOpenChange, exercises, previo
         side="bottom"
         desktopSide="right"
         title="Ajouter à la séance"
-        className="max-h-[88vh] bg-surface border-border"
+        className="bg-surface border-border"
       >
         <SheetBody>
           <p className="text-[13px] leading-relaxed text-muted mb-3">

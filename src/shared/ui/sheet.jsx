@@ -2,6 +2,7 @@ import { forwardRef } from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
+import { KeyboardInsetProbe } from '@/shared/lib/keyboardInset.js'
 
 export const Sheet = DialogPrimitive.Root
 export const SheetTrigger = DialogPrimitive.Trigger
@@ -37,8 +38,10 @@ const sideStyles = {
     'inset-y-0 left-0 h-full w-full max-w-md border-r data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left',
   top:
     'inset-x-0 top-0 w-full border-b data-[state=open]:slide-in-from-top data-[state=closed]:slide-out-to-top',
+  // `kb-safe` tient lieu de bottom-0/max-h-[90vh] : il cale le panneau sur le
+  // viewport visible, donc au-dessus du clavier virtuel.
   bottom:
-    'inset-x-0 bottom-0 w-full max-h-[90vh] rounded-t-2xl border-t data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom',
+    'inset-x-0 w-full rounded-t-2xl border-t kb-safe data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom',
 }
 
 /**
@@ -75,6 +78,7 @@ export function SheetContent({
         )}
         {...props}
       >
+        <KeyboardInsetProbe />
         {(title || showClose) && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 flex-shrink-0">
             {title ? (

@@ -49,6 +49,18 @@ body {
 
 .tabular { font-variant-numeric: tabular-nums; }
 
+/* Modales ancrées en bas : rester au-dessus du clavier virtuel.
+   `--kb-inset` / `--vvh` sont posées par keyboardInset.js pendant qu'une modale
+   est ouverte, et absentes le reste du temps (d'où les valeurs de repli).
+   Déclaré dans la couche `components` pour que les variantes Tailwind `sm:`
+   (modale centrée sur desktop) continuent de l'emporter. */
+@layer components {
+  .kb-safe {
+    bottom: var(--kb-inset, 0px);
+    max-height: calc(var(--vvh, 100vh) * 0.9);
+  }
+}
+
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slide-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes slide-in-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
