@@ -8,6 +8,7 @@ import { sumIngredients, sumIngredientsForPerson, personFactor } from '../utils/
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
 import { AUTHORIZED_UIDS, getPerson } from '@/shared/config/people.js'
 import { formatPrepTime } from '../utils/recipeMeta.js'
+import { getMealType } from '../config/mealTypes.js'
 import ConfirmDialog from './ConfirmDialog.jsx'
 import AddIngredientsSheet from './AddIngredientsSheet.jsx'
 import NutritionSummary from './NutritionSummary.jsx'
@@ -89,6 +90,21 @@ export default function RecipeDetail({ recipe, items, catalog, pantry = [], food
           />
         )}
         <h1 className="text-2xl font-semibold tracking-[-0.01em] text-fg">{recipe.title}</h1>
+        {recipe.meals.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+            {recipe.meals.map(getMealType).filter(Boolean).map((m) => {
+              const Icon = m.icon
+              return (
+                <span
+                  key={m.id}
+                  className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border', m.pillClass)}
+                >
+                  <Icon size={11} /> {m.label}
+                </span>
+              )
+            })}
+          </div>
+        )}
         {recipe.note && <p className="text-sm text-muted mt-2 whitespace-pre-line">{recipe.note}</p>}
 
         {(recipe.prepMinutes > 0 || baseServings) && (

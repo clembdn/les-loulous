@@ -9,6 +9,7 @@ import { cleanName } from '../utils/aisleGuess.js'
 import ImagePickerSheet from './ImagePickerSheet.jsx'
 import FoodPickerSheet from './FoodPickerSheet.jsx'
 import SplitEditor from './SplitEditor.jsx'
+import { MEAL_TYPES } from '../config/mealTypes.js'
 
 const EMPTY_ING = { name: '', quantity: '', unit: '', foodId: null, gramsOverride: null, split: null }
 
@@ -29,6 +30,7 @@ export default function RecipeEditor({ recipe, foods = [], foodById, onCancel, o
   const [servings, setServings] = useState('')
   const [prepMinutes, setPrepMinutes] = useState('')
   const [image, setImage] = useState('')
+  const [meals, setMeals] = useState([])
   const [pickerOpen, setPickerOpen] = useState(false)
   // Index de la ligne d'ingredient en cours de liaison (null = aucune).
   const [pickingFor, setPickingFor] = useState(null)
@@ -59,6 +61,7 @@ export default function RecipeEditor({ recipe, foods = [], foodById, onCancel, o
       setSteps(recipe.steps.length ? [...recipe.steps] : [''])
       setServings(recipe.servings != null ? String(recipe.servings) : '')
       setPrepMinutes(recipe.prepMinutes != null ? String(recipe.prepMinutes) : '')
+      setMeals(recipe.meals)
     } else {
       setTitle('')
       setNote('')
@@ -67,6 +70,7 @@ export default function RecipeEditor({ recipe, foods = [], foodById, onCancel, o
       setSteps([''])
       setServings('')
       setPrepMinutes('')
+      setMeals([])
     }
   }, [recipe])
 
@@ -80,6 +84,10 @@ export default function RecipeEditor({ recipe, foods = [], foodById, onCancel, o
   }
   function addIngredient() { setIngredients((arr) => [...arr, { ...EMPTY_ING }]) }
   function removeIngredient(i) { setIngredients((arr) => (arr.length > 1 ? arr.filter((_, j) => j !== i) : arr)) }
+
+  function toggleMeal(id) {
+    setMeals((arr) => (arr.includes(id) ? arr.filter((m) => m !== id) : [...arr, id]))
+  }
 
   function setStep(i, value) { setSteps((arr) => arr.map((s, j) => (j === i ? value : s))) }
   function addStep() { setSteps((arr) => [...arr, '']) }
@@ -104,6 +112,7 @@ export default function RecipeEditor({ recipe, foods = [], foodById, onCancel, o
       steps: steps.map((s) => s.trim()).filter(Boolean),
       servings: toNumber(servings),
       prepMinutes: toNumber(prepMinutes),
+      meals,
     })
   }
 
@@ -122,6 +131,34 @@ export default function RecipeEditor({ recipe, foods = [], foodById, onCancel, o
         <div>
           <label className="block text-xs text-muted mb-1.5">Titre</label>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="ex. Curry de pois chiches" autoFocus />
+        </div>
+
+        <div>
+          <label className="block text-xs text-muted mb-1.5">Type de repas</label>
+          <div className="flex flex-wrap gap-2">
+            {MEAL_TYPES.map((m) => {
+              const Icon = m.icon
+              const on = meals.includes(m.id)
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => toggleMeal(m.id)}
+                  aria-pressed={on}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 h-9 px-3 rounded-full border text-[13px] font-medium transition',
+                    on ? m.chipClass : 'bg-surface-2 text-muted border-border hover:text-fg',
+                  )}
+                >
+                  <Icon size={14} className={cn('shrink-0', !on && m.colorClass)} />
+                  {m.label}
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-[11px] text-faint mt-1.5">
+            Plusieurs choix possibles : des pâtes carbonara se rangent aussi bien en déjeuner qu'en dîner.
+          </p>
         </div>
 
         <div>

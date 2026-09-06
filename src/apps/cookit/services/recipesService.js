@@ -4,6 +4,7 @@ import {
 import { db } from '@/shared/lib/firebase.js'
 import { formatQuantity } from '../utils/quantity.js'
 import { cleanName } from '../utils/aisleGuess.js'
+import { normalizeMeals } from '../config/mealTypes.js'
 
 const RECIPES_PATH = 'couples/main/recipes'
 function recipesCol() { return collection(db, RECIPES_PATH) }
@@ -50,6 +51,9 @@ function normalize(raw) {
     imageUrl: raw.imageUrl || null,
     servings: typeof raw.servings === 'number' ? raw.servings : null,
     prepMinutes: typeof raw.prepMinutes === 'number' ? raw.prepMinutes : null,
+    // Toujours un tableau, jamais `undefined` : les recettes créées avant les
+    // types de repas n'ont pas le champ, et l'affichage n'a pas à s'en soucier.
+    meals: normalizeMeals(raw.meals),
     ingredients: Array.isArray(raw.ingredients) ? raw.ingredients.map(normalizeIngredient) : [],
     steps: Array.isArray(raw.steps) ? raw.steps.map((s) => String(s)) : [],
     createdAt: raw.createdAt,
@@ -73,6 +77,7 @@ function sanitizeInput(input) {
     imageUrl: input.imageUrl ? String(input.imageUrl).trim() : null,
     servings: typeof input.servings === 'number' && input.servings > 0 ? input.servings : null,
     prepMinutes: typeof input.prepMinutes === 'number' && input.prepMinutes > 0 ? input.prepMinutes : null,
+    meals: normalizeMeals(input.meals),
     ingredients,
     steps,
   }
