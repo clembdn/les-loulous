@@ -17,12 +17,40 @@ export const AIMS = [
   { id: 'prise', label: 'Prise', delta: 0.1 },
 ]
 
-// Répartition des macros retenue : 30 % protéines / 40 % glucides / 30 % lipides.
-// Protéines hautes car ils s'entraînent (MuscAuzi), et rassasiantes.
-const SPLIT = { proteins: 0.3, carbs: 0.4, fat: 0.3 }
 const KCAL_PER_G = { proteins: 4, carbs: 4, fat: 9 }
 
-// weightKg + profil → { kcal, proteins, carbs, fat } ; null si données incomplètes.
+// Répartition des macros.
+//
+// Les protéines se calent sur le POIDS DE CORPS, jamais sur un pourcentage des
+// calories : c'est la masse à nourrir qui commande, pas l'énergie dépensée.
+// La version précédente en prenait 30 % des calories, si bien qu'une personne
+// légère qui s'entraîne beaucoup héritait de la cible la plus haute — 60 kg en
+// activité intense donnaient 202 g, soit 3,4 g/kg. Personne ne mange ça, et
+// rien ne le justifie : à poids égal, s'entraîner davantage demande surtout
+// plus de GLUCIDES.
+//
+// Repères : la méta-analyse Morton (2018) place le plateau du gain musculaire
+// vers 1,6 g/kg, la borne haute de son intervalle de confiance à 2,2. On monte
+// en déficit, où les protéines protègent la masse maigre.
+const PROTEIN_G_PER_KG = { perte: 2, maintien: 1.8, prise: 1.8 }
+
+// Lipides : 30 % des calories — milieu de la fourchette usuelle de 20 à 35 % —
+// avec un plancher au poids de corps, sous lequel l'équilibre hormonal se
+// dégrade. Le plancher ne mord qu'en franc déficit.
+const FAT_KCAL_RATIO = 0.3
+const FAT_G_PER_KG_FLOOR = 0.8
+
+// Garde-fou : au-delà de 40 % des calories, la cible protéique ne laisse plus
+// de place aux glucides. Le seuil est haut à dessein — 35 % rognait déjà une
+// coupe tout à fait ordinaire (60 kg, sédentaire, en perte), or un régime à
+// forte teneur en protéines pendant un déficit est légitime. Il ne se déclenche
+// donc que sur un gros poids en déficit, là où le calcul « par kilo de poids
+// total » surestime le besoin réel : la graisse n'a pas à être nourrie en
+// protéines.
+const PROTEIN_MAX_KCAL_RATIO = 0.4
+
+// weightKg + profil → { kcal, proteins, carbs, fat, proteinPerKg } ; null si
+// données incomplètes.
 export function computeGoals({ weightKg, heightCm, birthYear, sex, activity, aim }) {
   const w = Number(weightKg)
   const h = Number(heightCm)
@@ -36,10 +64,22 @@ export function computeGoals({ weightKg, heightCm, birthYear, sex, activity, aim
   const delta = AIMS.find((a) => a.id === aim)?.delta ?? 0
   const kcal = Math.round(bmr * factor * (1 + delta))
 
-  return {
-    kcal,
-    proteins: Math.round((kcal * SPLIT.proteins) / KCAL_PER_G.proteins),
-    carbs: Math.round((kcal * SPLIT.carbs) / KCAL_PER_G.carbs),
-    fat: Math.round((kcal * SPLIT.fat) / KCAL_PER_G.fat),
-  }
+  const proteins = Math.round(Math.min(
+    w * (PROTEIN_G_PER_KG[aim] ?? PROTEIN_G_PER_KG.maintien),
+    (kcal * PROTEIN_MAX_KCAL_RATIO) / KCAL_PER_G.proteins,
+  ))
+  const fat = Math.round(Math.max(
+    (kcal * FAT_KCAL_RATIO) / KCAL_PER_G.fat,
+    w * FAT_G_PER_KG_FLOOR,
+  ))
+  // Les glucides prennent le RESTE. C'est le macro d'ajustement — celui qui
+  // absorbe la dépense — et c'est ce qui garantit que les trois lignes se
+  // rebouclent sur les calories affichées juste au-dessus.
+  const carbs = Math.max(0, Math.round(
+    (kcal - proteins * KCAL_PER_G.proteins - fat * KCAL_PER_G.fat) / KCAL_PER_G.carbs,
+  ))
+
+  // `proteinPerKg` est affiché tel quel : c'est le chiffre qui permet de juger
+  // la cible d'un coup d'œil, là où « 200 g » ne dit rien sans le poids.
+  return { kcal, proteins, carbs, fat, proteinPerKg: Math.round((proteins / w) * 10) / 10 }
 }

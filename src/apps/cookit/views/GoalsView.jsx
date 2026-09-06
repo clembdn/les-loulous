@@ -182,7 +182,9 @@ export default function GoalsView({ goals }) {
               ≈ <strong>{estimate.kcal} kcal</strong> · P {estimate.proteins} g · G {estimate.carbs} g · L {estimate.fat} g
             </p>
             <p className="text-[11px] text-faint mb-3">
-              Estimation Mifflin-St Jeor, à ±10 % près. À ajuster selon ce que tu constates.
+              Calories : Mifflin-St Jeor, à ±10 % près. Protéines calées sur le poids
+              ({String(estimate.proteinPerKg).replace('.', ',')} g/kg), lipides à 30 % des calories,
+              glucides pour le reste. À ajuster selon ce que tu constates.
             </p>
             <Button variant="secondary" className="w-full" onClick={applyEstimate}>
               <Calculator size={16} /> Utiliser cette estimation
