@@ -5,7 +5,7 @@ import { Button } from '@/shared/ui/Button.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { formatDateFr } from '@/shared/lib/dates.js'
-import { toNumber } from '../utils/quantity.js'
+import { toNumber, formatNumber } from '../utils/quantity.js'
 import { computeGoals, ACTIVITY_LEVELS, AIMS } from '../utils/mifflin.js'
 import { saveGoals } from '../services/nutritionGoalsService.js'
 import { useLatestWeight } from '../hooks/useLatestWeight.js'
@@ -183,8 +183,8 @@ export default function GoalsView({ goals }) {
             </p>
             <p className="text-[11px] text-faint mb-3">
               Calories : Mifflin-St Jeor, à ±10 % près. Protéines calées sur le poids
-              ({String(estimate.proteinPerKg).replace('.', ',')} g/kg), lipides à 30 % des calories,
-              glucides pour le reste. À ajuster selon ce que tu constates.
+              ({formatNumber(estimate.proteinPerKg)} g/kg), lipides à {estimate.fatKcalPercent} % des
+              calories, glucides pour le reste. À ajuster selon ce que tu constates.
             </p>
             <Button variant="secondary" className="w-full" onClick={applyEstimate}>
               <Calculator size={16} /> Utiliser cette estimation

@@ -45,9 +45,10 @@ test('les macros se rebouclent sur les calories', () => {
 test('la cible protéique reste mangeable, quel que soit le profil', () => {
   for (const p of everyProfile()) {
     const perKg = computeGoals(p).proteins / p.weightKg
-    // Borne haute : celle de la méta-analyse Morton. Borne basse : le garde-fou
-    // à 35 % des calories, qui n'abaisse la cible que sur un gros poids en
-    // déficit — là où « par kilo de poids total » surestime le besoin.
+    // Borne haute : celle de la méta-analyse Morton. Borne basse : ce que
+    // laisse le garde-fou à 40 % des calories sur LES PROFILS BALAYÉS ICI — il
+    // mord dès qu'un métabolisme est bas rapporté à la masse, pas seulement sur
+    // un gros poids en déficit, et descend plus bas hors de cette grille.
     assert.ok(perKg >= 1.3 && perKg <= 2.2, `${label(p)} → ${perKg.toFixed(2)} g/kg`)
   }
 })
@@ -89,6 +90,16 @@ test('les lipides ne descendent jamais sous 0,8 g/kg', () => {
   for (const p of everyProfile()) {
     const g = computeGoals(p)
     assert.ok(g.fat >= Math.round(p.weightKg * 0.8), `${label(p)} → ${g.fat} g`)
+  }
+})
+
+test('un objectif inconnu retombe sur maintien, jamais sur NaN', () => {
+  // `aim` traversait un lookup par crochets : n'importe quelle clé de
+  // Object.prototype rendait un nombre invalide au lieu de la valeur par défaut.
+  const base = { weightKg: 70, heightCm: 175, birthYear: BIRTH_YEAR, sex: 'h', activity: 1.55 }
+  const attendu = computeGoals({ ...base, aim: 'maintien' })
+  for (const aim of ['constructor', 'toString', 'inconnu', undefined]) {
+    assert.deepEqual(computeGoals({ ...base, aim }), attendu, `aim: ${aim}`)
   }
 })
 
