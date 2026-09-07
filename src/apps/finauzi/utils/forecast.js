@@ -7,12 +7,13 @@
 
 import { getAccountBalanceAt, getAccountDelta, expandOccurrences, touchesAccount } from './ledger.js'
 import { RECURRENCES_BY_ID, normalizeRecurrence, isRecurring } from './recurrence.js'
+import { toLocalDate } from '@/shared/lib/dates.js'
 import { round2 } from './money.js'
 
 const DAY_MS = 86400000
 
 function startOfDay(d) {
-  const date = d instanceof Date ? d : new Date(d)
+  const date = toLocalDate(d)
   return new Date(date.getFullYear(), date.getMonth(), date.getDate())
 }
 
@@ -138,12 +139,18 @@ export function getRunway(transactions, accountId, opening, { buffer = 0, rate, 
   let zeroDate = null
   let lowest = { balance: currentBalance, date: today }
 
+  // La boucle va jusqu'au bout de l'horizon, même une fois le compte à sec.
+  //
+  // Elle s'arrêtait au premier passage sous zéro. `lowest` et `balanceAtHorizon`
+  // restaient donc figés sur ce franchissement : l'écran annonçait « point le
+  // plus bas : −500 A$ le 15 mars » là où le creux réel des 36 mois était
+  // −33 500 A$ en décembre 2028. Les deux dates de bascule, elles, ne sont
+  // posées qu'une fois — c'est la PREMIÈRE qui intéresse, pas la dernière.
   for (const event of events) {
     balance += getAccountDelta(event.tx, accountId, rate)
     if (balance < lowest.balance) lowest = { balance, date: event.date }
     if (bufferDate === null && balance < buffer) bufferDate = event.date
     if (zeroDate === null && balance < 0) zeroDate = event.date
-    if (zeroDate !== null) break
   }
 
   const monthlyNetFlow = getMonthlyNetFlow(transactions, accountId, rate, now)

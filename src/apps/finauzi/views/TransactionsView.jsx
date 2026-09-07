@@ -11,6 +11,7 @@ import { DEPARTURE_DATE, DEPARTURE_TIMESTAMP } from '../config/journey.js'
 import TransactionRow from '../components/transactions/TransactionRow.jsx'
 import { Sheet, SheetContent, SheetBody, SheetFooter } from '@/shared/ui/sheet.jsx'
 import { cn } from '@/shared/lib/utils.js'
+import { toLocalDate } from '@/shared/lib/dates.js'
 
 // Un mois d'avance, pas plus. De quoi voir le prochain loyer et les prochaines
 // semaines d'abonnement pour anticiper, sans noyer l'historique sous des années
@@ -28,7 +29,7 @@ function expandHistory(txs, now) {
   if (txs.length === 0) return []
   let earliest = null
   for (const tx of txs) {
-    const d = tx.date ? new Date(tx.date) : null
+    const d = tx.date ? toLocalDate(tx.date) : null
     if (d && !isNaN(d) && (earliest === null || d < earliest)) earliest = d
   }
   if (!earliest) return []

@@ -25,7 +25,7 @@ const NOISE_WORDS = new Set([
   'recu', 'emis', 'inst', 'ref', 'reference',
   'aus', 'au', 'fra', 'nsw', 'vic', 'qld', 'sa', 'wa',
   'to', 'from', 'the', 'de', 'du', 'des', 'la', 'le', 'les', 'pour', 'par', 'chez', 'and', 'et',
-  'pty', 'ltd', 'sarl', 'sas', 'sa.', 'inc', 'llc', 'gmbh',
+  'pty', 'ltd', 'sarl', 'sas', 'inc', 'llc', 'gmbh',
 ])
 
 export function normalizeLabel(raw) {
@@ -67,23 +67,57 @@ export function prettifyLabel(raw) {
 // table, puisque le foyer dépense dans les deux pays.
 const SEEDS = {
   groceries: ['carrefour', 'leclerc', 'intermarche', 'auchan', 'lidl', 'aldi', 'monoprix', 'franprix', 'casino', 'super u', 'picard', 'biocoop', 'woolworths', 'woolies', 'coles', 'iga', 'harris farm', 'costco'],
-  restaurants: ['mcdonald', 'burger', 'kfc', 'subway', 'uber eats', 'ubereats', 'deliveroo', 'doordash', 'menulog', 'restaurant', 'cafe', 'coffee', 'boulangerie', 'pizza', 'sushi', 'thai', 'bakery'],
-  transport: ['sncf', 'ratp', 'uber', 'didi', 'ola', 'total', 'totalenergies acces', 'esso', 'shell', 'ampol', 'caltex', 'bp ', 'opal', 'translink', 'myki', 'parking', 'linkt', 'toll', 'peage', 'vinci autoroute', 'blablacar', 'lime', 'garage'],
+  restaurants: ['mcdonald', 'mcdonalds', 'burger', 'kfc', 'subway', 'uber eats', 'ubereats', 'deliveroo', 'doordash', 'menulog', 'restaurant', 'cafe', 'coffee', 'boulangerie', 'pizza', 'sushi', 'thai', 'bakery'],
+  transport: ['sncf', 'ratp', 'uber', 'didi', 'ola', 'total', 'totalenergies acces', 'esso', 'shell', 'ampol', 'caltex', 'bp', 'opal', 'translink', 'myki', 'parking', 'linkt', 'toll', 'peage', 'vinci autoroute', 'blablacar', 'lime', 'garage'],
   utilities: ['edf', 'engie', 'totalenergies', 'agl', 'origin energy', 'energy australia', 'alinta', 'sydney water', 'veolia', 'suez', 'eau'],
-  internet: ['orange', 'sfr', 'bouygues', 'free mobile', 'free ', 'sosh', 'red by', 'telstra', 'optus', 'vodafone', 'belong', 'tpg', 'aussie broadband', 'more telecom'],
+  internet: ['orange', 'sfr', 'bouygues', 'free mobile', 'free', 'sosh', 'red by', 'telstra', 'optus', 'vodafone', 'belong', 'tpg', 'aussie broadband', 'more telecom'],
   subscriptions: ['netflix', 'spotify', 'disney', 'prime video', 'amazon prime', 'apple.com', 'itunes', 'icloud', 'google', 'youtube', 'canal', 'deezer', 'adobe', 'microsoft', 'openai', 'anthropic', 'claude', 'dropbox', 'audible', 'stan', 'binge', 'kayo'],
   health: ['pharmacie', 'pharmacy', 'chemist', 'medicare', 'docteur', 'doctor', 'dentist', 'dentiste', 'mutuelle', 'bupa', 'medibank', 'hcf', 'nib', 'opticien', 'laboratoire', 'clinic'],
   shopping: ['amazon', 'zara', 'h&m', 'uniqlo', 'decathlon', 'ikea', 'kmart', 'big w', 'target', 'jb hi-fi', 'bunnings', 'officeworks', 'fnac', 'darty', 'boulanger', 'sephora', 'asos', 'zalando', 'temu', 'shein'],
   housing: ['loyer', 'rent', 'real estate', 'realty', 'agence immo', 'syndic', 'foncia', 'ray white', 'lj hooker'],
   travel: ['airbnb', 'booking', 'expedia', 'qantas', 'jetstar', 'virgin australia', 'air france', 'transavia', 'ryanair', 'easyjet', 'flixbus', 'hotel', 'hostel', 'trainline'],
-  leisure: ['cinema', 'hoyts', 'event cinemas', 'ugc', 'pathe', 'gym', 'fitness', 'anytime', 'goodlife', 'bar ', 'pub ', 'brewery', 'bottleshop', 'dan murphy', 'liquorland', 'nicolas', 'theatre', 'musee', 'museum'],
+  leisure: ['cinema', 'hoyts', 'event cinemas', 'ugc', 'pathe', 'gym', 'fitness', 'anytime', 'goodlife', 'bar', 'pub', 'brewery', 'bottleshop', 'dan murphy', 'liquorland', 'nicolas', 'theatre', 'musee', 'museum'],
   salary: ['salaire', 'salary', 'payroll', 'paie', 'wages', 'remuneration'],
-  bonus: ['caf ', 'allocation', 'centrelink', 'remboursement', 'refund', 'ato ', 'impots'],
+  bonus: ['caf', 'allocation', 'centrelink', 'remboursement', 'refund', 'ato', 'impots'],
 }
 
-const SEED_ENTRIES = Object.entries(SEEDS).flatMap(([category, needles]) =>
-  needles.map((needle) => [needle, category]),
-)
+// Les commerçants passent par le MÊME nettoyage que les libellés.
+//
+// Ils étaient comparés bruts, si bien que ceux qui portaient un caractère que
+// `normalizeLabel` retire ne pouvaient jamais correspondre : « apple.com » ne
+// rencontrait jamais « apple com », ni « jb hi-fi » « jb hi fi ». Normaliser
+// des deux côtés supprime aussi le besoin des espaces finales de protection
+// (« bp », « bar », « free »…) — le mot entier s'en charge.
+//
+// Triés du plus long au plus court : c'est le commerçant le PLUS PRÉCIS qui
+// gagne, pas celui dont la catégorie est déclarée en premier. « totalenergies »
+// l'emporte donc sur « total », et « uber eats » sur « uber », sans que l'ordre
+// de `SEEDS` ait quoi que ce soit à porter.
+const SEED_ENTRIES = Object.entries(SEEDS)
+  .flatMap(([category, needles]) => needles.map((needle) => [normalizeLabel(needle), category]))
+  .filter(([needle]) => needle)
+  .sort((a, b) => b[0].length - a[0].length)
+
+/**
+ * Le libellé contient-il ce commerçant, en MOTS ENTIERS ?
+ *
+ * `includes` sur la chaîne brute rapprochait des sous-chaînes : « eau »
+ * (fournisseur d'eau) classait BUREAU VALLEE, BORDEAUX, CHATEAU et BEAUTY en
+ * « factures », et « ola » (le VTC) envoyait SOLARIUM et CHOCOLATERIE en
+ * « transport ». Les deux côtés étant des mots joints par une seule espace,
+ * les encadrer d'espaces suffit à exiger la frontière de mot.
+ */
+function containsPhrase(label, needle) {
+  return ` ${label} `.includes(` ${needle} `)
+}
+
+// Une catégorie de dépense n'a pas de sens sur un crédit, ni l'inverse :
+// un « remboursement Carrefour » reste une entrée d'argent.
+function allowsKind(category, kind) {
+  if (kind === 'income') return ['salary', 'bonus', 'other-income'].includes(category)
+  if (kind === 'expense') return !['salary', 'bonus'].includes(category)
+  return true
+}
 
 // Les règles de l'utilisateur passent avant les nôtres : c'est lui qui a
 // raison sur son propre relevé.
@@ -92,17 +126,11 @@ export function guessCategory(rawLabel, kind, userRules = {}) {
   if (!label) return null
 
   for (const [needle, category] of Object.entries(userRules)) {
-    if (needle && label.includes(needle)) return category
+    if (needle && containsPhrase(label, needle)) return category
   }
 
   for (const [needle, category] of SEED_ENTRIES) {
-    if (label.includes(needle)) {
-      // Un « remboursement Carrefour » reste une entrée d'argent : une
-      // catégorie de dépense sur un crédit n'aurait aucun sens.
-      if (kind === 'income' && !['salary', 'bonus', 'other-income'].includes(category)) continue
-      if (kind === 'expense' && ['salary', 'bonus'].includes(category)) continue
-      return category
-    }
+    if (containsPhrase(label, needle) && allowsKind(category, kind)) return category
   }
 
   return null

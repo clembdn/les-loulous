@@ -11,6 +11,7 @@
 //   getRangePeriod()   — pour les totaux, en MOIS CIVILS entiers : un budget
 //                        se lit du 1er au 31, pas sur les 30 derniers jours.
 
+import { toLocalDate } from '@/shared/lib/dates.js'
 import { startOfMonth, endOfMonth, addMonths } from '../utils/forecast.js'
 
 export const RANGES = [
@@ -57,7 +58,7 @@ function getEarliestDate(transactions, fallback) {
   let earliest = null
   for (const tx of transactions) {
     if (tx.isActive === false || !tx.date) continue
-    const date = tx.date instanceof Date ? tx.date : new Date(tx.date)
+    const date = toLocalDate(tx.date)
     if (Number.isNaN(date.getTime())) continue
     if (!earliest || date < earliest) earliest = date
   }

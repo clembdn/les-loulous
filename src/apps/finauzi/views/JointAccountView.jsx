@@ -12,6 +12,7 @@ import { formatDateShort, formatMonthLong } from '../utils/cashflow.js'
 import { COMMON_SUBS } from '../config/navigation.js'
 import TradeChart from '../components/chart/TradeChart.jsx'
 import SegmentedTabs from '@/shared/ui/SegmentedTabs.jsx'
+import { toLocalDate } from '@/shared/lib/dates.js'
 
 const HORIZON_MONTHS = 6
 
@@ -55,7 +56,7 @@ export default function JointAccountView({ onNavigate }) {
         && tx.kind === 'expense'
         && tx.fromAccount === JOINT_ACCOUNT_ID
         && isRecurring(tx)
-        && (!tx.endDate || new Date(tx.endDate) >= today))
+        && (!tx.endDate || toLocalDate(tx.endDate) >= today))
       .map((tx) => ({ tx, monthly: getMonthlyEquivalent(tx) }))
       .sort((a, b) => b.monthly - a.monthly)
   }, [transactions])

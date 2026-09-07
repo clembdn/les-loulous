@@ -162,17 +162,41 @@ function splitCSVLine(line, delimiter) {
   return cells
 }
 
+// Le bon séparateur est celui qui découpe le PLUS DE LIGNES en un même nombre
+// de colonnes — la largeur dominante, pas celle de la première ligne.
+//
+// L'ancienne version prenait `counts[0]` comme référence. Un export Caisse
+// d'Épargne commence par une ligne d'en-tête de compte (« Compte, N 041…,
+// Solde au … ») : découpée par `;` elle ne fait qu'une cellule, `;` était donc
+// écarté d'emblée, `,` gagnait sur ce seul préambule, et le relevé entier
+// rendait zéro opération — sans erreur, juste « aucune opération lue ».
+function dominantWidth(counts) {
+  const tally = new Map()
+  for (const count of counts) {
+    if (count < 2) continue
+    tally.set(count, (tally.get(count) || 0) + 1)
+  }
+  let width = 0
+  let best = 0
+  for (const [candidate, seen] of tally) {
+    // À égalité de fréquence, la largeur la plus grande : un séparateur qui
+    // découpe vraiment bat celui qui laisse la ligne presque entière.
+    if (seen > best || (seen === best && candidate > width)) {
+      best = seen
+      width = candidate
+    }
+  }
+  return { width, stable: best }
+}
+
 function sniffDelimiter(lines) {
   const candidates = [';', ',', '\t', '|']
   let best = ';'
   let bestScore = -1
   for (const delimiter of candidates) {
-    // Le bon séparateur est celui qui découpe toutes les lignes en un même
-    // nombre de colonnes — et en plus d'une.
     const counts = lines.map((l) => splitCSVLine(l, delimiter).length)
-    const width = counts[0]
+    const { width, stable } = dominantWidth(counts)
     if (width < 2) continue
-    const stable = counts.filter((c) => c === width).length
     const score = stable * 10 + width
     if (score > bestScore) { bestScore = score; best = delimiter }
   }
@@ -198,14 +222,20 @@ function matchHeader(cells, hints) {
 // Un export CE commence souvent par plusieurs lignes d'en-tête de compte
 // avant la vraie ligne de colonnes. On cherche donc la première ligne qui
 // ressemble à un en-tête ; à défaut, le fichier est positionnel (CommBank).
+// DÉTECTION seulement : une ligne qui nomme une date ET au moins une autre
+// colonne connue. Le libellé compte comme second signal — exiger le montant ici
+// ferait retomber en mode positionnel un fichier qui a bel et bien un en-tête,
+// et le vrai défaut (« pas de colonne de montant ») serait rapporté comme
+// « pas de colonne de date ». La validation se fait dans `parseCSV`.
 function findHeader(rows) {
   for (let i = 0; i < Math.min(rows.length, 15); i += 1) {
     const cells = rows[i]
     const hasDate = matchHeader(cells, HEADER_HINTS.date) !== -1
-    const hasMoney = matchHeader(cells, HEADER_HINTS.amount) !== -1
+    const hasKnownColumn = matchHeader(cells, HEADER_HINTS.amount) !== -1
       || matchHeader(cells, HEADER_HINTS.debit) !== -1
+      || matchHeader(cells, HEADER_HINTS.credit) !== -1
       || matchHeader(cells, HEADER_HINTS.label) !== -1
-    if (hasDate && hasMoney) return i
+    if (hasDate && hasKnownColumn) return i
   }
   return -1
 }
@@ -264,6 +294,11 @@ function parseCSV(text) {
   }
 
   if (columns.dateIndex === -1) return { format: 'csv', currency: null, lines: [], error: 'no-date-column' }
+  // Sans colonne de montant, chaque ligne serait écartée une par une et le
+  // fichier rendrait zéro opération sans qu'on sache pourquoi. On le dit.
+  if (columns.amountIndex === -1 && columns.debitIndex === -1 && columns.creditIndex === -1) {
+    return { format: 'csv', currency: null, lines: [], error: 'no-amount-column' }
+  }
 
   const lines = []
   for (let i = bodyStart; i < rows.length; i += 1) {

@@ -26,6 +26,13 @@ import { toast } from '@/shared/ui/sonner.jsx'
 // Un fichier par mois et par compte remplace donc la saisie ligne à ligne.
 // Tout est lu dans le navigateur : le relevé ne part sur aucun serveur.
 
+// Ce qu'on sait dire quand un fichier ne rend rien. Un « aucune opération lue »
+// sec sur un relevé parfaitement valide n'aide personne à s'en sortir.
+const PARSE_ERRORS = {
+  'no-date-column': "Aucune colonne de date reconnue. Réessaie en exportant en OFX, c'est le format le plus fiable.",
+  'no-amount-column': "Colonne de montant introuvable : ni « Montant », ni « Débit »/« Crédit ». Réessaie en exportant en OFX.",
+}
+
 export default function ImportView() {
   const { transactions, settings, isLoading } = useAppData()
   const { currentUser } = useAuth()
@@ -67,11 +74,7 @@ export default function ImportView() {
       if (parsed.lines.length === 0) {
         setRows(null)
         setFile(picked)
-        setError(
-          parsed.error === 'no-date-column'
-            ? "Aucune colonne de date reconnue. Réessaie en exportant en OFX, c'est le format le plus fiable."
-            : 'Aucune opération lue dans ce fichier.',
-        )
+        setError(PARSE_ERRORS[parsed.error] || 'Aucune opération lue dans ce fichier.')
         return
       }
 

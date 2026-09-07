@@ -9,6 +9,7 @@
 // Ce fichier ne garde que les helpers partagés (dates, départ) et des
 // raccourcis « ce mois-ci » pour les écrans qui n'ont pas besoin de plus.
 
+import { toLocalDate } from '@/shared/lib/dates.js'
 import { startOfMonth, endOfMonth } from './forecast.js'
 import { getSpendingByCategory } from './ledger.js'
 
@@ -30,12 +31,12 @@ export function getMonthSpendingByCategory(transactions, { rate, accountId = nul
 // ─── Formatage ────────────────────────────────────────────────────────────
 
 export function formatDateShort(d) {
-  const date = d instanceof Date ? d : new Date(d)
+  const date = toLocalDate(d)
   return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 export function formatMonthLong(d) {
-  const date = d instanceof Date ? d : new Date(d)
+  const date = toLocalDate(d)
   return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
 }
 
@@ -45,7 +46,7 @@ export function formatMonthLong(d) {
 // 0 = jour J, négatif = jours depuis l'arrivée.
 export function getDaysToDeparture(departureDate, now = new Date()) {
   if (!departureDate) return null
-  const dep = departureDate instanceof Date ? departureDate : new Date(departureDate)
+  const dep = toLocalDate(departureDate)
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const startOfDep = new Date(dep.getFullYear(), dep.getMonth(), dep.getDate())
   return Math.round((startOfDep.getTime() - startOfToday.getTime()) / DAY_MS)

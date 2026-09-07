@@ -45,7 +45,11 @@ export function fromLocalDateKey(key) {
 // Accepte indifféremment une Date, une clé locale ou un timestamp, et rend
 // toujours une Date en heure locale. Toutes les fonctions ci-dessous passent
 // par là : aucune ne doit refaire son propre `new Date(...)`.
-function toLocalDate(value) {
+//
+// EXPORTÉ parce que les appelants en avaient besoin et ne l'avaient pas : six
+// fichiers de FinAuzi refaisaient `d instanceof Date ? d : new Date(d)`, qui
+// relit une clé « AAAA-MM-JJ » en UTC — l'interdit énoncé en tête de fichier.
+export function toLocalDate(value) {
   if (value instanceof Date) return value
   if (isDateKey(value)) return fromLocalDateKey(value)
   return new Date(value)
