@@ -1,4 +1,4 @@
-import { doneSets } from '../services/sessionsService.js'
+import { doneSets } from './sets.js'
 import { isBodyweight } from '../config/exercises.js'
 
 // Métriques de progression. Une série sans répétitions n'entre dans AUCUNE
@@ -47,17 +47,6 @@ export function formatMetric(value, metricId) {
 }
 
 /**
- * « 60 kg × 8 · 60 × 8 · 55 × 8 » — le rappel compact de la dernière fois.
- *
- * L'unité n'est écrite que sur la première série : répétée quatre fois, elle
- * noie les chiffres qu'on est venu lire.
- *
- * Le POIDS DU CORPS a sa propre écriture. Sa charge vaut 0, et le format
- * commun affichait donc « 0 kg × 12 » — un zéro qui se lit comme une erreur de
- * saisie. Non lesté, seules les répétitions sont dites ; lesté, le lest est
- * signé (« +10 kg ») pour qu'on ne le confonde pas avec une charge totale.
- */
-/**
  * Une charge, écrite en français : 62,5 — jamais 62.5.
  *
  * Le champ de saisie accepte déjà la virgule, mais ce qui revenait de Firestore
@@ -78,6 +67,17 @@ function formatOneSet(set, exercise, isFirst) {
   return isFirst ? `${shown} kg × ${set.reps}` : `${shown} × ${set.reps}`
 }
 
+/**
+ * « 60 kg × 8 · 60 × 8 · 55 × 8 » — le rappel compact de la dernière fois.
+ *
+ * L'unité n'est écrite que sur la première série : répétée quatre fois, elle
+ * noie les chiffres qu'on est venu lire.
+ *
+ * Le POIDS DU CORPS a sa propre écriture. Sa charge vaut 0, et le format
+ * commun affichait donc « 0 kg × 12 » — un zéro qui se lit comme une erreur de
+ * saisie. Non lesté, seules les répétitions sont dites ; lesté, le lest est
+ * signé (« +10 kg ») pour qu'on ne le confonde pas avec une charge totale.
+ */
 export function formatSets(sets, exercise) {
   if (!sets || sets.length === 0) return null
   return sets.map((s, i) => formatOneSet(s, exercise, i === 0)).join(' · ')
@@ -220,14 +220,6 @@ export function pickReferenceSession(sessions, { name, parity, dayOfWeek }) {
 }
 
 /**
- * Historique d'un MOUVEMENT : un point par date, jamais deux.
- *
- * Si le mouvement figure plusieurs fois dans la même séance, les séries de
- * toutes ses occurrences sont concaténées en une seule liste. Les trois
- * métriques se comportent alors correctement d'elles-mêmes : volume et reps
- * somment, Epley prend le maximum.
- */
-/**
  * Index de l'historique PAR MOUVEMENT : combien de fois, et les dernières fois.
  *
  * Dérivé de l'historique des séances lui-même. Un cache dénormalisé a existé
@@ -268,22 +260,13 @@ export function exerciseHistoryIndex(sessions, keep = 2) {
 }
 
 /**
- * Dernière séance avec du travail réel, par exercice.
+ * Historique d'un MOUVEMENT : un point par date, jamais deux.
  *
- * Dérivé de l'index ci-dessus pour qu'il n'existe qu'UNE définition de « la
- * dernière fois ». Elle agrège désormais les passages multiples d'un même jour,
- * ce que cette fonction ne faisait pas : le bilan de fin de séance comparait
- * alors un total agrégé (aujourd'hui) à un total qui ne l'était pas (avant),
- * et annonçait un progrès dès qu'on avait fait l'exercice deux fois la fois
- * précédente.
+ * Si le mouvement figure plusieurs fois dans la même séance, les séries de
+ * toutes ses occurrences sont concaténées en une seule liste. Les trois
+ * métriques se comportent alors correctement d'elles-mêmes : volume et reps
+ * somment, Epley prend le maximum.
  */
-export function latestByExercise(sessions) {
-  const index = exerciseHistoryIndex(sessions, 1)
-  const out = {}
-  for (const [exerciseId, item] of Object.entries(index)) out[exerciseId] = item.recent[0]
-  return out
-}
-
 export function historyForExercise(sessions, exerciseId) {
   const out = []
   for (const session of sessions) {

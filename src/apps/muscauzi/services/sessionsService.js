@@ -1,8 +1,7 @@
 import {
-  collection, doc, onSnapshot, setDoc, deleteField, query, where, documentId,
+  collection, doc, onSnapshot, setDoc, deleteField,
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
-import { doneSets } from '../utils/sets.js'
 
 /**
  * Séances : un document par jour et par profil, `users/{uid}/sessions/{date}`.
@@ -133,53 +132,6 @@ export function normalizeSession(id, raw) {
   }
 }
 
-// La règle « une série compte si elle porte des répétitions » vit dans
-// `utils/sets.js` : elle est arithmétique, elle n'a pas besoin de Firestore, et
-// tout le reste en dépend. Ré-exportée ici pour ne rien changer aux appelants.
-export { doneSets } from '../utils/sets.js'
-
-/** L'entrée porte-t-elle quelque chose qu'on ne doit pas perdre de vue ? */
-export function hasWork(entry) {
-  if (!entry) return false
-  return entry.skipped || entry.sets.length > 0
-}
-
-/**
- * L'occurrence est-elle bouclée ?
- *
- * `prescribedSets` est la prescription VIVANTE, celle du programme d'aujourd'hui
- * — pas celle figée dans l'entrée. Les deux divergent dès qu'on passe un
- * exercice de 4×8 à 5×8 : l'entrée enregistrée dit toujours 4, et sans ce
- * paramètre la pastille affichait « terminé » pendant que le libellé juste à
- * côté annonçait « 4/5 ». La prescription figée ne sert qu'à relire
- * l'historique, jamais à juger la séance du jour.
- */
-export function isEntryComplete(entry, prescribedSets) {
-  if (!entry) return false
-  if (entry.skipped) return true
-  const required = Math.max(1, Number(prescribedSets) || entry.prescribedSets || 1)
-  return doneSets(entry).length >= required
-}
-
-export function hasCompletedWork(session) {
-  if (!session) return false
-  return Object.values(session.entries || {}).some((e) => doneSets(e).length > 0)
-}
-
-/** Les entrées d'une séance, dans l'ordre où elles ont été faites. */
-export function sessionLineup(session) {
-  return Object.values(session?.entries || {}).sort((a, b) => a.order - b.order)
-}
-
-export function subscribeToSession(uid, dateKey, callback, onError) {
-  return onSnapshot(sessionDoc(uid, dateKey), (snap) => {
-    callback(snap.exists() ? normalizeSession(dateKey, snap.data()) : null)
-  }, (err) => {
-    console.error('[MuscAuzi] session error:', err)
-    onError?.(err)
-  })
-}
-
 function sortByDate(sessions) {
   // L'id du document EST la date : un tri lexicographique suffit.
   return sessions.sort((a, b) => a.date.localeCompare(b.date))
@@ -195,21 +147,13 @@ export function subscribeToSessions(uid, callback, onError) {
   })
 }
 
-// Fenêtre bornée par id de document — possible seulement parce que la clé de
-// date est strictement `yyyy-mm-dd` local. Sert au calendrier de régularité.
-export function subscribeToSessionRange(uid, startKey, endKey, callback, onError) {
-  const q = query(
-    sessionsCol(uid),
-    where(documentId(), '>=', startKey),
-    where(documentId(), '<=', endKey),
-  )
-  return onSnapshot(q, (snap) => {
-    callback(sortByDate(snap.docs.map((d) => normalizeSession(d.id, d.data())).filter(Boolean)))
-  }, (err) => {
-    console.error('[MuscAuzi] session range error:', err)
-    onError?.(err)
-  })
-}
+// Il a existé ici deux autres écoutes : une sur le document du jour, une sur
+// une fenêtre bornée par id de document. Toutes deux sont parties avec le
+// passage à l'historique complet tenu par `context/MuscDataContext.jsx` : la
+// séance du jour s'y trouve déjà, et le calendrier de régularité découpe sa
+// fenêtre dans le même tableau. Rouvrir un `onSnapshot` pour des données déjà
+// en mémoire, c'est un canal de plus et une occasion de plus de voir deux
+// écrans afficher deux versions de la même journée.
 
 /**
  * Écrit une entrée dans la séance d'une date.

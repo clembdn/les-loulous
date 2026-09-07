@@ -2,44 +2,24 @@ import { useMemo } from 'react'
 import { useMuscData } from '../context/MuscDataContext.jsx'
 
 /**
- * Les hooks de données de MuscAuzi.
+ * Les lectures de séances qui demandent un DÉCOUPAGE.
  *
- * Ils ouvraient chacun leur propre `onSnapshot`. L'écran de séance restant
- * monté en permanence, ouvrir Progrès rouvrait par-dessus le catalogue, les
- * notes et les pesées : sept à huit écoutes simultanées pour cinq jeux de
- * données, et autant d'occasions de voir deux écrans afficher deux versions de
- * la même chose.
+ * Ce fichier tenait aussi `useExercises`, `useProgram`, `useNotes` et
+ * `useWeights`. Chacun ouvrait autrefois son propre `onSnapshot` ; une fois le
+ * contexte devenu la source unique, ils n'étaient plus que des renvois d'une
+ * ligne vers `useMuscData()` — et plus personne ne les appelait, les cinq vues
+ * lisant le contexte directement. Une couche d'indirection que rien ne
+ * traversait n'est pas une couche, c'est un détour à maintenir.
  *
- * Ce ne sont plus que des lectures du contexte (`context/MuscDataContext.jsx`),
- * qui tient l'unique jeu d'abonnements. Aucun d'eux n'ouvre plus rien.
+ * Ne restent que les deux lectures qui font un vrai travail par-dessus le
+ * contexte : borner une fenêtre, et nommer l'historique complet.
  */
-
-export function useExercises() {
-  const { exercises, exerciseById, catalogueReady } = useMuscData()
-  return { exercises, exerciseById, isLoading: !catalogueReady }
-}
-
-export function useProgram(parity) {
-  const { programs, isLoading } = useMuscData()
-  const program = programs[parity] || programs.odd
-  return { days: program.days, names: program.names, isLoading }
-}
-
-export function useNotes() {
-  const { notes, isLoading } = useMuscData()
-  return { notes, isLoading }
-}
-
-export function useWeights() {
-  const { weights, isLoading } = useMuscData()
-  return { weights, isLoading }
-}
 
 /**
  * Fenêtre bornée de séances.
  *
- * Elle se découpe dans celle que le contexte tient déjà (120 jours) plutôt que
- * d'ouvrir une seconde requête : tous les appelants demandent moins que ça.
+ * Elle se découpe dans celle que le contexte tient déjà plutôt que d'ouvrir une
+ * seconde requête : tous les appelants demandent moins que ça.
  */
 export function useSessionRange(startKey, endKey) {
   const { recentSessions, isLoading } = useMuscData()
@@ -50,7 +30,7 @@ export function useSessionRange(startKey, endKey) {
   return { sessions, isLoading }
 }
 
-// Historique COMPLET — désormais tenu par le contexte, comme le reste.
+// Historique COMPLET — tenu par le contexte, comme le reste.
 //
 // Il ouvrait sa propre écoute non bornée, en plus de la fenêtre glissante du
 // contexte : deux lectures de la même collection, décalées, dont l'une pouvait

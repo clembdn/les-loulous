@@ -296,10 +296,13 @@ function copyMessage(pending, parity) {
   if (pending.kind === 'week') {
     return `La semaine ${PARITY_LABEL[pending.target.parity]} contient ${what} en tout. Ils seront remplacés par ceux de la semaine ${PARITY_LABEL[parity]}.`
   }
+  // Le « y » ne renvoyait à rien : la destination était calculée puis jamais
+  // écrite. On confirmait donc un écrasement sans savoir de quel jour — et
+  // c'est la seule information qui compte avant de dire oui.
   const where = pending.target.parity === parity
     ? dayLabel(pending.target.dayOfWeek).toLowerCase()
     : `${dayLabel(pending.target.dayOfWeek).toLowerCase()} de la semaine ${PARITY_LABEL[pending.target.parity]}`
-  return `${what} y ${n > 1 ? 'sont' : 'est'} déjà prévu${n > 1 ? 's' : ''}. La copie les remplace.`
+  return `${what} ${n > 1 ? 'sont' : 'est'} déjà prévu${n > 1 ? 's' : ''} ${where}. La copie les remplace.`
 }
 
 /**

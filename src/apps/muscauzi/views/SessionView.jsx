@@ -10,10 +10,10 @@ import { Button } from '@/shared/ui/Button.jsx'
 import { ProgressRing } from '@/shared/ui/Progress.jsx'
 import { SkeletonList } from '@/shared/ui/Skeleton.jsx'
 import { useMuscData } from '../context/MuscDataContext.jsx'
-import { clearEntry, hasWork, saveEntry } from '../services/sessionsService.js'
+import { clearEntry, saveEntry } from '../services/sessionsService.js'
 import { withoutOrphans } from '../services/programService.js'
 import { saveNote } from '../services/notesService.js'
-import { doneSets } from '../utils/sets.js'
+import { hasWork, isEntryComplete } from '../utils/sets.js'
 import { buildPreviousIndex } from '../utils/previous.js'
 import { buildRecordIndex } from '../utils/records.js'
 import { setScore } from '../utils/metrics.js'
@@ -209,19 +209,17 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
   }, [currentUid, dateKey, parity, dayOfWeek, sessionName])
 
   const total = walk.length
-  const doneCount = walk.filter((l) => {
-    const entry = session?.entries?.[l.instanceId]
-    return entry?.skipped || doneSets(entry).length >= l.prescribedSets
-  }).length
+  const doneCount = walk.filter(
+    (l) => isEntryComplete(session?.entries?.[l.instanceId], l.prescribedSets),
+  ).length
 
   // « Commencer » ouvre le premier exercice qui reste à faire, pas le premier
   // de la liste : reprendre une séance interrompue ne doit pas se payer de
   // quatre appuis sur « Suivant ».
   const firstUnfinished = useMemo(() => {
-    const i = walk.findIndex((l) => {
-      const entry = session?.entries?.[l.instanceId]
-      return !(entry?.skipped || doneSets(entry).length >= l.prescribedSets)
-    })
+    const i = walk.findIndex(
+      (l) => !isEntryComplete(session?.entries?.[l.instanceId], l.prescribedSets),
+    )
     return i === -1 ? 0 : i
   }, [walk, session])
 
@@ -320,6 +318,31 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
     />
   )
 
+  // Les deux tiroirs ne dépendent d'aucune des trois branches de rendu
+  // ci-dessous — ils y étaient recopiés à l'identique, trois fois. Un ajout de
+  // prop devait donc être fait trois fois, sous peine de ne marcher que sur
+  // certaines tailles d'écran.
+  const sheets = (
+    <>
+      <AddExerciseSheet
+        open={adding}
+        onOpenChange={setAdding}
+        exercises={exercises}
+        previousIndex={previousIndex}
+        onPick={addExerciseToDay}
+      />
+
+      <ExerciseHistorySheet
+        open={!!historyFor}
+        onOpenChange={(next) => { if (!next) setHistoryFor(null) }}
+        exercise={exerciseById[historyFor] || null}
+        sessions={sessions}
+        notes={notes}
+        onSaveNote={(exerciseId, text) => saveNote(currentUid, exerciseId, text, currentUid)}
+      />
+    </>
+  )
+
   const done = showDone && (
     <SessionDone
       session={session}
@@ -363,22 +386,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
           </div>
         )}
         <WeighInNudge show={isToday && dayOfWeek === 1} weights={weights} dateKey={dateKey} onGo={onOpenWeight} />
-      <AddExerciseSheet
-        open={adding}
-        onOpenChange={setAdding}
-        exercises={exercises}
-        previousIndex={previousIndex}
-        onPick={addExerciseToDay}
-      />
-
-      <ExerciseHistorySheet
-        open={!!historyFor}
-        onOpenChange={(next) => { if (!next) setHistoryFor(null) }}
-        exercise={exerciseById[historyFor] || null}
-        sessions={sessions}
-        notes={notes}
-        onSaveNote={(exerciseId, text) => saveNote(currentUid, exerciseId, text, currentUid)}
-      />
+      {sheets}
       </div>
     )
   }
@@ -402,22 +410,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
           <span className="shrink-0 text-xs text-faint tabular">{doneCount}/{total}</span>
         </div>
         {done || focus}
-      <AddExerciseSheet
-        open={adding}
-        onOpenChange={setAdding}
-        exercises={exercises}
-        previousIndex={previousIndex}
-        onPick={addExerciseToDay}
-      />
-
-      <ExerciseHistorySheet
-        open={!!historyFor}
-        onOpenChange={(next) => { if (!next) setHistoryFor(null) }}
-        exercise={exerciseById[historyFor] || null}
-        sessions={sessions}
-        notes={notes}
-        onSaveNote={(exerciseId, text) => saveNote(currentUid, exerciseId, text, currentUid)}
-      />
+      {sheets}
       </div>
     )
   }
@@ -452,22 +445,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
       )}
 
       <WeighInNudge show={isToday && dayOfWeek === 1} weights={weights} dateKey={dateKey} onGo={onOpenWeight} />
-      <AddExerciseSheet
-        open={adding}
-        onOpenChange={setAdding}
-        exercises={exercises}
-        previousIndex={previousIndex}
-        onPick={addExerciseToDay}
-      />
-
-      <ExerciseHistorySheet
-        open={!!historyFor}
-        onOpenChange={(next) => { if (!next) setHistoryFor(null) }}
-        exercise={exerciseById[historyFor] || null}
-        sessions={sessions}
-        notes={notes}
-        onSaveNote={(exerciseId, text) => saveNote(currentUid, exerciseId, text, currentUid)}
-      />
+      {sheets}
     </div>
   )
 }

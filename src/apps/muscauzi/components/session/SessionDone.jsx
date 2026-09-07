@@ -3,7 +3,7 @@ import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Award, Minus, Trophy } from 
 import { cn } from '@/shared/lib/utils.js'
 import { Button } from '@/shared/ui/Button.jsx'
 import { formatDateFr, fromLocalDateKey } from '@/shared/lib/dates.js'
-import { hasCompletedWork } from '../../services/sessionsService.js'
+import { hasCompletedWork } from '../../utils/sets.js'
 import {
   bestScore, bestSet, formatSets, pickReferenceSession, sessionTotals, setScore, workByExercise,
 } from '../../utils/metrics.js'

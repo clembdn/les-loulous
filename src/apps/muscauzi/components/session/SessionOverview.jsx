@@ -2,7 +2,7 @@ import { Check, ChevronRight, Dumbbell, Play, Plus, SkipForward } from 'lucide-r
 import { cn } from '@/shared/lib/utils.js'
 import { Button } from '@/shared/ui/Button.jsx'
 import { Progress } from '@/shared/ui/Progress.jsx'
-import { doneSets } from '../../utils/sets.js'
+import { doneSets, isEntryComplete } from '../../utils/sets.js'
 import { formatSets } from '../../utils/metrics.js'
 
 /**
@@ -80,7 +80,7 @@ function OverviewRow({ line, entry, exercise, onClick }) {
   const skipped = entry?.skipped === true
   const done = doneSets(entry)
   const savedDone = done.length
-  const isComplete = skipped || savedDone >= line.prescribedSets
+  const isComplete = isEntryComplete(entry, line.prescribedSets)
   const isPartial = !skipped && savedDone > 0 && !isComplete
   const recap = formatSets(done, exercise)
 

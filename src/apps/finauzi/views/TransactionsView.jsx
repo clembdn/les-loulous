@@ -12,6 +12,7 @@ import TransactionRow from '../components/transactions/TransactionRow.jsx'
 import { Sheet, SheetContent, SheetBody, SheetFooter } from '@/shared/ui/sheet.jsx'
 import { cn } from '@/shared/lib/utils.js'
 import { toLocalDate } from '@/shared/lib/dates.js'
+import { useDebounced } from '@/shared/lib/useDebounced.js'
 
 // Un mois d'avance, pas plus. De quoi voir le prochain loyer et les prochaines
 // semaines d'abonnement pour anticiper, sans noyer l'historique sous des années
@@ -65,6 +66,10 @@ export default function TransactionsView({ onNavigate }) {
   const [accountFilter, setAccountFilter] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [search, setSearch] = useState('')
+  // Le champ affiche `search` et répond au doigt ; le dépliage des échéances,
+  // lui, attend que la frappe se pose. Une recherche sur trois ans de loyer
+  // hebdomadaire, c'est des centaines d'objets reconstruits par caractère.
+  const settledSearch = useDebounced(search)
   const [filtersOpen, setFiltersOpen] = useState(false)
 
   function resetFilters() {
@@ -74,23 +79,30 @@ export default function TransactionsView({ onNavigate }) {
     setCategoryFilter('all')
   }
 
+  // Le socle commun aux deux lectures ci-dessous : les lignes actives, passées
+  // au crible des filtres qui ne dépendent NI de la catégorie NI de la
+  // recherche. La liste des catégories proposées doit rester celle du socle —
+  // sinon choisir une catégorie ferait disparaître toutes les autres du menu.
+  //
+  // Il était recalculé deux fois, une passe complète chacune. Le voici une fois.
+  //
   // Le filtre par compte prend les deux sens : un virement apparaît aussi
   // bien dans le compte qui l'envoie que dans celui qui le reçoit.
-  const applyBaseFilters = useMemo(() => (list) => {
-    let out = list
+  const baseFiltered = useMemo(() => {
+    let out = transactions.filter((tx) => tx.isActive !== false)
     if (splitFilter !== 'all') out = out.filter((tx) => tx.split === splitFilter)
     if (kindFilter !== 'all') out = out.filter((tx) => tx.kind === kindFilter)
     if (accountFilter !== 'all') out = out.filter((tx) => touchesAccount(tx, accountFilter))
     return out
-  }, [splitFilter, kindFilter, accountFilter])
+  }, [transactions, splitFilter, kindFilter, accountFilter])
 
   // Filtrer AVANT de déplier : inutile de générer les échéances de lignes
   // que l'utilisateur ne regarde pas.
   const filtered = useMemo(() => {
-    let list = applyBaseFilters(transactions.filter((tx) => tx.isActive !== false))
+    let list = baseFiltered
     if (categoryFilter !== 'all') list = list.filter((tx) => (tx.category || 'other-expense') === categoryFilter)
-    if (search.trim()) {
-      const q = search.trim().toLowerCase()
+    if (settledSearch.trim()) {
+      const q = settledSearch.trim().toLowerCase()
       list = list.filter((tx) =>
         tx.title?.toLowerCase().includes(q) ||
         tx.notes?.toLowerCase().includes(q) ||
@@ -98,7 +110,7 @@ export default function TransactionsView({ onNavigate }) {
       )
     }
     return list
-  }, [transactions, applyBaseFilters, categoryFilter, search])
+  }, [baseFiltered, categoryFilter, settledSearch])
 
   const events = useMemo(() => {
     const expanded = expandHistory(filtered, new Date())
@@ -110,10 +122,9 @@ export default function TransactionsView({ onNavigate }) {
   const groups = useMemo(() => groupByMonth(events), [events])
 
   const visibleCategories = useMemo(() => {
-    const list = applyBaseFilters(transactions.filter((tx) => tx.isActive !== false))
-    const ids = new Set(list.map((tx) => tx.category || 'other-expense'))
+    const ids = new Set(baseFiltered.map((tx) => tx.category || 'other-expense'))
     return CATEGORIES.filter((c) => ids.has(c.id))
-  }, [transactions, applyBaseFilters])
+  }, [baseFiltered])
 
   const filtersProps = {
     splitFilter, setSplitFilter,

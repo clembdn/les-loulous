@@ -1,6 +1,6 @@
 import { Flag, Plus } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
-import { doneSets } from '../../utils/sets.js'
+import { doneSets, isEntryComplete } from '../../utils/sets.js'
 import { StatusDot } from './SessionOverview.jsx'
 
 /**
@@ -18,7 +18,7 @@ export default function SessionRail({ lines, session, activeIndex, onSelect, onF
         const entry = session?.entries?.[line.instanceId] || null
         const skipped = entry?.skipped === true
         const savedDone = doneSets(entry).length
-        const isComplete = skipped || savedDone >= line.prescribedSets
+        const isComplete = isEntryComplete(entry, line.prescribedSets)
         const isActive = i === activeIndex
 
         return (

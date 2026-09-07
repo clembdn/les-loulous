@@ -1,5 +1,5 @@
 import {
-  collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, deleteField,
+  collection, doc, onSnapshot, addDoc, updateDoc, deleteField,
   getDoc, getDocs, query, orderBy, writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
@@ -20,7 +20,6 @@ function programDoc(uid, parity) { return doc(db, 'users', uid, 'program', parit
 function sessionsCol(uid) { return collection(db, 'users', uid, 'sessions') }
 function sessionDoc(uid, dateKey) { return doc(db, 'users', uid, 'sessions', dateKey) }
 function noteDoc(uid, exerciseId) { return doc(db, 'users', uid, 'exerciseNotes', exerciseId) }
-function lastPerfDoc(uid) { return doc(db, 'users', uid, 'meta', 'lastPerf') }
 
 
 // Firestore plafonne un lot à 500 opérations ; on garde de la marge.
@@ -123,6 +122,17 @@ export function updateExercise(uid, id, updates, currentUid) {
  * Tout est lu ICI, une seule fois : le résultat sert d'abord à annoncer les
  * dégâts dans la confirmation, puis à les appliquer. Pas de seconde lecture
  * entre les deux.
+ *
+ * ── Pourquoi relire les séances que le contexte tient déjà ──────────────────
+ *
+ * `MuscDataContext` a l'historique complet en mémoire, et s'en servir ferait
+ * l'économie d'une lecture de collection. Il ne le peut pas : le nettoyage des
+ * vieux documents a besoin de `programSnapshot`, un champ BRUT que
+ * `normalizeSession` ne recopie pas dans les séances du contexte. Passer par le
+ * contexte laisserait ces lignes derrière, à nommer un exercice disparu.
+ *
+ * Le coût se paie une fois, sur un geste rare et délibéré — pas à l'ouverture
+ * d'un écran.
  */
 export async function collectExerciseImpact(uid, exerciseId) {
   const [noteSnap, sessionsSnap, ...programSnaps] = await Promise.all([
@@ -132,7 +142,9 @@ export async function collectExerciseImpact(uid, exerciseId) {
   ])
 
   // Les occurrences (`instanceId`) du mouvement, où qu'elles apparaissent :
-  // ce sont elles qui indexent les entrées de séance et le cache lastPerf.
+  // ce sont elles qui rattachent une entrée de séance à une ligne de programme
+  // retirée, quand l'entrée est trop vieille pour porter son `exerciseId`.
+  // Interne à cette lecture — plus rien ne les consomme au-dehors.
   const instanceIds = new Set()
 
   const programs = []
@@ -184,7 +196,6 @@ export async function collectExerciseImpact(uid, exerciseId) {
     hasNote: noteSnap.exists(),
     programs,
     sessions,
-    instanceIds: [...instanceIds],
   }
 }
 
@@ -201,11 +212,10 @@ async function commitInChunks(ops) {
  * Supprime un exercice ET tout ce qui n'a plus de sens sans lui.
  *
  * Laisser le catalogue seul se vider produisait des lignes de programme
- * fantômes affichées « Exercice supprimé », une séance du jour reliée à rien,
- * et un cache lastPerf qui pré-remplissait des champs orphelins. Une
- * suppression retire donc, d'un bloc : les lignes de programme (les deux
- * parités, les sept jours), les entrées correspondantes dans les séances, la
- * note de réglages et le cache de dernière perf.
+ * fantômes affichées « Exercice supprimé » et une séance du jour reliée à rien.
+ * Une suppression retire donc, d'un bloc : les lignes de programme (les deux
+ * parités, les sept jours), les entrées correspondantes dans les séances et la
+ * note de réglages.
  *
  * L'appelant confirme d'abord — cf. `collectExerciseImpact`.
  */
@@ -228,15 +238,15 @@ export async function deleteExerciseCascade(uid, exerciseId, impact, currentUid)
     ops.push((b) => b.set(sessionDoc(uid, session.id), payload, { merge: true }))
   }
 
-  // Le cache de dernière perf est nettoyé sans condition : c'est lui qui
-  // pré-remplirait sinon les champs d'une occurrence qui n'existe plus.
-  const byInstance = {}
-  for (const id of data.instanceIds) byInstance[id] = deleteField()
-  ops.push((b) => b.set(lastPerfDoc(uid), {
-    byInstance,
-    byExercise: { [exerciseId]: deleteField() },
-    updatedAt: now,
-  }, { merge: true }))
+  // Le cache `meta/lastPerf` n'est plus nettoyé : il n'est plus ni écrit ni lu
+  // depuis que « la dernière fois » se calcule dans `utils/previous.js` (cf.
+  // l'en-tête de `sessionsService.js`). Cette écriture était la dernière du
+  // dépôt à le viser, sans condition — donc une écriture facturée à chaque
+  // suppression d'exercice, et la RECRÉATION du document chez qui n'en avait
+  // jamais eu, `set` + `merge` créant ce qui n'existe pas.
+  //
+  // Les documents déjà là sont laissés en place : ils ne coûtent rien et rien
+  // ne les relit.
 
   if (data.hasNote) ops.push((b) => b.delete(noteDoc(uid, exerciseId)))
   ops.push((b) => b.delete(exerciseDoc(uid, exerciseId)))

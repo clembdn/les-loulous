@@ -1,6 +1,6 @@
 import { downloadText } from '@/shared/lib/download.js'
 import { toLocalDateKey, fromLocalDateKey, dayLabel, isoDayOfWeek } from '@/shared/lib/dates.js'
-import { doneSets, sessionLineup } from '../services/sessionsService.js'
+import { doneSets, sessionLineup } from './sets.js'
 import { getExerciseType, isBodyweight } from '../config/exercises.js'
 import { setScore } from './metrics.js'
 

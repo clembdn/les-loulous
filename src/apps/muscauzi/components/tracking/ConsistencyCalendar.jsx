@@ -6,7 +6,7 @@ import {
 import { cn } from '@/shared/lib/utils.js'
 import { useMuscData } from '../../context/MuscDataContext.jsx'
 import { useSessionRange } from '../../hooks/useMuscData.js'
-import { hasCompletedWork, doneSets, sessionLineup } from '../../services/sessionsService.js'
+import { hasCompletedWork, doneSets, sessionLineup } from '../../utils/sets.js'
 
 const WINDOW_DAYS = 90
 const MONTHS_SHOWN = 3

@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS } from '../services/settingsService.js'
 
 const AppDataContext = createContext(null)
 
-// Single source of truth — one set of Firestore subscriptions for the whole app.
+// Source unique — UN jeu d'abonnements Firestore pour toute l'application.
 export function AppDataProvider({ children }) {
   const value = useFinAuziData()
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>
@@ -13,7 +13,7 @@ export function AppDataProvider({ children }) {
 export function useAppData() {
   const ctx = useContext(AppDataContext)
   if (ctx) return ctx
-  // Fallback for code paths rendered before the provider (e.g. Login screen).
+  // Repli pour ce qui est rendu avant le provider (l'écran de connexion).
   return {
     transactions: [],
     settings: DEFAULT_SETTINGS,

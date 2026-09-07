@@ -14,6 +14,3 @@ export function tick() { buzz(4) }
 
 /** Une action a été enregistrée (série validée, article coché). */
 export function confirm() { buzz(12) }
-
-/** Fin de minuteur : deux impulsions, reconnaissables poche fermée. */
-export function alarm() { buzz([28, 90, 28]) }

@@ -71,7 +71,14 @@ service cloud.firestore {
         && isValidSplit(data.split)
         && isValidRecurrence(data.recurrence)
         && isValidRate(data)
-        && (data.amountReceived == null
+        // Le montant réellement crédité sur un virement inter-devises.
+        //
+        // Il était lu SANS vérifier sa présence — le seul champ optionnel de ce
+        // fichier dans ce cas. Lire une clé absente met l'expression en erreur
+        // et refuse l'écriture : tant que `buildPayload` l'écrit toujours (même
+        // à null) rien ne casse, mais la règle tenait par cette coïncidence.
+        && (!('amountReceived' in data)
+            || data.amountReceived == null
             || (data.amountReceived is number && data.amountReceived >= 0))
         // Provenance d'un import de relevé : l'identifiant que la banque a
         // donné à l'opération, et le format du fichier. Bornés : ils viennent
@@ -100,11 +107,41 @@ service cloud.firestore {
       allow delete: if isAuthorizedUser();
     }
 
-    // Settings (single shared doc)
+    // Réglages : un seul document partagé, écrit par petits bouts fusionnés
+    // (soldes d'ouverture, seuil, budgets, couleurs, règles d'import…).
+    //
+    // Chaque champ n'est validé QUE s'il est présent : aucun écrivain n'envoie
+    // le document entier, tous passent par un `merge`.
+    //
+    // C'était la seule collection sans la moindre validation de forme, quand
+    // toutes les autres en ont une. Rien n'y empêchait une faute de frappe
+    // d'écrire un taux de change en texte, ou de faire enfler la table des
+    // règles apprises sans limite — deux choses que personne ne remarquerait
+    // avant que les montants convertis ne deviennent absurdes.
+    function hasValidSettingsShape(data) {
+      return (!('openingBalances' in data)
+              || (data.openingBalances is map && data.openingBalances.size() <= 10))
+        && (!('safetyBuffers' in data)
+            || (data.safetyBuffers is map && data.safetyBuffers.size() <= 10))
+        && (!('budgets' in data)
+            || (data.budgets is map && data.budgets.size() <= 60))
+        && (!('userColors' in data)
+            || (data.userColors is map && data.userColors.size() <= 10))
+        // Une règle apprise par commerçant corrigé : large, mais borné.
+        && (!('importRules' in data)
+            || (data.importRules is map && data.importRules.size() <= 500))
+        && (!('currency' in data) || data.currency == "EUR" || data.currency == "AUD")
+        && (!('eurToAud' in data)
+            || (data.eurToAud is number && data.eurToAud > 0 && data.eurToAud < 100))
+        && (!('contributionTargetEUR' in data)
+            || (data.contributionTargetEUR is number && data.contributionTargetEUR >= 0));
+    }
+
     match /couples/main/settings/{settingsId} {
       allow read: if isAuthorizedUser();
 
       allow create, update: if isAuthorizedUser()
+        && hasValidSettingsShape(request.resource.data)
         && request.resource.data.updatedBy == request.auth.uid;
 
       allow delete: if false;
@@ -371,10 +408,20 @@ service cloud.firestore {
       allow read: if isOwner(uid);
       allow create, update: if isOwner(uid)
         && (parity == "even" || parity == "odd")
-        && request.resource.data.days is map
-        // Sept jours, pas un de plus : une clé inattendue serait un bogue
-        // d'écriture, et un document de programme n'a aucune raison d'enfler.
-        && request.resource.data.days.size() <= 7
+        // `days` n'est validé QUE s'il est là — comme `dayNames` juste en
+        // dessous, et pour la même raison.
+        //
+        // Il était exigé sur toute écriture. Or renommer un jour n'écrit que
+        // `dayNames` : sur un document de programme qui n'existe PAS ENCORE,
+        // l'état fusionné n'avait donc pas de `days`, la règle partait en
+        // erreur et refusait. Nommer le lundi avant d'y avoir mis le moindre
+        // exercice — le premier geste d'un profil neuf — échouait sur un
+        // « Enregistrement impossible » que rien n'expliquait.
+        && (!("days" in request.resource.data)
+            || (request.resource.data.days is map
+                // Sept jours, pas un de plus : une clé inattendue serait un
+                // bogue d'écriture, et ce document n'a aucune raison d'enfler.
+                && request.resource.data.days.size() <= 7))
         // Nom de la séance par jour — écrit séparément des lignes, donc
         // validé seulement quand il fait partie de la requête.
         && (!("dayNames" in request.resource.data)
@@ -417,17 +464,22 @@ service cloud.firestore {
       allow delete: if isOwner(uid);
     }
 
-    // Cache de la dernière perf, dénormalisé dans un seul document : ouvrir la
-    // séance du jour ne coûte qu'une lecture. `byInstance` pré-remplit la
-    // saisie d'une occurrence, `byExercise` donne l'aperçu du mouvement.
-    // Les écritures étant fusionnées, chaque champ n'est validé que s'il est
-    // présent dans la requête.
+    // Cache de la dernière perf — RETIRÉ, document conservé.
+    //
+    // Il dénormalisait la dernière série de chaque occurrence. Réécrit à chaque
+    // série enregistrée, y compris celles du jour, il changeait le rappel
+    // « dernière fois : 60 kg × 8 » en la série qu'on venait de taper. Le repère
+    // se calcule désormais dans `utils/previous.js`, sur l'historique déjà en
+    // mémoire, et strictement avant la date affichée.
+    //
+    // Plus une ligne du dépôt ne l'écrit ni ne le lit : l'écriture était la
+    // dernière, dans la cascade de suppression d'un exercice. L'autorisation
+    // d'écrire part avec elle — mais la lecture et la suppression restent, pour
+    // que les documents déjà en base restent consultables et effaçables à la
+    // main. Rien n'est supprimé ici.
     match /users/{uid}/meta/lastPerf {
-      allow read: if isOwner(uid);
-      allow create, update: if isOwner(uid)
-        && (!("byInstance" in request.resource.data) || request.resource.data.byInstance is map)
-        && (!("byExercise" in request.resource.data) || request.resource.data.byExercise is map);
-      allow delete: if isOwner(uid);
+      allow read, delete: if isOwner(uid);
+      allow create, update: if false;
     }
 
     // Journal alimentaire, un document par jour et par personne. Les macros sont

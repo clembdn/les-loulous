@@ -6,7 +6,7 @@ import { cn } from '@/shared/lib/utils.js'
 import { Button } from '@/shared/ui/Button.jsx'
 import { formatDateFr, fromLocalDateKey } from '@/shared/lib/dates.js'
 import { isBodyweight, weightHint } from '../../config/exercises.js'
-import { doneSets } from '../../utils/sets.js'
+import { doneSets, isEntryComplete } from '../../utils/sets.js'
 import { beatsPrevious, formatSets, formatWeight, setScore } from '../../utils/metrics.js'
 import { beatsRecord } from '../../utils/records.js'
 import { previousSetAt } from '../../utils/previous.js'
@@ -154,8 +154,7 @@ export default function ExerciseFocus({
   const go = (fn) => { commit(); fn?.() }
 
   const done = doneSets(entry)
-  const savedDone = done.length
-  const isComplete = skipped || savedDone >= line.prescribedSets
+  const isComplete = isEntryComplete(entry, line.prescribedSets)
   const improved = !skipped && beatsPrevious(done, previous?.sets, exercise)
 
   /**

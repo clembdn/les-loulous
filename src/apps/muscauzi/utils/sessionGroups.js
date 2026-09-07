@@ -1,5 +1,5 @@
 import { dayLabel } from '@/shared/lib/dates.js'
-import { hasCompletedWork } from '../services/sessionsService.js'
+import { hasCompletedWork } from './sets.js'
 import { sessionTotals } from './metrics.js'
 
 /**

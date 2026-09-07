@@ -7,7 +7,7 @@ import { AUTHORIZED_UIDS, CLEMENT_UID } from '@/shared/config/people.js'
 import { isValidCategoryId, getDefaultCategoryId } from '../config/categories.js'
 import {
   JOINT_ACCOUNT_ID, SPLIT_COMMON,
-  getAccount, getAccountCurrency, getPersonalAccountId,
+  getAccountCurrency, getPersonalAccountId,
   isValidAccountId, isValidSplit, getDefaultSplit,
 } from '../config/accounts.js'
 import { normalizeRecurrence } from '../utils/recurrence.js'
@@ -113,7 +113,6 @@ function normalize(raw) {
     createdBy: raw.createdBy,
     updatedAt: raw.updatedAt,
     updatedBy: raw.updatedBy,
-    isLegacy,
   }
 }
 
@@ -284,5 +283,3 @@ export async function createContribution({ fromUid, amount, currency, amountRece
     rate,
   }, currentUid)
 }
-
-export { getAccount }

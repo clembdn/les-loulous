@@ -7,7 +7,7 @@ import { toLocalDateKey } from '@/shared/lib/dates.js'
 import { Sheet, SheetContent, SheetBody } from '@/shared/ui/sheet.jsx'
 import { downloadSetsCsv, downloadWeightsCsv } from '../../utils/exportCsv.js'
 import { collectBackup } from '../../services/backupService.js'
-import { doneSets, hasCompletedWork } from '../../services/sessionsService.js'
+import { doneSets, hasCompletedWork } from '../../utils/sets.js'
 
 /**
  * Sortir ses données de l'appli.
