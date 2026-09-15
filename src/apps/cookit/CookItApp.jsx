@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAppTheme } from '@/shared/theme/useAppTheme.js'
+import { useTabRoute } from '@/shared/lib/useTabRoute.js'
 import { useCookItData } from './hooks/useCookItData.js'
 import { useRecipes } from './hooks/useRecipes.js'
 import { usePantry } from './hooks/usePantry.js'
@@ -7,7 +8,7 @@ import { useFoods } from './hooks/useFoods.js'
 import { useNutritionGoals } from './hooks/useNutritionGoals.js'
 import { useShoppingLists, itemBelongsToList } from './hooks/useShoppingLists.js'
 import Shell from './components/layout/Shell.jsx'
-import { DEFAULT_TAB, NUTRITION_IDS } from './config/navigation.js'
+import { DEFAULT_TAB, NUTRITION_IDS, TAB_IDS } from './config/navigation.js'
 import ListView from './views/ListView.jsx'
 import RecipesView from './views/RecipesView.jsx'
 import PlanningView from './views/PlanningView.jsx'
@@ -20,7 +21,10 @@ import ManageListsSheet from './components/ManageListsSheet.jsx'
 
 export default function CookItApp() {
   useAppTheme('light', 'emerald')
-  const [tab, setTab] = useState(DEFAULT_TAB)
+  // L'écran courant est dans l'URL (/cookit/recettes) : chaque écran a son
+  // entrée d'historique, donc « retour » revient à l'écran précédent de l'app
+  // au lieu de la quitter d'un coup.
+  const { tab, goTab } = useTabRoute('/cookit', TAB_IDS, DEFAULT_TAB)
   const [manageOpen, setManageOpen] = useState(false)
   const [logFood, setLogFood] = useState(null)
   const { items, catalog, isLoading } = useCookItData()
@@ -30,7 +34,7 @@ export default function CookItApp() {
   const { goals } = useNutritionGoals()
   const lists = useShoppingLists()
   const { activeListId, defaultListId } = lists
-  const goToList = () => setTab('liste')
+  const goToList = () => goTab('liste')
 
   // Articles de la liste active uniquement : toutes les vues raisonnent sur la
   // liste en cours (les articles legacy sans listId suivent la liste « défaut »).
@@ -52,7 +56,7 @@ export default function CookItApp() {
 
   return (
     <>
-    <Shell active={tab} onChange={setTab} lists={lists} counts={counts} onManageLists={() => setManageOpen(true)}>
+    <Shell active={tab} onChange={goTab} lists={lists} counts={counts} onManageLists={() => setManageOpen(true)}>
       {tab === 'liste' && (
         <ListView
           items={activeItems}
@@ -63,7 +67,7 @@ export default function CookItApp() {
           listsApi={lists}
           counts={counts}
           onManageLists={() => setManageOpen(true)}
-          onLogFood={(food) => { setLogFood(food); setTab('journal') }}
+          onLogFood={(food) => { setLogFood(food); goTab('journal') }}
         />
       )}
       {tab === 'frigo' && (
@@ -94,7 +98,7 @@ export default function CookItApp() {
         <>
           {/* Sur mobile le groupe Nutrition se replie en un seul onglet : sans ce
               sélecteur, Journal et Objectifs seraient inatteignables au doigt. */}
-          <NutritionTabs active={tab} onChange={setTab} />
+          <NutritionTabs active={tab} onChange={goTab} />
           {tab === 'journal' && (
             <JournalView
               foods={foods}

@@ -16,7 +16,7 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<DashboardView />} />
         <Route
-          path="/finauzi"
+          path="/finauzi/*"
           element={
             <Suspense fallback={<Splash />}>
               <FinauziApp />
@@ -24,7 +24,7 @@ export default function App() {
           }
         />
         <Route
-          path="/cookit"
+          path="/cookit/*"
           element={
             <Suspense fallback={<Splash />}>
               <CookItApp />
@@ -33,9 +33,9 @@ export default function App() {
         />
         {/* L'app s'appelait « Liste de courses » : leur PWA installée et leurs
             marque-pages pointent encore sur /courses. */}
-        <Route path="/courses" element={<Navigate to="/cookit" replace />} />
+        <Route path="/courses/*" element={<Navigate to="/cookit" replace />} />
         <Route
-          path="/muscauzi"
+          path="/muscauzi/*"
           element={
             <Suspense fallback={<Splash />}>
               <MuscauziApp />

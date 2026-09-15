@@ -24,6 +24,9 @@ export const NUTRITION_DEFAULT = 'journal'
 
 const ALL_TABS = [...COOKIT_TABS, ...NUTRITION_TABS]
 
+// Segments d'URL reconnus sous /cookit — tout le reste retombe sur DEFAULT_TAB.
+export const TAB_IDS = ALL_TABS.map((t) => t.id)
+
 export const DEFAULT_TAB = 'liste'
 
 export function getTab(id) {

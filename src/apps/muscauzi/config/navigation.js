@@ -46,6 +46,9 @@ export const SIDEBAR_SECTIONS = [
 
 const ALL_ITEMS = SIDEBAR_SECTIONS.flatMap((s) => s.items)
 
+// Segments d'URL reconnus sous /muscauzi — tout le reste retombe sur DEFAULT_TAB.
+export const TAB_IDS = ALL_ITEMS.map((t) => t.id)
+
 export function getTab(id) {
   return ALL_ITEMS.find((t) => t.id === id) || ALL_ITEMS[0]
 }

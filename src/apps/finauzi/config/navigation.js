@@ -46,3 +46,8 @@ export const SIDEBAR_SECTIONS = [
     ],
   },
 ]
+
+// Segments d'URL reconnus sous /finauzi — tout le reste retombe sur DEFAULT_TAB.
+export const TAB_IDS = SIDEBAR_SECTIONS.flatMap((s) => s.items).map((t) => t.id)
+
+export const DEFAULT_TAB = 'dashboard'

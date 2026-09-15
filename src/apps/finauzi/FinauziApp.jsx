@@ -1,5 +1,7 @@
-import { useState, lazy, Suspense } from 'react'
+import { lazy, Suspense } from 'react'
 import { useAppTheme } from '@/shared/theme/useAppTheme.js'
+import { useTabRoute } from '@/shared/lib/useTabRoute.js'
+import { DEFAULT_TAB, TAB_IDS } from './config/navigation.js'
 import { UIProvider } from './context/UIContext.jsx'
 import { AppDataProvider } from './context/AppDataContext.jsx'
 import { CurrencyProvider } from './context/CurrencyContext.jsx'
@@ -34,14 +36,17 @@ function ActiveView({ active, onNavigate }) {
 
 export default function FinauziApp() {
   useAppTheme('dark', 'amber')
-  const [active, setActive] = useState('dashboard')
+  // L'écran courant est dans l'URL (/finauzi/budgets) : chaque écran a son
+  // entrée d'historique, donc « retour » revient à l'écran précédent de l'app
+  // au lieu de la quitter d'un coup.
+  const { tab: active, goTab } = useTabRoute('/finauzi', TAB_IDS, DEFAULT_TAB)
   return (
     <AppDataProvider>
       <CurrencyProvider>
         <UIProvider>
-          <Shell active={active} onChange={setActive}>
+          <Shell active={active} onChange={goTab}>
             <Suspense fallback={<Splash />}>
-              <ActiveView active={active} onNavigate={setActive} />
+              <ActiveView active={active} onNavigate={goTab} />
             </Suspense>
           </Shell>
         </UIProvider>
