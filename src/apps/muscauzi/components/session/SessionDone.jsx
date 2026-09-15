@@ -5,7 +5,7 @@ import { Button } from '@/shared/ui/Button.jsx'
 import { formatDateFr, fromLocalDateKey } from '@/shared/lib/dates.js'
 import { hasCompletedWork } from '../../utils/sets.js'
 import {
-  bestScore, bestSet, formatSets, pickReferenceSession, sessionTotals, setScore, workByExercise,
+  bestSet, formatSets, pickReferenceSession, progressValue, sessionTotals, setScore, workByExercise,
 } from '../../utils/metrics.js'
 import { buildPreviousIndex } from '../../utils/previous.js'
 import { beatsRecord } from '../../utils/records.js'
@@ -26,14 +26,16 @@ import { compare } from '../../utils/trend.js'
  *    nom, on retombe sur la même case du programme (même parité, même jour).
  *
  * 2. CHAQUE EXERCICE se compare à la dernière fois qu'il a été fait, où que ce
- *    soit — la seule comparaison qui reste vraie quand le programme bouge.
+ *    soit — la seule comparaison qui reste vraie quand le programme bouge. Sur
+ *    la mesure de sa COURBE (`progressValue`), pas sur sa série la plus lourde :
+ *    une flèche qui contredit le graphe qu'on ouvre juste après ne vaut rien.
  *
  * Tout se lit dans la fenêtre de séances récentes déjà ouverte par le contexte,
  * bornée à la veille : ce bilan n'ouvre aucune écoute à lui seul, et ne peut
  * pas se comparer à lui-même.
  */
 export default function SessionDone({
-  session, dateKey, name, parity, dayOfWeek, exerciseById, recentSessions, records,
+  session, dateKey, name, parity, dayOfWeek, exerciseById, recentSessions, records, bests,
   onBack, onSeeProgress,
 }) {
   const past = useMemo(
@@ -64,25 +66,28 @@ export default function SessionDone({
         const exercise = exerciseById?.[item.exerciseId] || null
         const best = bestSet(item.sets, exercise)
         const before = previousByExercise[item.exerciseId]
+        const value = progressValue(item.sets, exercise)
+        // Deux records, deux fiertés différentes — et les deux index excluent
+        // déjà la séance en cours, sans quoi elle se battrait elle-même.
+        const setRecord = best
+          ? beatsRecord(setScore(best, exercise), records?.[item.exerciseId])
+          : false
+        const bestEver = beatsRecord(value, bests?.[item.exerciseId])
         return {
           key: item.exerciseId,
           name: exercise?.name || item.name,
           best: best ? formatSets([best], exercise) : null,
-          // Le record se juge sur la MEILLEURE série du jour, face au record
-          // d'avant aujourd'hui (`records` exclut déjà la séance en cours).
-          isRecord: best
-            ? beatsRecord(setScore(best, exercise), records?.[item.exerciseId])
-            : false,
+          // La série la plus lourde l'emporte quand les deux tombent le même
+          // jour : c'est elle qu'on raconte en sortant de la salle.
+          record: setRecord ? 'set' : bestEver ? 'session' : null,
           // Sans passage précédent, il n'y a pas de verdict à rendre.
-          trend: before
-            ? compare(bestScore(item.sets, exercise), bestScore(before.sets, exercise))
-            : null,
+          trend: before ? compare(value, progressValue(before.sets, exercise)) : null,
         }
       })
-  ), [session, previousByExercise, exerciseById, records])
+  ), [session, previousByExercise, exerciseById, records, bests])
 
   const empty = totals.sets === 0
-  const recordCount = rows.filter((r) => r.isRecord).length
+  const recordCount = rows.filter((r) => r.record).length
 
   return (
     <section className="fade-in">
@@ -135,6 +140,11 @@ export default function SessionDone({
               <p className="px-4 pt-3.5 text-[10px] uppercase tracking-[0.14em] text-faint">
                 Chaque exercice face à la dernière fois
               </p>
+              {/* La mesure comparée, dite une fois : c'est celle de la courbe
+                  qu'on ouvre en tapant sur « Mes progrès ». */}
+              <p className="px-4 pt-1 text-[11px] text-muted">
+                Volume soulevé — répétitions au poids du corps.
+              </p>
               <ul className="mt-2">
                 {rows.map((row) => (
                   <li
@@ -143,8 +153,13 @@ export default function SessionDone({
                   >
                     <Trend trend={row.trend} />
                     <span className="flex-1 min-w-0 text-[13px] text-fg truncate">{row.name}</span>
-                    {row.isRecord && (
-                      <Trophy size={12} strokeWidth={2.6} className="shrink-0 text-accent" aria-label="Record battu" />
+                    {row.record && (
+                      <Trophy
+                        size={12}
+                        strokeWidth={2.6}
+                        className="shrink-0 text-accent"
+                        aria-label={RECORD_LABEL[row.record]}
+                      />
                     )}
                     <span className="shrink-0 text-[12px] text-muted tabular">{row.best}</span>
                   </li>
@@ -165,6 +180,12 @@ export default function SessionDone({
       </div>
     </section>
   )
+}
+
+// Un trophée, deux raisons de l'avoir : le dire, sinon il ne se lit plus.
+const RECORD_LABEL = {
+  set: 'Record : série la plus lourde',
+  session: 'Record : meilleure séance sur ce mouvement',
 }
 
 // Dire À QUOI on compare, sinon les écarts ne veulent rien dire.

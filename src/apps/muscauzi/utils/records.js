@@ -56,7 +56,55 @@ export function buildRecordIndex(sessions, excludeDate, scoreOf) {
 }
 
 /**
- * Cette série bat-elle le record ?
+ * LE MEILLEUR PASSAGE sur un mouvement — l'autre record, celui de la courbe.
+ *
+ * `buildRecordIndex` ne connaît que la série la plus lourde jamais faite. Une
+ * séance où l'on fait plus de séries et plus de répétitions que jamais, sans
+ * jamais dépasser son top set, poussait donc la courbe à son plus haut point
+ * sans qu'aucun badge ne le dise : le seul écran qui célébrait quelque chose
+ * célébrait une autre question que celle qu'on regardait.
+ *
+ * La valeur d'un passage est celle que trace la courbe (`progressValue`), et
+ * les occurrences multiples d'un même mouvement dans une journée sont mises
+ * bout à bout — un jour reste un jour, comme partout ailleurs.
+ *
+ * `excludeDate` joue le même rôle qu'au-dessus : le passage du jour ne peut pas
+ * être son propre record.
+ *
+ * @param {Function} valueOf  (sets, exerciseId) => number
+ * @returns {Object} { [exerciseId]: { score, date } }
+ */
+export function buildBestIndex(sessions, excludeDate, valueOf) {
+  const out = {}
+  for (const session of sessions || []) {
+    if (!session?.date || session.date === excludeDate) continue
+
+    const ofDay = {}
+    for (const entry of Object.values(session.entries || {})) {
+      if (!entry?.exerciseId) continue
+      const done = doneSets(entry)
+      if (done.length === 0) continue
+      if (!ofDay[entry.exerciseId]) ofDay[entry.exerciseId] = []
+      ofDay[entry.exerciseId].push(...done)
+    }
+
+    for (const [exerciseId, sets] of Object.entries(ofDay)) {
+      const score = valueOf(sets, exerciseId)
+      if (!(score > 0)) continue
+      const current = out[exerciseId]
+      // Strictement supérieur, comme pour la série : à égalité, la plus
+      // ancienne garde le record.
+      if (!current || score > current.score) out[exerciseId] = { score, date: session.date }
+    }
+  }
+  return out
+}
+
+/**
+ * Ce chiffre bat-il le record ?
+ *
+ * Vaut pour les deux index : une série face au meilleur set, un passage face au
+ * meilleur passage. La règle est la même, elle ne s'écrit qu'une fois.
  *
  * Sans record établi, on ne dit rien : une première série n'est pas un exploit,
  * et un badge sur chaque premier passage ne voudrait plus rien dire.

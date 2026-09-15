@@ -15,8 +15,8 @@ import { withoutOrphans } from '../services/programService.js'
 import { saveNote } from '../services/notesService.js'
 import { hasWork, isEntryComplete } from '../utils/sets.js'
 import { buildPreviousIndex } from '../utils/previous.js'
-import { buildRecordIndex } from '../utils/records.js'
-import { setScore } from '../utils/metrics.js'
+import { buildBestIndex, buildRecordIndex } from '../utils/records.js'
+import { progressValue, setScore } from '../utils/metrics.js'
 import { newInstanceId } from '../utils/ids.js'
 import SessionOverview, { EmptyDay } from '../components/session/SessionOverview.jsx'
 import SessionRail from '../components/session/SessionRail.jsx'
@@ -157,6 +157,18 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
    */
   const recordIndex = useMemo(
     () => buildRecordIndex(sessions, dateKey, (set, exerciseId) => setScore(set, exerciseById[exerciseId])),
+    [sessions, dateKey, exerciseById],
+  )
+
+  /**
+   * Le meilleur PASSAGE sur chaque mouvement — le sommet de sa courbe.
+   *
+   * Même exclusion du jour, même historique complet : c'est le second record,
+   * celui qui répond à « je n'avais jamais autant travaillé ce mouvement »
+   * quand la série la plus lourde, elle, n'a pas bougé.
+   */
+  const bestIndex = useMemo(
+    () => buildBestIndex(sessions, dateKey, (sets, exerciseId) => progressValue(sets, exerciseById[exerciseId])),
     [sessions, dateKey, exerciseById],
   )
 
@@ -353,6 +365,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
       exerciseById={exerciseById}
       recentSessions={recentSessions}
       records={recordIndex}
+      bests={bestIndex}
       onBack={() => setCursor(isWide ? total - 1 : null)}
       onSeeProgress={() => onOpenExercise(null)}
     />

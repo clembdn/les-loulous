@@ -6,7 +6,7 @@ import {
 import { cn } from '@/shared/lib/utils.js'
 import { fromLocalDateKey, formatDateFr } from '@/shared/lib/dates.js'
 import { getExerciseType } from '../../config/exercises.js'
-import { exerciseHistoryIndex, bestSet, bestScore, formatSets } from '../../utils/metrics.js'
+import { exerciseHistoryIndex, bestSet, progressValue, formatSets } from '../../utils/metrics.js'
 import { compare } from '../../utils/trend.js'
 
 /**
@@ -51,10 +51,11 @@ export default function ExerciseTable({ exercises, sessions, selectedId, onSelec
           last: last.date,
           best: best ? formatSets([best], exercise) : null,
           count: item.count,
-          // Le verdict porte sur la MEILLEURE série, pas sur le total : ajouter
-          // une série de plus n'est pas un gain de force.
+          // Le verdict porte sur la mesure que trace la courbe de l'exercice —
+          // celle qu'on ouvre en cliquant sur la ligne. Une flèche qui descend
+          // au-dessus d'un graphe qui monte ne fait que semer le doute.
           trend: previous
-            ? compare(bestScore(last.sets, exercise), bestScore(previous.sets, exercise))
+            ? compare(progressValue(last.sets, exercise), progressValue(previous.sets, exercise))
             : null,
         }
       })

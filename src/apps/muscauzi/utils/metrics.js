@@ -40,6 +40,30 @@ export function defaultMetricId(exercise) {
   return isBodyweight(exercise) ? 'reps' : 'volume'
 }
 
+/**
+ * CE QUE VAUT UN MOUVEMENT SUR UNE SÉANCE — la seule mesure de progrès.
+ *
+ * Il y en avait deux, et elles se contredisaient. La courbe d'un exercice trace
+ * son volume (ses répétitions au poids du corps) ; la flèche du bilan et celle
+ * du tableau ne regardaient que la MEILLEURE SÉRIE, ramenée à un 1RM estimé.
+ * Une séance faite de plus de séries et de plus de répétitions, mais sans série
+ * plus lourde que la fois d'avant, faisait donc monter la courbe et descendre
+ * la flèche — le même travail, deux verdicts opposés à deux écrans d'écart.
+ *
+ * L'argument d'origine tenait : ajouter une cinquième série n'est pas un gain
+ * de force. Mais la courbe, elle, la comptait déjà, et c'est elle qu'on regarde
+ * pour savoir si l'on progresse. Entre deux définitions défendables, celle qui
+ * s'affiche partout gagne : mieux vaut un verdict discutable qu'un verdict qui
+ * se dédit.
+ *
+ * Ce que la meilleure série a d'irremplaçable — le jour où l'on soulève plus
+ * lourd que jamais — est dit par le TROPHÉE, pas par la flèche (cf.
+ * `utils/records.js`). Chacun sa question.
+ */
+export function progressValue(sets, exercise) {
+  return METRICS[defaultMetricId(exercise)].compute(sets)
+}
+
 export function formatMetric(value, metricId) {
   const m = METRICS[metricId] || METRICS.volume
   const rounded = m.id === 'epley' ? Math.round(value * 10) / 10 : Math.round(value)
@@ -102,23 +126,24 @@ export function setScore(set, exercise) {
   return weight * (1 + reps / 30)
 }
 
-export function bestScore(sets, exercise) {
-  return (sets || []).reduce((best, s) => Math.max(best, setScore(s, exercise)), 0)
-}
-
 /**
  * A-t-on fait mieux que la dernière fois ?
  *
- * On compare la MEILLEURE série de chaque séance, pas leur somme : ajouter une
- * cinquième série n'est pas un progrès de force, et un jour où l'on s'arrête à
- * trois séries ne doit pas effacer un record établi sur la première.
+ * Même mesure que la courbe et que la flèche du bilan — `progressValue`. Elle
+ * comparait la meilleure série de chaque séance, et la pastille « Mieux »
+ * pouvait donc rester éteinte sur un exercice que le bilan, deux écrans plus
+ * loin, annonçait en progrès.
+ *
+ * Elle s'allume au cours de la saisie, dès que le travail du jour dépasse celui
+ * de la dernière fois : le volume s'accumule série après série, et le signal
+ * arrive au moment où il se mérite plutôt qu'à la toute dernière.
  *
  * Sans référence, on ne dit rien : une première fois n'est pas un progrès.
  */
 export function beatsPrevious(sets, previousSets, exercise) {
-  const previous = bestScore(previousSets, exercise)
+  const previous = progressValue(previousSets, exercise)
   if (previous <= 0) return false
-  return bestScore(sets, exercise) > previous
+  return progressValue(sets, exercise) > previous
 }
 
 /**
