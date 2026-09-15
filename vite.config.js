@@ -8,10 +8,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon-180x180.png'],
+      includeAssets: ['favicon.ico', 'favicon-96x96.png', 'apple-touch-icon-180x180.png'],
       manifest: {
-        name: 'Clément & Lise',
-        short_name: 'C&L',
+        name: 'Loulous',
+        short_name: 'Loulous',
         description: 'Notre espace à deux — cuisine, budget et séances',
         lang: 'fr',
         theme_color: '#0B0E13',
