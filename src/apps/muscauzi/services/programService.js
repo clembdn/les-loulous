@@ -1,5 +1,6 @@
 import { doc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
+import { normalizeRange } from '../utils/repRange.js'
 
 // Programme d'un profil, une semaine paire et une semaine impaire.
 //
@@ -27,7 +28,16 @@ function fallbackInstanceId(parity, dayOfWeek, index) {
   return `legacy-${parity}-${dayOfWeek}-${index}`
 }
 
+/**
+ * Une ligne de programme.
+ *
+ * La fourchette (`repsMin`–`repsMax`) est arrivée après coup. Une ligne qui
+ * n'en porte pas se relit sur son ancien nombre fixe : min = max = `reps`.
+ * `reps` reste écrit, égal au haut de la fourchette — une version de l'appli
+ * pas encore mise à jour sur un téléphone continue ainsi de lire un nombre.
+ */
 function normalizeLine(raw, index, parity, dayOfWeek) {
+  const range = normalizeRange(raw?.repsMin, raw?.repsMax, raw?.reps)
   return {
     instanceId: raw?.instanceId || fallbackInstanceId(parity, dayOfWeek, index),
     exerciseId: raw?.exerciseId || '',
@@ -37,7 +47,9 @@ function normalizeLine(raw, index, parity, dayOfWeek) {
     name: raw?.name || '',
     order: Number.isFinite(raw?.order) ? raw.order : index,
     sets: Math.max(1, Number(raw?.sets) || 1),
-    reps: Math.max(1, Number(raw?.reps) || 1),
+    reps: range.max,
+    repsMin: range.min,
+    repsMax: range.max,
   }
 }
 
@@ -100,8 +112,19 @@ function normalizeNames(raw) {
   return names
 }
 
+/**
+ * L'alternance semaines paires/impaires — un réglage du PROFIL, rangé sur le
+ * document de la semaine paire (`program/even.alternateWeeks`).
+ *
+ * Là plutôt que dans un document de réglages à part : il est déjà lu à
+ * l'ouverture, et les règles Firestore l'acceptent telles quelles (seuls
+ * `days` et `dayNames` y sont validés). Absent = alternance active, le
+ * comportement d'avant ce réglage : un profil qui n'y touche pas ne voit rien
+ * changer. Coupée, le programme pair sert toutes les semaines ; le programme
+ * impair n'est ni lu ni effacé, il revient tel quel si on réactive.
+ */
 export function emptyProgram() {
-  return { days: normalizeDays(null, 'even'), names: {} }
+  return { days: normalizeDays(null, 'even'), names: {}, alternateWeeks: true }
 }
 
 export function subscribeToProgram(uid, parity, callback, onError) {
@@ -110,12 +133,22 @@ export function subscribeToProgram(uid, parity, callback, onError) {
     callback({
       days: normalizeDays(data?.days, parity),
       names: normalizeNames(data?.dayNames),
+      alternateWeeks: data?.alternateWeeks !== false,
     })
   }, (err) => {
     console.error('[MuscAuzi] program error:', err)
     onError?.(err)
     callback(emptyProgram())
   })
+}
+
+// Merge : ni les jours ni leurs noms ne sont touchés.
+export function saveAlternateWeeks(uid, alternateWeeks, currentUid) {
+  return setDoc(programDoc(uid, 'even'), {
+    alternateWeeks: alternateWeeks === true,
+    updatedAt: new Date().toISOString(),
+    updatedBy: currentUid,
+  }, { merge: true })
 }
 
 // Renommer un jour ne touche pas ses lignes, et inversement : deux écritures
@@ -198,7 +231,9 @@ export function copyLines(lines, newInstanceId) {
     name: line.name || '',
     order: i,
     sets: line.sets,
-    reps: line.reps,
+    reps: line.repsMax ?? line.reps,
+    repsMin: line.repsMin ?? line.reps,
+    repsMax: line.repsMax ?? line.reps,
   }))
 }
 

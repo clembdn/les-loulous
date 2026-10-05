@@ -33,16 +33,22 @@ import { doneSets } from './sets.js'
  */
 
 /**
+ * Les PASSAGES de chaque mouvement : un par date, strictement avant `beforeDate`.
+ *
+ * Le regroupement que suivent « la dernière fois » et la barre d'XP — écrit
+ * une seule fois, ici. Un mouvement fait deux fois dans la même séance donne un
+ * seul passage : ses entrées dans l'ordre de la séance, et leurs séries mises
+ * bout à bout dans le même ordre.
+ *
  * @param {Array} sessions  séances normalisées, triées par date croissante
- * @param {string} dateKey  la date affichée — exclue, ainsi que tout ce qui suit
- * @returns {Object} { [exerciseId]: { date, sets: [{ weightKg, reps }] } }
+ * @param {string} beforeDate  exclue, ainsi que tout ce qui suit
+ * @returns {Object} { [exerciseId]: [{ date, entries, sets }] }, du plus ancien
+ *   au plus récent — `sets` ne contient que les séries qui comptent (`doneSets`)
  */
-export function buildPreviousIndex(sessions, dateKey) {
+export function passagesByExercise(sessions, beforeDate) {
   const out = {}
   for (const session of sessions || []) {
-    // `sessions` est trié : on écrase au fur et à mesure, la dernière séance
-    // retenue est donc la plus récente d'avant `dateKey`.
-    if (!session?.date || session.date >= dateKey) continue
+    if (!session?.date || (beforeDate && session.date >= beforeDate)) continue
 
     const ofDay = {}
     for (const entry of Object.values(session.entries || {})) {
@@ -50,16 +56,33 @@ export function buildPreviousIndex(sessions, dateKey) {
       const done = doneSets(entry)
       if (done.length === 0) continue
       if (!ofDay[entry.exerciseId]) ofDay[entry.exerciseId] = []
-      ofDay[entry.exerciseId].push({ order: entry.order ?? 0, done })
+      ofDay[entry.exerciseId].push({ entry, done })
     }
 
     for (const [exerciseId, groups] of Object.entries(ofDay)) {
-      const sets = groups
-        .sort((a, b) => a.order - b.order)
-        .flatMap((g) => g.done)
-        .map((s) => ({ weightKg: s.weightKg, reps: s.reps }))
-      out[exerciseId] = { date: session.date, sets }
+      groups.sort((a, b) => (a.entry.order ?? 0) - (b.entry.order ?? 0))
+      if (!out[exerciseId]) out[exerciseId] = []
+      out[exerciseId].push({
+        date: session.date,
+        entries: groups.map((g) => g.entry),
+        sets: groups.flatMap((g) => g.done),
+      })
     }
+  }
+  return out
+}
+
+/**
+ * @param {Array} sessions  séances normalisées, triées par date croissante
+ * @param {string} dateKey  la date affichée — exclue, ainsi que tout ce qui suit
+ * @returns {Object} { [exerciseId]: { date, sets: [{ weightKg, reps }] } }
+ */
+export function buildPreviousIndex(sessions, dateKey) {
+  const out = {}
+  for (const [exerciseId, passages] of Object.entries(passagesByExercise(sessions, dateKey))) {
+    // Du plus ancien au plus récent : le dernier passage est « la dernière fois ».
+    const last = passages[passages.length - 1]
+    out[exerciseId] = { date: last.date, sets: last.sets.map((s) => ({ weightKg: s.weightKg, reps: s.reps })) }
   }
   return out
 }

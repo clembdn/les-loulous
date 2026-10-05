@@ -7,7 +7,9 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { doneSets, hasWork, isEntryComplete, hasCompletedWork, sessionLineup } from './sets.js'
+import {
+  doneSets, hasWork, isEntryComplete, hasCompletedWork, loggedSets, sessionLineup,
+} from './sets.js'
 
 const set = (weightKg, reps) => ({ weightKg, reps })
 const entry = (sets, extra = {}) => ({ sets, skipped: false, prescribedSets: 4, ...extra })
@@ -76,4 +78,16 @@ test('les entrées se relisent dans l\'ordre où elles ont été faites', () => 
   }
   assert.deepEqual(sessionLineup(session).map((e) => e.instanceId), ['a', 'b', 'c'])
   assert.deepEqual(sessionLineup(null), [])
+})
+
+test('les échauffements ne comptent nulle part, mais restent enregistrés', () => {
+  const warm = { ...set(20, 12), warmup: true }
+  const e = entry([warm, warm, set(60, 8), set(60, 8)], { prescribedSets: 4 })
+
+  assert.equal(doneSets(e).length, 2, 'deux séries de travail')
+  assert.equal(loggedSets(e).length, 4, 'l\'export voit tout')
+  // Deux échauffements + deux séries ne bouclent pas un 4 × 8.
+  assert.equal(isEntryComplete(e, 4), false)
+  assert.equal(hasWork(entry([warm])), true, 'un échauffement seul reste du travail à ne pas perdre')
+  assert.equal(hasCompletedWork({ entries: { a: entry([warm]) } }), false)
 })

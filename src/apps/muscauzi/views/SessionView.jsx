@@ -17,6 +17,9 @@ import { hasWork, isEntryComplete } from '../utils/sets.js'
 import { buildPreviousIndex } from '../utils/previous.js'
 import { buildBestIndex, buildRecordIndex } from '../utils/records.js'
 import { progressValue, setScore } from '../utils/metrics.js'
+import { buildProgressIndex } from '../utils/progression.js'
+import { entryRange, programRangeIndex } from '../utils/repRange.js'
+import { isBodyweight } from '../config/exercises.js'
 import { newInstanceId } from '../utils/ids.js'
 import SessionOverview, { EmptyDay } from '../components/session/SessionOverview.jsx'
 import SessionRail from '../components/session/SessionRail.jsx'
@@ -56,7 +59,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
   const { currentUid } = useAuth()
   const {
     today, exercises, exerciseById, programs, notes, weights,
-    sessions, recentSessions, catalogueReady, isLoading,
+    sessions, recentSessions, catalogueReady, isLoading, alternateWeeks, settingsReady,
   } = useMuscData()
 
   const [dateKey, setDateKey] = useState(today)
@@ -94,10 +97,15 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
 
   // La date affichée détermine SEULE le jour et la parité — aucun forçage
   // séparé : le programme se change dans Réglages, pas ici.
+  //
+  // `parity` est la VRAIE parité de la semaine : c'est elle que la séance
+  // enregistre, alternance ou pas. Sans alternance, seul le programme lu
+  // change — le pair, toutes les semaines.
   const { parity, dayOfWeek } = useMemo(() => {
     const date = fromLocalDateKey(dateKey)
     return { parity: weekParity(date), dayOfWeek: isoDayOfWeek(date) }
   }, [dateKey])
+  const programParity = alternateWeeks ? parity : 'even'
 
   // La séance du jour se lit dans la fenêtre déjà ouverte par le contexte :
   // pas d'écoute supplémentaire pour un document qu'on a déjà.
@@ -106,11 +114,15 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
     [recentSessions, dateKey],
   )
 
-  const program = programs[parity]
+  const program = programs[programParity]
   const programDays = program.days
   // Le nom du jour au programme : c'est lui qu'on recopie dans la séance et
   // qu'on affiche en tête.
   const sessionName = program.names?.[dayOfWeek] || ''
+
+  // La fourchette de chaque exercice au programme actuel : le repli des
+  // séances d'avant les fourchettes (cf. `entryRange`).
+  const rangeIndex = useMemo(() => programRangeIndex(programs, programParity), [programs, programParity])
 
   const { lines, extras } = useMemo(() => {
     const prescribed = withoutOrphans(programDays?.[dayOfWeek] || [], exerciseById, catalogueReady)
@@ -120,25 +132,32 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
         name: exerciseById[l.exerciseId]?.name || l.name || '',
         order: i,
         prescribedSets: l.sets,
-        prescribedReps: l.reps,
+        prescribedReps: l.repsMax,
+        prescribedRepsMin: l.repsMin,
+        prescribedRepsMax: l.repsMax,
       }))
     const known = new Set(prescribed.map((l) => l.instanceId))
     const off = Object.values(session?.entries || {})
       .filter((e) => !known.has(e.instanceId) && hasWork(e))
       .sort((a, b) => a.order - b.order)
-      .map((e) => ({
-        instanceId: e.instanceId,
-        exerciseId: e.exerciseId,
-        name: exerciseById[e.exerciseId]?.name || e.name || 'Exercice supprimé',
-        order: e.order,
-        prescribedSets: e.prescribedSets,
-        prescribedReps: e.prescribedReps,
-      }))
+      .map((e) => {
+        const range = entryRange(e, rangeIndex[e.exerciseId])
+        return {
+          instanceId: e.instanceId,
+          exerciseId: e.exerciseId,
+          name: exerciseById[e.exerciseId]?.name || e.name || 'Exercice supprimé',
+          order: e.order,
+          prescribedSets: e.prescribedSets,
+          prescribedReps: range.max,
+          prescribedRepsMin: range.min,
+          prescribedRepsMax: range.max,
+        }
+      })
     // Un ajout qui a reçu sa première série est déjà revenu par `off` : on ne
     // garde de la liste locale que ce qui n'est pas encore enregistré.
     const saved = new Set(off.map((l) => l.instanceId))
     return { lines: prescribed, extras: [...off, ...added.filter((l) => !saved.has(l.instanceId))] }
-  }, [programDays, dayOfWeek, exerciseById, session, catalogueReady, added])
+  }, [programDays, dayOfWeek, exerciseById, session, catalogueReady, added, rangeIndex])
 
   // L'ordre de parcours : la prescription du jour, puis le hors-programme.
   const walk = useMemo(() => [...lines, ...extras], [lines, extras])
@@ -173,6 +192,24 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
   )
 
   /**
+   * La barre d'XP de chaque mouvement : niveau, dernière séance, charge
+   * conseillée. Recalculée depuis l'historique complet, strictement AVANT la
+   * date affichée — la séance du jour ne se juge pas elle-même.
+   */
+  const progressIndex = useMemo(
+    () => buildProgressIndex(
+      sessions,
+      dateKey,
+      (exerciseId) => ({
+        incrementKg: exerciseById[exerciseId]?.incrementKg,
+        bodyweight: isBodyweight(exerciseById[exerciseId]),
+      }),
+      (exerciseId) => rangeIndex[exerciseId],
+    ),
+    [sessions, dateKey, exerciseById, rangeIndex],
+  )
+
+  /**
    * Ajouter un mouvement à la séance du jour.
    *
    * La prescription se déduit de la dernière fois — même nombre de séries, même
@@ -182,19 +219,25 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
    */
   const addExerciseToDay = useCallback((exercise) => {
     const previous = previousIndex[exercise.id]
+    // La fourchette aussi vient de la dernière fois : sans elle, la barre d'XP
+    // se mesurerait contre un nombre fixe tiré des reps de la première série.
+    const lastRange = progressIndex[exercise.id]?.last?.range || rangeIndex[exercise.id]
+    const reps = previous?.sets?.[0]?.reps || 10
     const line = {
       instanceId: newInstanceId(),
       exerciseId: exercise.id,
       name: exercise.name,
       order: 1000 + added.length,
-      prescribedSets: previous?.sets?.length || 3,
-      prescribedReps: previous?.sets?.[0]?.reps || 10,
+      prescribedSets: progressIndex[exercise.id]?.last?.prescribedSets || previous?.sets?.length || 3,
+      prescribedReps: lastRange?.max || reps,
+      prescribedRepsMin: lastRange?.min || reps,
+      prescribedRepsMax: lastRange?.max || reps,
     }
     setAdded((prev) => [...prev, line])
     // On ouvre directement le mouvement qu'on vient de choisir : personne
     // n'ajoute un exercice pour aller le chercher ensuite dans la liste.
     setCursor(lines.length + extras.length)
-  }, [previousIndex, added.length, lines.length, extras.length])
+  }, [previousIndex, progressIndex, rangeIndex, added.length, lines.length, extras.length])
 
   /**
    * Retirer une occurrence hors programme.
@@ -266,6 +309,14 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
           <h1 className="text-2xl font-semibold tracking-[-0.02em] text-fg mt-0.5 first-letter:uppercase truncate">
             {formatDayFr(fromLocalDateKey(dateKey))}
           </h1>
+          {/* En alternance, la semaine décide du programme : on le dit en
+              clair, avant même la liste. Sans alternance, rien à dire. */}
+          {settingsReady && alternateWeeks && (
+            <span className="inline-flex items-center mt-2 px-2.5 py-1 rounded-full bg-accent/10 text-accent
+                             text-xs font-semibold tracking-wide">
+              Semaine {parity === 'even' ? 'paire' : 'impaire'}
+            </span>
+          )}
         </div>
 
         <DateNav
@@ -313,6 +364,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
       exercise={exerciseById[focusLine.exerciseId] || null}
       entry={session?.entries?.[focusLine.instanceId] || null}
       previous={previousIndex[focusLine.exerciseId] || null}
+      progress={progressIndex[focusLine.exerciseId] || null}
       record={recordIndex[focusLine.exerciseId] || null}
       note={notes[focusLine.exerciseId] || ''}
       index={active}
@@ -360,7 +412,9 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
       session={session}
       dateKey={dateKey}
       name={sessionName}
-      parity={parity}
+      // Sans alternance, « la même case » ne dépend plus de la semaine : la
+      // séance de référence se cherche au même jour, quelle que soit la parité.
+      parity={alternateWeeks ? parity : null}
       dayOfWeek={dayOfWeek}
       exerciseById={exerciseById}
       recentSessions={recentSessions}
@@ -390,6 +444,8 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
             <SessionRail
               lines={walk}
               session={session}
+              progressIndex={progressIndex}
+              exerciseById={exerciseById}
               activeIndex={active}
               onSelect={setCursor}
               onFinish={() => setCursor(total)}
@@ -442,6 +498,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
           extras={extras}
           session={session}
           exerciseById={exerciseById}
+          progressIndex={progressIndex}
           onOpen={setCursor}
           onStart={() => setCursor(doneCount === total ? total : firstUnfinished)}
           startLabel={doneCount === 0 ? 'Commencer' : doneCount === total ? 'Voir le bilan' : 'Reprendre'}

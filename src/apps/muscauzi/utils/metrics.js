@@ -108,6 +108,15 @@ export function formatSets(sets, exercise) {
 }
 
 /**
+ * Une charge à annoncer : « 18 kg », « +5 kg » (lest), « poids du corps ».
+ */
+export function formatLoad(load, exercise) {
+  const weight = Number(load) || 0
+  if (isBodyweight(exercise)) return weight > 0 ? `+${formatWeight(weight)} kg` : 'poids du corps'
+  return `${formatWeight(weight)} kg`
+}
+
+/**
  * Valeur d'UNE série, pour la comparer à une autre.
  *
  * Charge et répétitions ne se comparent pas terme à terme — 70 × 5 vaut-il
@@ -227,6 +236,9 @@ export function bestSet(sets, exercise) {
  * Rien de comparable ? On ne compare pas. Un écart inventé vaut moins que pas
  * d'écart du tout.
  *
+ * `parity` à `null` : l'alternance est coupée, le même programme revient
+ * chaque semaine — la case se reconnaît au seul jour.
+ *
  * `sessions` est attendu trié par date croissante et déjà filtré sur les
  * séances qui portent du travail.
  */
@@ -238,7 +250,7 @@ export function pickReferenceSession(sessions, { name, parity, dayOfWeek }) {
     if (sameName) return { session: sameName, by: 'name' }
   }
   const sameSlot = lastOf(
-    sessions.filter((s) => s.parity === parity && s.dayOfWeek === dayOfWeek),
+    sessions.filter((s) => (!parity || s.parity === parity) && s.dayOfWeek === dayOfWeek),
   )
   if (sameSlot) return { session: sameSlot, by: 'slot' }
   return null

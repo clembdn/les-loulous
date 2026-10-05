@@ -3,7 +3,9 @@ import {
   getDoc, getDocs, query, orderBy, writeBatch,
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
-import { DEFAULT_TYPE, EXERCISE_TYPE_BY_ID } from '../config/exercises.js'
+import {
+  DEFAULT_TYPE, EXERCISE_TYPE_BY_ID, customIncrement, defaultIncrement,
+} from '../config/exercises.js'
 import { OTHER_GROUP, groupForName, isMuscleGroup } from '../config/exerciseLibrary.js'
 import { normalizeSession } from './sessionsService.js'
 import { PARITIES } from './programService.js'
@@ -46,12 +48,21 @@ function resolveGroup(raw) {
   return groupForName(raw?.name) || OTHER_GROUP
 }
 
+/**
+ * Le pas de charge : celui de la fiche s'il a été réglé, sinon le défaut du
+ * type. Les exercices créés avant ce champ n'en portent pas — ils prennent le
+ * défaut, sans réécriture.
+ */
 function normalize(raw) {
+  const type = resolveType(raw.type)
+  const custom = customIncrement(raw.incrementKg, type)
   return {
     id: raw.id,
     name: raw.name || '',
-    type: resolveType(raw.type),
+    type,
     group: resolveGroup(raw),
+    incrementKg: custom ?? defaultIncrement(type),
+    incrementCustom: custom !== null,
   }
 }
 
@@ -67,10 +78,12 @@ export function subscribeToExercises(uid, callback, onError) {
 export function addExercise(uid, input, currentUid) {
   const now = new Date().toISOString()
   const type = resolveType(input.type)
+  const increment = customIncrement(input.incrementKg, type)
   return addDoc(exercisesCol(uid), {
     name: String(input.name || '').trim(),
     type,
     group: isMuscleGroup(input.group) ? input.group : OTHER_GROUP,
+    ...(increment !== null ? { incrementKg: increment } : {}),
     createdAt: now,
     createdBy: currentUid,
     updatedAt: now,
@@ -113,6 +126,13 @@ export function updateExercise(uid, id, updates, currentUid) {
   if (updates.name != null) payload.name = String(updates.name).trim()
   if (updates.type != null) payload.type = resolveType(updates.type)
   if (updates.group != null) payload.group = isMuscleGroup(updates.group) ? updates.group : OTHER_GROUP
+  // Le pas se juge contre le type ENREGISTRÉ avec lui — d'où l'exigence de les
+  // recevoir ensemble : un pas égal au défaut est effacé, pour suivre le type
+  // s'il change plus tard.
+  if (updates.incrementKg !== undefined && updates.type != null) {
+    const increment = customIncrement(updates.incrementKg, resolveType(updates.type))
+    payload.incrementKg = increment !== null ? increment : deleteField()
+  }
   return updateDoc(exerciseDoc(uid, id), payload)
 }
 

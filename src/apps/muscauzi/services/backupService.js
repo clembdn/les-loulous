@@ -56,8 +56,9 @@ export async function collectBackup(uid) {
     sessions,
     exerciseNotes,
     weights,
-    // Cache dérivé, plus lu par l'appli. Conservé dans la sauvegarde : il ne
-    // coûte qu'un document et il témoigne de l'état d'avant la refonte.
-    meta: { lastPerf: await readDoc(uid, 'meta', 'lastPerf') },
+    // `meta/lastPerf` n'est plus exporté. Ce cache n'est plus écrit depuis le
+    // 28 août 2026 (le repère « dernière fois » se calcule désormais dans
+    // `utils/previous.js`) : l'exporter faisait croire à une donnée vivante
+    // restée bloquée à cette date. Le document reste en base, rien ne le lit.
   }
 }

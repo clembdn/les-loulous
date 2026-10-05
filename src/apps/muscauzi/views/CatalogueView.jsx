@@ -8,7 +8,10 @@ import { Input } from '@/shared/ui/Input.jsx'
 import ConfirmDialog from '@/shared/ui/ConfirmDialog.jsx'
 import { SkeletonList } from '@/shared/ui/Skeleton.jsx'
 import { cn } from '@/shared/lib/utils.js'
-import { DEFAULT_TYPE, EXERCISE_TYPES, getExerciseType } from '../config/exercises.js'
+import {
+  DEFAULT_TYPE, EXERCISE_TYPES, INCREMENT_CHOICES, MAX_INCREMENT_KG, defaultIncrement, getExerciseType,
+} from '../config/exercises.js'
+import { formatWeight } from '../utils/metrics.js'
 import { useMuscData } from '../context/MuscDataContext.jsx'
 import { SETTINGS_SUBS } from '../config/navigation.js'
 import {
@@ -228,6 +231,11 @@ export default function CatalogueView({ onNavigate }) {
                         <span className="block text-[15px] font-medium text-fg truncate">{ex.name}</span>
                         <span className="block text-xs text-muted mt-0.5">
                           {getExerciseType(ex.type).label}
+                          {ex.incrementKg > 0 && (
+                            <span className={ex.incrementCustom ? 'text-fg/80' : undefined}>
+                              {' · pas '}{formatWeight(ex.incrementKg)} kg
+                            </span>
+                          )}
                         </span>
                       </span>
                       <Button variant="ghost" size="icon" aria-label={`Modifier ${ex.name}`} onClick={() => setEditingId(ex.id)}>
@@ -276,13 +284,18 @@ function ExerciseForm({ initial, onCancel, onSubmit }) {
   const [name, setName] = useState(initial?.name || '')
   const [type, setType] = useState(initial?.type || DEFAULT_TYPE)
   const [group, setGroup] = useState(initial?.group || OTHER_GROUP)
+  // `null` = le défaut du type : changer de type change alors le pas, tant
+  // qu'on ne l'a pas réglé à la main.
+  const [increment, setIncrement] = useState(initial?.incrementCustom ? initial.incrementKg : null)
+  const effectiveIncrement = increment ?? defaultIncrement(type)
 
   // Le TYPE décide comment la charge se saisit ; le GROUPE, où le mouvement se
-  // range et à quel total il compte. Deux questions distinctes, deux choix.
+  // range et à quel total il compte ; le PAS, de combien on monte quand la
+  // barre d'XP est pleine. Trois questions distinctes, trois choix.
   const submit = () => {
     const trimmed = name.trim()
     if (!trimmed) return
-    onSubmit({ name: trimmed, type, group })
+    onSubmit({ name: trimmed, type, group, incrementKg: increment })
   }
 
   return (
@@ -336,6 +349,15 @@ function ExerciseForm({ initial, onCancel, onSubmit }) {
         ))}
       </div>
 
+      <IncrementPicker
+        // Tant que le pas suit le type, changer de type ressème le champ libre.
+        key={increment === null ? type : 'custom'}
+        type={type}
+        value={effectiveIncrement}
+        isDefault={increment === null}
+        onChange={(v) => setIncrement(v === defaultIncrement(type) ? null : v)}
+      />
+
       <div className="flex gap-2 mt-4">
         <Button variant="outline" className="flex-1" onClick={onCancel}>
           <X size={15} /> Annuler
@@ -345,5 +367,80 @@ function ExerciseForm({ initial, onCancel, onSubmit }) {
         </Button>
       </div>
     </div>
+  )
+}
+
+/**
+ * Le pas de charge — de combien monter quand la barre d'XP est pleine.
+ *
+ * Les pas courants se choisissent d'un appui ; un autre (une poulie à 1,5 kg)
+ * se tape. Le défaut du type est signalé : c'est ce qui s'applique tant qu'on
+ * n'y touche pas.
+ */
+function IncrementPicker({ type, value, isDefault, onChange }) {
+  const [draft, setDraft] = useState(INCREMENT_CHOICES.includes(value) ? '' : formatWeight(value))
+  const fallback = defaultIncrement(type)
+
+  const commitDraft = () => {
+    const n = Number(String(draft).replace(',', '.'))
+    if (!draft.trim() || !Number.isFinite(n) || n < 0 || n > MAX_INCREMENT_KG) {
+      setDraft(INCREMENT_CHOICES.includes(value) ? '' : formatWeight(value))
+      return
+    }
+    onChange(Math.round(n * 100) / 100)
+  }
+
+  return (
+    <>
+      <p className="text-[10px] uppercase tracking-[0.16em] text-faint mt-4 mb-1.5">
+        Pas de charge
+        <span className="normal-case tracking-normal ml-2 text-faint/80">
+          {isDefault ? `défaut ${getExerciseType(type).label.toLowerCase()}` : 'réglé à la main'}
+        </span>
+      </p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {INCREMENT_CHOICES.map((choice) => (
+          <button
+            key={choice}
+            type="button"
+            onClick={() => { setDraft(''); onChange(choice) }}
+            aria-pressed={choice === value}
+            className={cn(
+              'px-3 h-10 rounded-lg text-[13px] font-medium border transition tabular',
+              choice === value
+                ? 'bg-accent text-accent-fg border-accent'
+                : 'bg-surface-2 text-muted border-border hover:text-fg',
+            )}
+          >
+            {formatWeight(choice)}
+          </button>
+        ))}
+        <label className="relative">
+          <input
+            type="text"
+            inputMode="decimal"
+            enterKeyHint="done"
+            value={draft}
+            placeholder="autre"
+            aria-label="Autre pas de charge, en kilos"
+            onChange={(e) => setDraft(e.target.value.replace(/[^\d.,]/g, '').slice(0, 5))}
+            onBlur={commitDraft}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+            className={cn(
+              'w-20 h-10 pl-2.5 pr-7 rounded-lg border text-[13px] font-medium tabular bg-surface-2 transition',
+              'placeholder:text-faint focus:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              !INCREMENT_CHOICES.includes(value) && draft ? 'border-accent text-fg' : 'border-border text-muted',
+            )}
+          />
+          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-faint pointer-events-none">kg</span>
+        </label>
+      </div>
+      <p className="text-[11px] text-faint mt-1.5 leading-relaxed">
+        {value > 0
+          ? `Barre pleine → +${formatWeight(value)} kg.`
+          : 'Sans pas, la barre pleine te dira d’ajouter du lest.'}
+        {fallback === 7 && ' Machines guidées : 7 kg — une poulie monte souvent par 1,25 ou 2,5.'}
+      </p>
+    </>
   )
 }

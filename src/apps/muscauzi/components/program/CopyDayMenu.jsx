@@ -27,11 +27,15 @@ const PARITY_LABEL = { even: 'paire', odd: 'impaire' }
  *
  * Une copie écrase la destination. Elle passe donc par une confirmation dès que
  * cette destination n'est pas vide.
+ *
+ * Sans alternance (`alternate` coupé), il n'y a qu'une semaine : seule reste la
+ * copie vers un autre jour, et la liste des jours s'ouvre directement.
  */
 export default function CopyDayMenu({
-  open, onOpenChange, parity, dayOfWeek, dayCounts, otherCounts, weekCount, onCopy,
+  open, onOpenChange, parity, dayOfWeek, dayCounts, otherCounts, weekCount, alternate = true, onCopy,
 }) {
-  const [pickingDay, setPickingDay] = useState(false)
+  const [picking, setPickingDay] = useState(false)
+  const pickingDay = picking || !alternate
   const other = parity === 'even' ? 'odd' : 'even'
 
   const close = (next) => {
@@ -91,7 +95,7 @@ export default function CopyDayMenu({
                 />
                 <Choice
                   icon={CalendarRange}
-                  title={`Toute la semaine vers l'${PARITY_LABEL[other]}`}
+                  title={`Toute la semaine vers la semaine ${PARITY_LABEL[other]}`}
                   detail={weekCount > 0
                     ? `Les 7 jours de la semaine ${PARITY_LABEL[other]} seront remplacés`
                     : 'Rien à copier — la semaine est vide'}

@@ -1,9 +1,12 @@
-import { Check, ChevronRight, Dumbbell, Play, Plus, SkipForward } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, ChevronRight, Dumbbell, Play, Plus, SkipForward } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { Button } from '@/shared/ui/Button.jsx'
 import { Progress } from '@/shared/ui/Progress.jsx'
 import { doneSets, isEntryComplete } from '../../utils/sets.js'
-import { formatSets } from '../../utils/metrics.js'
+import { formatLoad, formatSets } from '../../utils/metrics.js'
+import { entryRange, formatPrescription } from '../../utils/repRange.js'
+import { passageXp } from '../../utils/progression.js'
+import { isBodyweight } from '../../config/exercises.js'
 
 /**
  * Ce qu'il y a à faire, d'un coup d'œil.
@@ -18,6 +21,7 @@ export default function SessionOverview({
   extras,
   session,
   exerciseById,
+  progressIndex = {},
   onOpen,
   onStart,
   onAdd,
@@ -32,6 +36,7 @@ export default function SessionOverview({
             line={line}
             entry={session?.entries?.[line.instanceId] || null}
             exercise={exerciseById[line.exerciseId] || null}
+            progress={progressIndex[line.exerciseId] || null}
             onClick={() => onOpen(i)}
           />
         ))}
@@ -50,6 +55,7 @@ export default function SessionOverview({
                 line={line}
                 entry={session?.entries?.[line.instanceId] || null}
                 exercise={exerciseById[line.exerciseId] || null}
+                progress={progressIndex[line.exerciseId] || null}
                 onClick={() => onOpen(lines.length + i)}
               />
             ))}
@@ -76,13 +82,29 @@ export default function SessionOverview({
   )
 }
 
-function OverviewRow({ line, entry, exercise, onClick }) {
+/**
+ * Une ligne de l'aperçu : on y voit, avant de commencer, ce qui MONTE
+ * aujourd'hui (« ↑ 20 kg »), et la barre d'XP de chaque mouvement.
+ *
+ * La barre du bas est TOUJOURS la barre d'XP — celle du jour dès qu'une série
+ * est faite, celle de la dernière séance avant. L'avancement en séries se lit
+ * déjà dans la pastille et dans « 2/4 » : deux barres l'une sous l'autre se
+ * seraient contredites.
+ */
+function OverviewRow({ line, entry, exercise, progress, onClick }) {
   const skipped = entry?.skipped === true
   const done = doneSets(entry)
   const savedDone = done.length
   const isComplete = isEntryComplete(entry, line.prescribedSets)
   const isPartial = !skipped && savedDone > 0 && !isComplete
   const recap = formatSets(done, exercise)
+  const range = entryRange(line)
+
+  const today = savedDone > 0
+    ? passageXp({ sets: done, prescribedSets: line.prescribedSets, range }, { bodyweight: isBodyweight(exercise) })
+    : null
+  const xp = today ? today.xp : progress?.last?.xp ?? null
+  const kind = progress?.suggestion?.kind
 
   return (
     <button
@@ -95,26 +117,54 @@ function OverviewRow({ line, entry, exercise, onClick }) {
     >
       <StatusDot skipped={skipped} complete={isComplete} partial={isPartial} />
       <span className="flex-1 min-w-0">
-        <span className="block text-[15px] font-semibold text-fg truncate">{line.name}</span>
-        <span className="block text-xs text-muted mt-0.5 tabular">
-          {line.prescribedSets} × {line.prescribedReps}
-          {skipped && ' · non fait'}
-          {isPartial && ` · ${savedDone}/${line.prescribedSets}`}
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="text-[15px] font-semibold text-fg truncate">{line.name}</span>
+          {progress?.last && (
+            <span className="shrink-0 px-1.5 py-px rounded-full bg-surface-2 text-[10px] font-semibold text-muted tabular">
+              Niv. {progress.level}
+            </span>
+          )}
+        </span>
+        <span className="flex items-center gap-2 text-xs text-muted mt-0.5 tabular">
+          <span className="truncate">
+            {formatPrescription(line.prescribedSets, range)}
+            {skipped && ' · non fait'}
+            {isPartial && ` · ${savedDone}/${line.prescribedSets}`}
+          </span>
+          {!skipped && <LoadHint kind={kind} load={progress?.suggestion?.load} exercise={exercise} />}
         </span>
         {recap && (
           <span className="block text-[11px] text-faint tabular mt-1 truncate">{recap}</span>
         )}
-        {isPartial && (
+        {!skipped && xp !== null && (
           <Progress
             className="mt-2 h-1"
-            value={savedDone}
-            max={line.prescribedSets}
-            label={`${savedDone} séries sur ${line.prescribedSets}`}
+            value={Math.round(xp * 100)}
+            max={100}
+            label={`Barre d’XP ${Math.round(xp * 100)} %`}
           />
         )}
       </span>
       <ChevronRight size={18} className="shrink-0 text-faint" />
     </button>
+  )
+}
+
+/**
+ * La charge du jour, en un mot : « ↑ 20 kg » quand on monte, « ↓ 16 kg » quand
+ * on redescend. Rester à la même charge n'est pas une nouvelle : rien.
+ */
+export function LoadHint({ kind, load, exercise, className }) {
+  if (kind !== 'levelUp' && kind !== 'deload') return null
+  const Icon = kind === 'levelUp' ? ArrowUp : ArrowDown
+  return (
+    <span className={cn(
+      'shrink-0 inline-flex items-center gap-0.5 font-semibold',
+      kind === 'levelUp' ? 'text-accent' : 'text-muted',
+      className,
+    )}>
+      <Icon size={11} strokeWidth={3} /> {formatLoad(load, exercise)}
+    </span>
   )
 }
 

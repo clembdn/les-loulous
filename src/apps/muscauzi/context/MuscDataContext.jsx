@@ -47,6 +47,9 @@ const EMPTY = {
   weights: [],
   sessions: [],
   recentSessions: [],
+  alternateWeeks: true,
+  settingsReady: false,
+
   isLoading: true,
 }
 
@@ -132,6 +135,11 @@ export function MuscDataProvider({ children }) {
     weights,
     sessions,
     recentSessions,
+    // Rangé sur `program/even` (cf. `programService`). Tant qu'il n'est pas lu,
+    // on ne sait pas quel programme vaut aujourd'hui : l'en-tête attend avant
+    // d'annoncer une parité.
+    alternateWeeks: programs.even.alternateWeeks !== false,
+    settingsReady: ready.even,
     isLoading: !Object.values(ready).every(Boolean),
     // Le catalogue seul décide si une ligne de programme est orpheline ; les
     // vues en ont besoin séparément du chargement global.

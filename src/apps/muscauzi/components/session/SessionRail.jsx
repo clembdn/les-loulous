@@ -1,7 +1,8 @@
 import { Flag, Plus } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { doneSets, isEntryComplete } from '../../utils/sets.js'
-import { StatusDot } from './SessionOverview.jsx'
+import { entryRange, formatPrescription } from '../../utils/repRange.js'
+import { LoadHint, StatusDot } from './SessionOverview.jsx'
 
 /**
  * La séance en colonne, sur grand écran.
@@ -11,7 +12,9 @@ import { StatusDot } from './SessionOverview.jsx'
  * vaut mieux qu'un compteur « 3 sur 6 » — on saute directement au mouvement
  * qu'on veut corriger, sans repasser par l'aperçu.
  */
-export default function SessionRail({ lines, session, activeIndex, onSelect, onFinish, onAdd }) {
+export default function SessionRail({
+  lines, session, progressIndex = {}, exerciseById = {}, activeIndex, onSelect, onFinish, onAdd,
+}) {
   return (
     <nav className="space-y-1" aria-label="Exercices de la séance">
       {lines.map((line, i) => {
@@ -20,6 +23,7 @@ export default function SessionRail({ lines, session, activeIndex, onSelect, onF
         const savedDone = doneSets(entry).length
         const isComplete = isEntryComplete(entry, line.prescribedSets)
         const isActive = i === activeIndex
+        const progress = progressIndex[line.exerciseId] || null
 
         return (
           <button
@@ -39,9 +43,19 @@ export default function SessionRail({ lines, session, activeIndex, onSelect, onF
               )}>
                 {line.name}
               </span>
-              <span className="block text-[11px] text-faint tabular mt-0.5">
-                {line.prescribedSets} × {line.prescribedReps}
-                {!skipped && savedDone > 0 && ` · ${savedDone} faite${savedDone > 1 ? 's' : ''}`}
+              <span className="flex items-center gap-1.5 text-[11px] text-faint tabular mt-0.5">
+                <span className="truncate">
+                  {formatPrescription(line.prescribedSets, entryRange(line))}
+                  {progress?.last && ` · Niv. ${progress.level}`}
+                  {!skipped && savedDone > 0 && ` · ${savedDone} faite${savedDone > 1 ? 's' : ''}`}
+                </span>
+                {!skipped && (
+                  <LoadHint
+                    kind={progress?.suggestion?.kind}
+                    load={progress?.suggestion?.load}
+                    exercise={exerciseById[line.exerciseId] || null}
+                  />
+                )}
               </span>
             </span>
           </button>

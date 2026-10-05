@@ -1,17 +1,24 @@
 import { useMemo, useState } from 'react'
 import {
-  ArrowLeft, ArrowRight, Check, CopyCheck, LineChart, Plus, RotateCcw, SkipForward, Trash2, TrendingUp, Trophy,
+  ArrowLeft, ArrowRight, Check, CopyCheck, Flame, LineChart, Plus, RotateCcw, SkipForward, Trash2, TrendingUp,
 } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { Button } from '@/shared/ui/Button.jsx'
-import { formatDateFr, fromLocalDateKey } from '@/shared/lib/dates.js'
+import { confirm as hapticConfirm } from '@/shared/lib/haptics.js'
 import { isBodyweight, weightHint } from '../../config/exercises.js'
-import { doneSets, isEntryComplete } from '../../utils/sets.js'
-import { beatsPrevious, formatSets, formatWeight, setScore } from '../../utils/metrics.js'
+import { doneSets, isEntryComplete, isWarmup } from '../../utils/sets.js'
+import { beatsPrevious, formatWeight, setScore } from '../../utils/metrics.js'
 import { beatsRecord } from '../../utils/records.js'
 import { previousSetAt } from '../../utils/previous.js'
+import { entryRange, formatPrescription } from '../../utils/repRange.js'
+import { jumpedEarly, passageXp, reachedLoad } from '../../utils/progression.js'
+import {
+  addSet, addWarmup, buildRows, clearRow, fillRow, parseNumber, removeRow, rowLabels, setField,
+  toField, toSets, toggleWarmup,
+} from '../../utils/setRows.js'
 import SetInput from './SetInput.jsx'
 import ExerciseNote from './ExerciseNote.jsx'
+import XpCard from './XpCard.jsx'
 
 /**
  * UN exercice, en grand.
@@ -35,6 +42,14 @@ import ExerciseNote from './ExerciseNote.jsx'
  * `commit()`. Appelée à la sortie d'un champ, au clic sur une pastille, à
  * l'ajout ou au retrait d'une série, et avant de changer d'exercice. Pas de
  * minuteur, pas d'écriture au démontage, pas de second chemin.
+ *
+ * ── La barre d'XP mène ──────────────────────────────────────────────────────
+ *
+ * En tête, avant les champs : la dernière fois, la barre, la charge à mettre
+ * (cf. `XpCard`). Rien n'est pré-rempli : quand la barre dit de monter ou de
+ * redescendre, la charge conseillée devient le placeholder, et c'est elle que
+ * la pastille et « Répéter » enregistrent à la place de celle de la dernière
+ * fois.
  */
 export default function ExerciseFocus({
   line,
@@ -42,6 +57,7 @@ export default function ExerciseFocus({
   exercise,
   entry,
   previous,
+  progress,
   record,
   note,
   index,
@@ -58,6 +74,18 @@ export default function ExerciseFocus({
 }) {
   const bodyweight = isBodyweight(exercise)
   const skipped = entry?.skipped === true
+  const range = entryRange(line)
+  const prescribedSets = line.prescribedSets
+
+  const suggestion = progress?.suggestion || null
+  const last = progress?.last || null
+  // La charge qui REMPLACE celle de la dernière fois : seulement quand la barre
+  // dit de changer — monter (barre pleine) ou redescendre. Au poids du corps
+  // non lesté elle vaut 0 : rien à proposer.
+  const changeLoad = (suggestion?.kind === 'levelUp' || suggestion?.kind === 'deload') && suggestion.load > 0
+    ? suggestion.load
+    : null
+  const levelUpLoad = suggestion?.kind === 'levelUp' ? suggestion.load : null
 
   /**
    * Le brouillon de saisie, semé UNE fois.
@@ -67,66 +95,78 @@ export default function ExerciseFocus({
    * écho de Firestore ne le touche jamais — c'est ce qui réécrivait les séries
    * 2 à 4 en pleine frappe quand on enregistrait la série 1.
    */
-  const [rows, setRows] = useState(() => buildRows(line.prescribedSets, entry))
+  const [rows, setRows] = useState(() => buildRows({ prescribedSets, entry }))
+  const [celebrate, setCelebrate] = useState(false)
+  const labels = rowLabels(rows, prescribedSets)
+
+  const working = (list) => toSets(list).filter((s) => !isWarmup(s) && s.reps > 0)
 
   const write = (next) => {
+    // Niveau suivant : la PREMIÈRE série validée à la nouvelle charge se fête.
+    // Une fois par ouverture — revenir sur l'exercice ne la rejoue pas, la
+    // série étant déjà là avant le geste.
+    if (levelUpLoad && !celebrate
+      && !reachedLoad(working(rows), levelUpLoad) && reachedLoad(working(next), levelUpLoad)) {
+      setCelebrate(true)
+      hapticConfirm()
+    }
     setRows(next)
     onSave({ sets: toSets(next), skipped: false })
   }
 
   const commit = () => write(rows)
 
-  const setField = (rank, field, value) => {
-    setRows((prev) => prev.map((r) => (r.rank === rank ? { ...r, [field]: value } : r)))
-  }
+  const changeField = (i, field, value) => setRows((prev) => setField(prev, i, field, value))
 
   /**
-   * La pastille : valider, ou annuler.
+   * Ce que la pastille enregistre quand on la touche sans rien taper — et donc
+   * ce que dit le placeholder, en gris : on valide ce qu'on voit.
    *
-   * Valider écrit ce qui est TAPÉ. À défaut, la dernière fois ; à défaut, la
-   * prescription du jour — mais seulement sur un geste explicite, jamais au
-   * passage d'un doigt. Sans rien de tout ça, il n'y a rien à valider et la
-   * pastille ne fait rien.
+   * La dernière fois, série par série. Quand la barre dit de changer de charge,
+   * la charge conseillée, et le bas de la fourchette pour les reps : à une
+   * charge nouvelle, battre les reps d'avant n'est pas l'objectif.
    */
-  const toggle = (rank) => {
-    const row = rows.find((r) => r.rank === rank)
+  const repsTarget = (i) => {
+    const label = labels[i]
+    if (label.warmup) return 0
+    if (changeLoad) return range.min
+    return previousSetAt(previous, label.workIndex)?.reps || range.min
+  }
+
+  const weightTarget = (i) => {
+    if (labels[i].warmup) return 0
+    if (changeLoad) return changeLoad
+    return previousSetAt(previous, labels[i].workIndex)?.weightKg || 0
+  }
+
+  const toggle = (i) => {
+    const row = rows[i]
     if (!row) return
     if (parseNumber(row.reps) > 0) {
-      write(rows.map((r) => (r.rank === rank ? { ...r, weightKg: '', reps: '' } : r)))
+      write(clearRow(rows, i))
       return
     }
-    const ref = previousSetAt(previous, rank)
-    const reps = Math.round(parseNumber(row.reps) || ref?.reps || line.prescribedReps || 0)
+    const reps = repsTarget(i)
     if (reps <= 0) return
-    const weightKg = parseNumber(row.weightKg) || ref?.weightKg || 0
-    write(rows.map((r) => (r.rank === rank
-      ? { ...r, weightKg: toField(weightKg, true), reps: String(reps) }
-      : r)))
-  }
-
-  const addRow = () => {
-    write([...rows, { rank: rows.length, extra: true, weightKg: '', reps: '' }])
-  }
-
-  // Les rangs sont renumérotés : retirer la 5e série ne doit pas laisser un
-  // trou que la reconstruction rouvrirait à la ligne suivante.
-  const removeRow = (rank) => {
-    write(rows
-      .filter((r) => r.rank !== rank)
-      .map((r, i) => ({ ...r, rank: i, extra: i >= line.prescribedSets })))
+    write(fillRow(rows, i, { weightKg: parseNumber(row.weightKg) || weightTarget(i), reps }))
   }
 
   /**
-   * « Comme la dernière fois » — remplit d'un geste les séries encore vides.
-   * Ne touche JAMAIS une série déjà saisie : le raccourci sert à éviter de
-   * retaper l'identique, pas à écraser le travail du jour.
+   * « Comme la dernière fois » — remplit d'un geste les séries de travail encore
+   * vides. Ne touche JAMAIS une série déjà saisie : le raccourci sert à éviter
+   * de retaper l'identique, pas à écraser le travail du jour.
+   *
+   * Quand la barre dit de changer de charge, ce sont les reps de la dernière
+   * fois à la charge conseillée : on ne refait pas, par réflexe, la charge
+   * qu'on vient justement de valider — ou de rater deux fois.
    */
   const repeatLast = () => {
-    write(rows.map((r) => {
-      if (parseNumber(r.reps) > 0) return r
-      const ref = previousSetAt(previous, r.rank)
+    write(rows.map((r, i) => {
+      const label = labels[i]
+      if (label.warmup || parseNumber(r.reps) > 0) return r
+      const ref = previousSetAt(previous, label.workIndex)
       if (!ref || !(ref.reps > 0)) return r
-      return { ...r, weightKg: toField(ref.weightKg, true), reps: String(ref.reps) }
+      return { ...r, weightKg: toField(changeLoad || ref.weightKg, true), reps: String(ref.reps) }
     }))
   }
 
@@ -142,20 +182,28 @@ export default function ExerciseFocus({
    * à un exercice qu'il avait sauté.
    */
   const reopen = () => {
-    setRows(buildRows(line.prescribedSets, null))
+    setRows(buildRows({ prescribedSets, entry: null }))
     onClear()
   }
 
   const remove = () => {
-    setRows(buildRows(line.prescribedSets, null))
+    setRows(buildRows({ prescribedSets, entry: null }))
     onRemove()
   }
 
   const go = (fn) => { commit(); fn?.() }
 
   const done = doneSets(entry)
-  const isComplete = isEntryComplete(entry, line.prescribedSets)
+  const isComplete = isEntryComplete(entry, prescribedSets)
   const improved = !skipped && beatsPrevious(done, previous?.sets, exercise)
+
+  // La barre d'aujourd'hui se lit dans le BROUILLON, pas dans Firestore : elle
+  // bouge dès qu'on valide une série, sans attendre l'écho du cache.
+  const todayWorking = working(rows)
+  const today = skipped ? null : passageXp({ sets: todayWorking, prescribedSets, range }, { bodyweight })
+  const warning = !skipped && jumpedEarly(todayWorking, progress)
+  const leveledToday = !!levelUpLoad && reachedLoad(todayWorking, levelUpLoad)
+  const level = (progress?.level || 0) + (leveledToday ? 1 : 0)
 
   /**
    * Le rang de la série qui bat le record — au plus une.
@@ -163,13 +211,14 @@ export default function ExerciseFocus({
    * Le record de référence est celui d'AVANT aujourd'hui (cf.
    * `utils/records.js`). Si plusieurs séries du jour le dépassent, c'est la
    * meilleure qui porte le badge : deux trophées sur le même exercice ne
-   * voudraient plus rien dire.
+   * voudraient plus rien dire. Un échauffement ne bat jamais rien.
    */
   const recordRank = useMemo(() => {
     if (skipped || !record) return null
     let best = null
     let bestScore = 0
     for (const set of entry?.sets || []) {
+      if (isWarmup(set)) continue
       const score = setScore(set, exercise)
       if (!beatsRecord(score, record) || score <= bestScore) continue
       bestScore = score
@@ -192,54 +241,76 @@ export default function ExerciseFocus({
               <h2 className="text-xl font-semibold tracking-[-0.02em] text-fg truncate">
                 {line.name}
               </h2>
+              {/* Le niveau : les montées de charge validées sur ce mouvement,
+                  recalculées depuis l'historique. Il passe au suivant sous les
+                  yeux à la première série faite à la nouvelle charge. */}
+              {last && (
+                <span
+                  key={level}
+                  className={cn(
+                    'shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tabular',
+                    leveledToday ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted',
+                    celebrate && 'level-pop',
+                  )}
+                  title="Niveau : nombre de montées de charge validées (barre pleine, puis montée)"
+                >
+                  Niv. {level}
+                </span>
+              )}
               {improved && (
                 <span
                   className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full
                              bg-accent/12 text-accent text-[10px] font-semibold"
-                  title="Meilleure série que la dernière fois"
+                  title="Meilleure séance que la dernière fois"
                 >
                   <TrendingUp size={10} strokeWidth={3} /> Mieux
                 </span>
               )}
             </div>
             <p className="text-sm text-muted mt-0.5 tabular">
-              {line.prescribedSets} × {line.prescribedReps}
+              {formatPrescription(prescribedSets, range)}
               {extra && ' · hors programme'}
             </p>
           </div>
         </div>
 
-        {/* Le repère de la séance précédente, en clair et en haut : c'est ce
-            qu'on cherche des yeux avant de charger la barre. Il vient de
-            l'historique réel, strictement antérieur à aujourd'hui — donc il ne
-            se transforme plus en la série qu'on vient de taper. */}
-        <PreviousRecap previous={previous} record={record} exercise={exercise} />
+        <XpCard
+          previous={previous}
+          progress={progress}
+          today={today}
+          exercise={exercise}
+          record={record}
+          warning={warning}
+          celebrate={celebrate}
+          leveled={leveledToday}
+          targetReps={range.max}
+        />
 
         <div className="flex items-center justify-between gap-2 mt-4 mb-3">
           <button
             onClick={() => onOpenDetail(line.exerciseId)}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:opacity-80 transition"
+            className="inline-flex items-center gap-1.5 h-9 text-xs font-medium text-accent hover:opacity-80 transition"
           >
             <LineChart size={13} /> Voir la progression
           </button>
           {skipped ? (
             <button
               onClick={reopen}
-              className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-fg transition"
+              className="inline-flex items-center gap-1.5 h-9 text-xs text-muted hover:text-fg transition"
             >
               <RotateCcw size={13} /> Reprendre
             </button>
           ) : extra ? (
             <button
               onClick={remove}
-              className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-danger transition"
+              className="inline-flex items-center gap-1.5 h-9 text-xs text-muted hover:text-danger transition"
             >
               <Trash2 size={13} /> Retirer
             </button>
           ) : (
             <button
               onClick={skip}
-              className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-fg transition"
+              className="inline-flex items-center gap-1.5 h-9 text-xs text-muted hover:text-fg transition"
             >
               <SkipForward size={13} /> Non fait
             </button>
@@ -254,27 +325,39 @@ export default function ExerciseFocus({
         ) : (
           <>
             <div className="space-y-2">
-              {rows.map((row) => (
-                <SetInput
-                  key={row.rank}
-                  label={row.extra ? `Série ${row.rank + 1} (en plus)` : `Série ${row.rank + 1}`}
-                  weightKg={row.weightKg}
-                  reps={row.reps}
-                  previous={previousSetAt(previous, row.rank)}
-                  isRecord={row.rank === recordRank}
-                  bodyweight={bodyweight}
-                  prescribedReps={line.prescribedReps}
-                  onChange={(field, value) => setField(row.rank, field, value)}
-                  onCommit={commit}
-                  onToggle={() => toggle(row.rank)}
-                  onRemove={row.extra ? () => removeRow(row.rank) : null}
-                />
-              ))}
+              {rows.map((row, i) => {
+                const label = labels[i]
+                const name = label.warmup ? 'Échauffement' : `Série ${label.number}${label.extra ? ' (en plus)' : ''}`
+                const weightTargetValue = weightTarget(i)
+                const repsTargetValue = repsTarget(i)
+                return (
+                  <SetInput
+                    key={i}
+                    label={name}
+                    number={label.number}
+                    warmup={label.warmup}
+                    weightKg={row.weightKg}
+                    reps={row.reps}
+                    weightPlaceholder={weightTargetValue > 0 ? formatWeight(weightTargetValue) : '0'}
+                    repsPlaceholder={repsTargetValue > 0 ? String(repsTargetValue) : '—'}
+                    isRecord={i === recordRank}
+                    bodyweight={bodyweight}
+                    onChange={(field, value) => changeField(i, field, value)}
+                    onCommit={commit}
+                    onToggle={() => toggle(i)}
+                    onToggleWarmup={() => write(toggleWarmup(rows, i, { prescribedSets }))}
+                    onRemove={label.warmup || label.extra ? () => write(removeRow(rows, i)) : null}
+                  />
+                )
+              })}
             </div>
 
             <div className="flex gap-2 mt-3">
-              <Button variant="dashed" className="flex-1 text-xs" onClick={addRow}>
+              <Button variant="dashed" className="flex-1 text-xs" onClick={() => write(addSet(rows))}>
                 <Plus size={14} /> série
+              </Button>
+              <Button variant="dashed" className="flex-1 text-xs" onClick={() => write(addWarmup(rows))}>
+                <Flame size={14} /> échauffement
               </Button>
               {canRepeat && (
                 <Button variant="secondary" className="flex-1 text-xs" onClick={repeatLast}>
@@ -283,7 +366,19 @@ export default function ExerciseFocus({
               )}
             </div>
 
-            {hint && <p className="text-[11px] text-faint mt-3 leading-relaxed">{hint}</p>}
+            {/* Le geste se découvre une fois ; dès qu'un échauffement existe,
+                l'explication n'apprend plus rien et se retire. */}
+            {(hint || !rows.some((r) => r.warmup)) && (
+              <p className="text-[11px] text-faint mt-3 leading-relaxed">
+                {!rows.some((r) => r.warmup) && (
+                  <span className="block">
+                    Touche le numéro d’une série pour la passer en échauffement — elle ne comptera
+                    ni dans la barre d’XP ni dans les records.
+                  </span>
+                )}
+                {hint && <span className="block mt-1">{hint}</span>}
+              </p>
+            )}
 
             <div className="mt-4">
               <ExerciseNote note={note} onSave={(text) => onSaveNote(line.exerciseId, text)} />
@@ -320,84 +415,4 @@ export default function ExerciseFocus({
       </div>
     </div>
   )
-}
-
-/**
- * Les deux repères qu'on cherche des yeux avant de charger la barre.
- *
- * La dernière fois répond à « où j'en étais » ; le record à « qu'est-ce que je
- * vise ». Les deux sont côte à côte, en haut, avant les champs — pas cachés
- * derrière un onglet Progrès.
- */
-function PreviousRecap({ previous, record, exercise }) {
-  if (!previous?.sets?.length) {
-    return (
-      <p className="mt-3 px-3.5 py-2.5 rounded-xl border border-dashed border-border text-[11px] text-faint">
-        Première fois sur ce mouvement — pas encore de repère.
-      </p>
-    )
-  }
-  return (
-    <div className="mt-3 rounded-xl border border-border bg-surface overflow-hidden">
-      <div className="px-3.5 py-2.5">
-        <p className="text-[10px] uppercase tracking-[0.16em] text-faint">
-          Dernière fois · {formatDateFr(fromLocalDateKey(previous.date))}
-        </p>
-        <p className="text-[13px] text-fg tabular mt-1 leading-relaxed">
-          {formatSets(previous.sets, exercise)}
-        </p>
-      </div>
-      {record && (
-        <div className="flex items-center gap-2 px-3.5 py-2 border-t border-border">
-          <Trophy size={12} className="shrink-0 text-accent" />
-          <span className="text-[11px] text-muted">Record</span>
-          <span className="flex-1 min-w-0 text-right text-[12px] text-fg tabular truncate">
-            {formatSets([record.set], exercise)}
-            <span className="text-faint ml-1.5">
-              {formatDateFr(fromLocalDateKey(record.date))}
-            </span>
-          </span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Relire une charge doit rendre exactement ce qu'on a tapé : « 62,5 », pas
-// « 62.5 ». Le champ accepte les deux, mais n'en affiche qu'une.
-function toField(value, decimal = false) {
-  if (!(value > 0)) return ''
-  return decimal ? formatWeight(value) : String(value)
-}
-
-function parseNumber(value) {
-  const n = Number(String(value).replace(',', '.'))
-  return Number.isFinite(n) && n > 0 ? n : 0
-}
-
-/**
- * Les lignes affichées : une par série prescrite, plus les séries ajoutées à la
- * main. Une série enregistrée à 0 revient comme un champ vide — un 0 stocké
- * veut dire « rien saisi », jamais « zéro kilo validé ».
- */
-function buildRows(prescribedSets, entry) {
-  const stored = new Map((entry?.sets || []).map((s) => [s.rank, s]))
-  const lastRank = stored.size > 0 ? Math.max(...stored.keys()) : -1
-  const count = Math.max(prescribedSets, lastRank + 1)
-
-  return Array.from({ length: count }, (_, rank) => {
-    const saved = stored.get(rank)
-    return {
-      rank,
-      extra: rank >= prescribedSets,
-      weightKg: saved ? toField(saved.weightKg, true) : '',
-      reps: saved ? toField(saved.reps) : '',
-    }
-  })
-}
-
-function toSets(rows) {
-  return rows
-    .map((r) => ({ rank: r.rank, weightKg: parseNumber(r.weightKg), reps: Math.round(parseNumber(r.reps)) }))
-    .filter((s) => s.weightKg > 0 || s.reps > 0)
 }

@@ -14,16 +14,38 @@
  * pouvoir en écrire un. Il n'y a plus qu'un chemin d'import.
  */
 
+/** Une série d'échauffement — marquée à la main, jamais devinée. */
+export function isWarmup(set) {
+  return set?.warmup === true
+}
+
 /**
- * Les séries qui comptent : celles où des répétitions ont été faites.
+ * Toutes les séries faites, échauffements COMPRIS.
  *
  * Il n'y a pas de drapeau « validée » à maintenir. Un `0` stocké veut dire
  * « rien saisi », jamais « zéro répétition validée » — c'est ce qui permet à un
  * champ vide de rester vide après un aller-retour par Firestore.
+ *
+ * Ne sert qu'à ce qui doit tout montrer : l'export, l'affichage d'une séance.
+ * Tout calcul passe par `doneSets`.
  */
-export function doneSets(entry) {
+export function loggedSets(entry) {
   if (!entry || entry.skipped) return []
   return (entry.sets || []).filter((s) => Number(s?.reps) > 0)
+}
+
+/**
+ * Les séries qui COMPTENT : faites, et pas d'échauffement.
+ *
+ * C'est le filtre que tout le reste traverse — séries faites, volumes, records,
+ * « dernière fois », barre d'XP, bilan. Écarter les échauffements ici les sort
+ * de tous ces calculs d'un coup, au lieu de devoir y penser dans chacun.
+ *
+ * Les séries enregistrées avant que le drapeau n'existe n'en portent pas : ce
+ * sont des séries de travail, ce qu'elles étaient.
+ */
+export function doneSets(entry) {
+  return loggedSets(entry).filter((s) => !isWarmup(s))
 }
 
 /** L'entrée porte-t-elle quelque chose qu'on ne doit pas perdre de vue ? */

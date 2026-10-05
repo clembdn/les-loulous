@@ -1,8 +1,9 @@
 import { downloadText } from '@/shared/lib/download.js'
 import { toLocalDateKey, fromLocalDateKey, dayLabel, isoDayOfWeek } from '@/shared/lib/dates.js'
-import { doneSets, sessionLineup } from './sets.js'
+import { isWarmup, loggedSets, sessionLineup } from './sets.js'
 import { getExerciseType, isBodyweight } from '../config/exercises.js'
 import { setScore } from './metrics.js'
+import { entryRange } from './repRange.js'
 
 /**
  * Export CSV des performances.
@@ -32,6 +33,12 @@ const SET_HEADERS = [
   'date', 'seance', 'jour_semaine', 'semaine',
   'exercice_id', 'exercice', 'type',
   'occurrence', 'serie', 'charge_kg', 'repetitions', 'volume_kg', 'rm_estime_kg',
+  // Ajoutées en DERNIER : les colonnes existantes ne bougent pas pour ce qui
+  // lisait déjà ce fichier. 1 = échauffement, exclu de toute progression ;
+  // reps_min / reps_max = la fourchette prescrite ce jour-là (min = max pour
+  // une séance d'avant les fourchettes) ; pas_kg = le pas de charge ACTUEL de
+  // l'exercice, comme son nom et son type.
+  'echauffement', 'reps_min', 'reps_max', 'pas_kg',
 ]
 
 const PARITY_LABEL = { even: 'paire', odd: 'impaire' }
@@ -73,12 +80,15 @@ export function buildSetsCsv(sessions, exerciseById) {
     const seen = {}
 
     for (const entry of sessionLineup(session)) {
-      const sets = doneSets(entry)
+      // Les échauffements sont exportés eux aussi — marqués : le fichier dit
+      // tout ce qui a été fait, c'est à la lecture de les écarter ou non.
+      const sets = loggedSets(entry)
       if (sets.length === 0) continue
 
       const exercise = exerciseById?.[entry.exerciseId] || null
       seen[entry.exerciseId] = (seen[entry.exerciseId] || 0) + 1
       const bodyweight = isBodyweight(exercise)
+      const range = entryRange(entry)
 
       for (const set of sets) {
         lines.push(row([
@@ -98,6 +108,10 @@ export function buildSetsCsv(sessions, exerciseById) {
           // au poids du corps, la colonne reste vide plutôt que de porter un
           // zéro qu'on lirait comme une mesure.
           bodyweight ? '' : num(setScore(set, exercise), 1),
+          isWarmup(set) ? 1 : 0,
+          range.min,
+          range.max,
+          exercise ? num(exercise.incrementKg, 2) : '',
         ]))
       }
     }

@@ -10,6 +10,7 @@ import {
 } from '../utils/sessionGroups.js'
 import { compare } from '../utils/trend.js'
 import { workByExercise, bestSet, formatSets } from '../utils/metrics.js'
+import { useMuscData } from '../context/MuscDataContext.jsx'
 
 /**
  * Comparer des SÉANCES entre elles, pas seulement des exercices.
@@ -22,7 +23,8 @@ import { workByExercise, bestSet, formatSets } from '../utils/metrics.js'
  */
 export default function SessionsProgressView({ sessions, isLoading, exerciseById }) {
   const [focusedKey, setFocusedKey] = useState(null)
-  const groups = useMemo(() => groupSessions(sessions), [sessions])
+  const { alternateWeeks } = useMuscData()
+  const groups = useMemo(() => groupSessions(sessions, { alternateWeeks }), [sessions, alternateWeeks])
   const focused = focusedKey ? groups.find((g) => g.key === focusedKey) : null
 
   if (focused) {

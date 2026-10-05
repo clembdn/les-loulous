@@ -7,7 +7,7 @@ import { toLocalDateKey } from '@/shared/lib/dates.js'
 import { Sheet, SheetContent, SheetBody } from '@/shared/ui/sheet.jsx'
 import { downloadSetsCsv, downloadWeightsCsv } from '../../utils/exportCsv.js'
 import { collectBackup } from '../../services/backupService.js'
-import { doneSets, hasCompletedWork } from '../../utils/sets.js'
+import { hasCompletedWork, loggedSets } from '../../utils/sets.js'
 
 /**
  * Sortir ses données de l'appli.
@@ -29,10 +29,11 @@ export default function ExportSheet({ open, onOpenChange, sessions, exerciseById
   const [backingUp, setBackingUp] = useState(false)
 
   // Compté avec la MÊME règle que l'export : seules les séries portant des
-  // répétitions produisent une ligne. Un total annoncé plus généreux que le
-  // fichier livré ferait douter du fichier.
+  // répétitions produisent une ligne — échauffements compris, puisque le
+  // fichier les livre (marqués). Un total annoncé différent du fichier livré
+  // ferait douter du fichier.
   const setCount = sessions.reduce(
-    (n, s) => n + Object.values(s.entries || {}).reduce((m, e) => m + doneSets(e).length, 0),
+    (n, s) => n + Object.values(s.entries || {}).reduce((m, e) => m + loggedSets(e).length, 0),
     0,
   )
   const sessionCount = sessions.filter((s) => hasCompletedWork(s)).length

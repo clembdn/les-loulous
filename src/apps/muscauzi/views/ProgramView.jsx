@@ -10,9 +10,10 @@ import { SkeletonList } from '@/shared/ui/Skeleton.jsx'
 import { Input } from '@/shared/ui/Input.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
 import { dayLabel, isoDayOfWeek, weekParity } from '@/shared/lib/dates.js'
+import { cn } from '@/shared/lib/utils.js'
 import { useMuscData } from '../context/MuscDataContext.jsx'
 import {
-  DOWS, MAX_DAY_NAME, copyLines, resolveLineName, saveProgramDay, saveProgramDayName,
+  DOWS, MAX_DAY_NAME, copyLines, resolveLineName, saveAlternateWeeks, saveProgramDay, saveProgramDayName,
   saveProgramWeek, withoutOrphans,
 } from '../services/programService.js'
 import { SETTINGS_SUBS } from '../config/navigation.js'
@@ -34,6 +35,10 @@ const PARITY_LABEL = { even: 'paire', odd: 'impaire' }
 /**
  * L'éditeur de programme : parité × jour de la semaine, propre à chaque profil.
  *
+ * L'alternance paire/impaire est un RÉGLAGE du profil. Coupée, il n'y a plus
+ * qu'un programme — le pair — et l'onglet impair disparaît ; le programme
+ * impair n'est pas effacé pour autant, il revient tel quel si on réactive.
+ *
  * Toute modification ici est sans effet sur les séances déjà enregistrées —
  * chacune porte sa propre copie de la prescription et de son libellé.
  *
@@ -45,9 +50,12 @@ const PARITY_LABEL = { even: 'paire', odd: 'impaire' }
  */
 export default function ProgramView({ onNavigate }) {
   const { currentUid } = useAuth()
-  const { exercises, exerciseById, programs, catalogueReady, isLoading } = useMuscData()
+  const {
+    exercises, exerciseById, programs, catalogueReady, isLoading, alternateWeeks, settingsReady,
+  } = useMuscData()
 
-  const [parity, setParity] = useState(() => weekParity(new Date()))
+  const [chosenParity, setParity] = useState(() => weekParity(new Date()))
+  const parity = alternateWeeks ? chosenParity : 'even'
   const [dayOfWeek, setDayOfWeek] = useState(() => isoDayOfWeek(new Date()))
   const [picking, setPicking] = useState(false)
   const [copying, setCopying] = useState(false)
@@ -89,7 +97,7 @@ export default function ProgramView({ onNavigate }) {
       instanceId: newInstanceId(),
       exerciseId,
       name: exerciseById[exerciseId]?.name || '',
-      sets: 4, reps: 8, order: lines.length,
+      sets: 4, reps: 8, repsMin: 8, repsMax: 8, order: lines.length,
     }])
     setPicking(false)
   }
@@ -114,6 +122,16 @@ export default function ProgramView({ onNavigate }) {
     const next = [...lines]
     ;[next[index], next[target]] = [next[target], next[index]]
     commit(next)
+  }
+
+  const toggleAlternate = (next) => {
+    saveAlternateWeeks(currentUid, next, currentUid)
+      .catch(() => toast.error('Enregistrement impossible'))
+    // Couper l'alternance n'efface rien : on le dit, c'est la première chose
+    // qu'on se demande en appuyant.
+    toast(next
+      ? 'Alternance réactivée — ta semaine impaire est de retour.'
+      : 'Un seul programme pour toutes les semaines. Ta semaine impaire est gardée de côté.')
   }
 
   const renameDay = (name) => {
@@ -142,7 +160,7 @@ export default function ProgramView({ onNavigate }) {
         copyLines(withoutOrphans(program.days[d] || [], exerciseById, catalogueReady), newInstanceId),
       ]))
       saveProgramWeek(currentUid, payload.target.parity, days, currentUid)
-        .then(() => toast.success(`Semaine copiée vers l'${PARITY_LABEL[payload.target.parity]}`))
+        .then(() => toast.success(`Semaine copiée vers la semaine ${PARITY_LABEL[payload.target.parity]}`))
         .catch(() => toast.error('Copie impossible'))
       return
     }
@@ -170,13 +188,20 @@ export default function ProgramView({ onNavigate }) {
 
       <div className="lg:grid lg:grid-cols-[minmax(0,20rem)_1fr] lg:gap-8 lg:items-start">
         <div className="lg:sticky lg:top-8">
-          <SegmentedTabs
-            items={PARITY_TABS}
-            active={parity}
-            onChange={setParity}
-            desktopHidden={false}
-            className="mb-3"
-          />
+          {settingsReady && (
+            <AlternateToggle checked={alternateWeeks} onChange={toggleAlternate} />
+          )}
+
+
+          {alternateWeeks && (
+            <SegmentedTabs
+              items={PARITY_TABS}
+              active={parity}
+              onChange={setParity}
+              desktopHidden={false}
+              className="mb-3"
+            />
+          )}
 
           <DayPicker
             value={dayOfWeek}
@@ -196,9 +221,9 @@ export default function ProgramView({ onNavigate }) {
             variant="secondary"
             className="w-full text-sm mb-5"
             onClick={() => setCopying(true)}
-            disabled={lines.length === 0 && weekCount === 0}
+            disabled={alternateWeeks ? lines.length === 0 && weekCount === 0 : lines.length === 0}
           >
-            <Copy size={15} /> Copier ce jour ou la semaine
+            <Copy size={15} /> {alternateWeeks ? 'Copier ce jour ou la semaine' : 'Copier ce jour'}
           </Button>
         </div>
 
@@ -232,13 +257,24 @@ export default function ProgramView({ onNavigate }) {
                       <Trash2 size={15} />
                     </Button>
                   </div>
-                  <div className="flex items-center gap-3 mt-2.5">
+                  {/* Séries, puis la fourchette de reps. Sur téléphone la fourchette
+                      passe à la ligne : trois steppers ne tiennent pas sur 390 px. */}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-2.5">
                     <Stepper label="séries" value={line.sets} min={1} max={12} onChange={(v) => updateLine(i, { sets: v })} />
-                    <span className="text-faint text-sm">×</span>
-                    <Stepper label="reps" value={line.reps} min={1} max={50} onChange={(v) => updateLine(i, { reps: v })} />
+                    <RangeSteppers
+                      min={line.repsMin}
+                      max={line.repsMax}
+                      onChange={({ min, max }) => updateLine(i, { repsMin: min, repsMax: max, reps: max })}
+                    />
                   </div>
                 </div>
               ))}
+
+              {lines.length > 0 && (
+                <p className="text-[11px] text-faint px-1 pt-1">
+                  Reps : une fourchette min – max (8–8 pour un nombre fixe). La barre d'XP se remplit vers le max.
+                </p>
+              )}
 
               {lines.length === 0 && !picking && (
                 <div className="text-center py-10 px-6 rounded-2xl border border-dashed border-border">
@@ -274,6 +310,7 @@ export default function ProgramView({ onNavigate }) {
         dayCounts={dayCounts}
         otherCounts={otherCounts}
         weekCount={weekCount}
+        alternate={alternateWeeks}
         onCopy={askCopy}
       />
 
@@ -343,17 +380,86 @@ function DayNameField({ value, onSave }) {
 function Stepper({ label, value, min, max, onChange }) {
   return (
     <div className="flex items-center gap-1.5">
-      <Button variant="secondary" size="icon" aria-label={`Moins de ${label}`} onClick={() => onChange(Math.max(min, value - 1))}>
+      <Button variant="secondary" size="icon" className="h-11 w-11" aria-label={`Moins de ${label}`} onClick={() => onChange(Math.max(min, value - 1))}>
         <Minus size={15} />
       </Button>
       <span className="w-12 text-center text-sm font-semibold text-fg tabular">
         {value}
         <span className="block text-[10px] font-normal text-faint leading-none">{label}</span>
       </span>
-      <Button variant="secondary" size="icon" aria-label={`Plus de ${label}`} onClick={() => onChange(Math.min(max, value + 1))}>
+      <Button variant="secondary" size="icon" className="h-11 w-11" aria-label={`Plus de ${label}`} onClick={() => onChange(Math.min(max, value + 1))}>
         <Plus size={15} />
       </Button>
     </div>
+  )
+}
+
+/**
+ * La fourchette de reps : deux steppers, sans clavier.
+ *
+ * Le bas ne dépasse jamais le haut : pousser l'un au-delà de l'autre emmène
+ * l'autre avec lui, plutôt que de refuser le geste. Une fourchette fermée
+ * (8–8) est un nombre fixe, comme avant les fourchettes.
+ */
+const MAX_REPS = 50
+
+function RangeSteppers({ min, max, onChange }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Stepper
+        label="reps min"
+        value={min}
+        min={1}
+        max={MAX_REPS}
+        onChange={(v) => onChange({ min: v, max: Math.max(v, max) })}
+      />
+      <span className="text-faint text-sm">–</span>
+      <Stepper
+        label="reps max"
+        value={max}
+        min={1}
+        max={MAX_REPS}
+        onChange={(v) => onChange({ min: Math.min(min, v), max: v })}
+      />
+    </div>
+  )
+}
+
+/**
+ * Alterner semaines paires/impaires — propre à CE profil : l'autre compte
+ * garde son propre réglage.
+ */
+function AlternateToggle({ checked, onChange }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="w-full flex items-center gap-3 px-4 py-3 mb-3 rounded-xl border border-border bg-surface text-left
+                 transition active:scale-[0.99] hover:border-border-strong"
+    >
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-medium text-fg">Alterner semaines paires/impaires</span>
+        <span className="block text-xs text-muted mt-0.5">
+          {checked ? 'Deux programmes, une semaine sur deux.' : 'Le même programme toutes les semaines.'}
+        </span>
+      </span>
+      <span
+        aria-hidden="true"
+        className={cn(
+          'relative h-7 w-12 shrink-0 rounded-full transition-colors duration-200',
+          checked ? 'bg-accent' : 'bg-surface-2 border border-border-strong',
+        )}
+      >
+        <span
+          className={cn(
+            'absolute top-1/2 -translate-y-1/2 h-5 w-5 rounded-full shadow transition-all duration-200 ease-ios',
+            checked ? 'left-6 bg-accent-fg' : 'left-1 bg-muted',
+          )}
+        />
+      </span>
+    </button>
   )
 }
 

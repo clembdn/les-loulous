@@ -2,6 +2,7 @@ import {
   collection, doc, onSnapshot, setDoc, deleteField,
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
+import { normalizeRange } from '../utils/repRange.js'
 
 /**
  * Séances : un document par jour et par profil, `users/{uid}/sessions/{date}`.
@@ -22,10 +23,19 @@ import { db } from '@/shared/lib/firebase.js'
  *
  *   entries[instanceId] = {
  *     exerciseId, name, order,        ← identité figée au moment de la saisie
- *     prescribedSets, prescribedReps, ← ce qui était prescrit ce jour-là
- *     sets: [{ rank, weightKg, reps }],
+ *     prescribedSets,                 ← ce qui était prescrit ce jour-là…
+ *     prescribedRepsMin, prescribedRepsMax, prescribedReps (= max),
+ *     sets: [{ rank, weightKg, reps, warmup? }],
  *     skipped,
  *   }
+ *
+ * La fourchette de reps est arrivée après coup : une entrée qui ne la porte
+ * pas garde des bornes nulles à la lecture, et `entryRange` (utils/repRange.js)
+ * se rabat sur le programme actuel, puis sur `prescribedReps`.
+ * `prescribedReps` reste écrit pour les versions de l'appli pas encore à jour.
+ *
+ * `warmup` n'est écrit que s'il est vrai. Une série sans drapeau est une série
+ * de travail — ce qu'étaient toutes celles d'avant.
  *
  * ── Plus de cache « dernière performance » ──────────────────────────────────
  *
@@ -62,11 +72,13 @@ function toCount(value) {
 }
 
 function normalizeSet(raw, fallbackRank) {
-  return {
+  const set = {
     rank: Number.isFinite(Number(raw?.rank)) ? Math.max(0, Math.round(Number(raw.rank))) : fallbackRank,
     weightKg: toNumber(raw?.weightKg),
     reps: toCount(raw?.reps),
   }
+  if (raw?.warmup === true) set.warmup = true
+  return set
 }
 
 // Accepte le tableau actuel comme l'ancienne map indexée par rang : les
@@ -88,13 +100,26 @@ function normalizeSets(raw) {
 }
 
 function normalizeEntry(instanceId, raw, fallback) {
+  // Une entrée d'avant les fourchettes n'en reçoit PAS ici : ses bornes restent
+  // nulles, et c'est `entryRange` (utils/repRange.js) qui décide du repli — la
+  // ligne de programme actuelle du même exercice, à défaut l'ancien nombre fixe.
+  // Les remplir d'office avec ce nombre fixe effacerait la différence entre
+  // « prescrit 10 » et « prescrit 6–10, avant que l'appli ne sache le dire ».
+  const ownRange = raw?.prescribedRepsMin != null || raw?.prescribedRepsMax != null
+  const range = normalizeRange(
+    raw?.prescribedRepsMin,
+    raw?.prescribedRepsMax,
+    toCount(raw?.prescribedReps) || toCount(fallback?.reps),
+  )
   return {
     instanceId,
     exerciseId: raw?.exerciseId || fallback?.exerciseId || '',
     name: raw?.name || fallback?.name || '',
     order: Number.isFinite(Number(raw?.order)) ? Number(raw.order) : (fallback?.order ?? 0),
     prescribedSets: Math.max(1, toCount(raw?.prescribedSets) || toCount(fallback?.sets) || 1),
-    prescribedReps: Math.max(1, toCount(raw?.prescribedReps) || toCount(fallback?.reps) || 1),
+    prescribedReps: range.max,
+    prescribedRepsMin: ownRange ? range.min : null,
+    prescribedRepsMax: ownRange ? range.max : null,
     sets: normalizeSets(raw?.sets),
     skipped: raw?.skipped === true,
   }
@@ -167,12 +192,15 @@ export function subscribeToSessions(uid, callback, onError) {
  */
 export function saveEntry(uid, dateKey, entry, plan, currentUid) {
   const now = new Date().toISOString()
+  const range = normalizeRange(entry.prescribedRepsMin, entry.prescribedRepsMax, entry.prescribedReps)
   const clean = {
     exerciseId: entry.exerciseId || '',
     name: entry.name || '',
     order: Number(entry.order) || 0,
     prescribedSets: Math.max(1, toCount(entry.prescribedSets) || 1),
-    prescribedReps: Math.max(1, toCount(entry.prescribedReps) || 1),
+    prescribedReps: range.max,
+    prescribedRepsMin: range.min,
+    prescribedRepsMax: range.max,
     sets: normalizeSets(entry.sets),
     skipped: entry.skipped === true,
   }

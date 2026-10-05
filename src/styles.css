@@ -79,6 +79,21 @@ body {
 .chart-area { animation: fade-in 0.9s ease-out both; }
 .chart-pulse { transform-box: fill-box; transform-origin: center; animation: chart-pulse 2.4s ease-out infinite; }
 
+/* MuscAuzi — niveau suivant : la barre d'XP lance une onde, le badge de niveau
+   rebondit. Joué une fois, à la première série validée à la nouvelle charge. */
+@keyframes xp-burst {
+  0% { box-shadow: 0 0 0 0 rgb(var(--accent) / 0.55); }
+  100% { box-shadow: 0 0 0 14px rgb(var(--accent) / 0); }
+}
+@keyframes level-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.4); }
+  65% { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+.xp-burst { animation: xp-burst 0.9s ease-out 2; }
+.level-pop { animation: level-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }

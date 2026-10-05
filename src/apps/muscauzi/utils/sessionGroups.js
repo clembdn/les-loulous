@@ -17,14 +17,19 @@ import { sessionTotals } from './metrics.js'
  */
 const PARITY_LABEL = { even: 'paire', odd: 'impaire' }
 
-export function sessionGroupKey(session) {
+// Sans alternance, le même programme revient chaque semaine : la case se
+// reconnaît au seul jour, et « semaine paire » n'apprendrait rien. La séance
+// enregistre pourtant toujours sa vraie parité — c'est ici qu'on l'ignore.
+export function sessionGroupKey(session, { alternateWeeks = true } = {}) {
   if (session?.name) return `n:${session.name}`
+  if (session?.dayOfWeek && !alternateWeeks) return `s:${session.dayOfWeek}`
   if (session?.parity && session?.dayOfWeek) return `s:${session.parity}:${session.dayOfWeek}`
   return 's:libre'
 }
 
-export function sessionGroupLabel(session) {
+export function sessionGroupLabel(session, { alternateWeeks = true } = {}) {
   if (session?.name) return session.name
+  if (session?.dayOfWeek && !alternateWeeks) return dayLabel(session.dayOfWeek).toLowerCase()
   if (session?.parity && session?.dayOfWeek) {
     return `${dayLabel(session.dayOfWeek).toLowerCase()} · semaine ${PARITY_LABEL[session.parity]}`
   }
@@ -39,14 +44,14 @@ export function sessionGroupLabel(session) {
  * Les séances ouvertes sans rien y faire sont écartées : elles produiraient un
  * point à zéro qui ressemble à un effondrement.
  */
-export function groupSessions(sessions) {
+export function groupSessions(sessions, options) {
   const groups = new Map()
   for (const session of sessions) {
     if (!hasCompletedWork(session)) continue
-    const key = sessionGroupKey(session)
+    const key = sessionGroupKey(session, options)
     let group = groups.get(key)
     if (!group) {
-      group = { key, label: sessionGroupLabel(session), occurrences: [] }
+      group = { key, label: sessionGroupLabel(session, options), occurrences: [] }
       groups.set(key, group)
     }
     group.occurrences.push({ date: session.date, session, totals: sessionTotals(session) })
