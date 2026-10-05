@@ -79,7 +79,11 @@ export default function AppShell({
 
         <main>{children}</main>
 
-        <AppBottomNav tabs={tabs} active={active} onChange={onChange} tabletNav={tabletNav} />
+        {/* Un écran sans onglets (la liste des voyages de Trip Planner) n'a pas
+            de barre du bas : vide, elle resterait collée sous le contenu. */}
+        {tabs?.length > 0 && (
+          <AppBottomNav tabs={tabs} active={active} onChange={onChange} tabletNav={tabletNav} />
+        )}
       </div>
     </div>
   )

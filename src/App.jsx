@@ -8,6 +8,7 @@ import DashboardView from '@/platform/DashboardView.jsx'
 const FinauziApp = lazy(() => import('@/apps/finauzi/FinauziApp.jsx'))
 const CookItApp = lazy(() => import('@/apps/cookit/CookItApp.jsx'))
 const MuscauziApp = lazy(() => import('@/apps/muscauzi/MuscauziApp.jsx'))
+const TripApp = lazy(() => import('@/apps/trip/TripApp.jsx'))
 
 export default function App() {
   return (
@@ -39,6 +40,14 @@ export default function App() {
           element={
             <Suspense fallback={<Splash />}>
               <MuscauziApp />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/trip/*"
+          element={
+            <Suspense fallback={<Splash />}>
+              <TripApp />
             </Suspense>
           }
         />

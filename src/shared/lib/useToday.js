@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { toLocalDateKey } from '@/shared/lib/dates.js'
+import { toLocalDateKey } from './dates.js'
 
 /**
  * La date du jour, en clé locale, qui reste JUSTE.

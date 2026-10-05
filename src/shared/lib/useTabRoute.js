@@ -34,13 +34,18 @@ export function useTabRoute(base, ids, fallback) {
     if (!known) navigate(`${base}/${fallback}`, { replace: true })
   }, [known, base, fallback, navigate])
 
-  const goTab = useCallback((nextTab, nextSub = null) => {
+  /**
+   * `replace` : pour un changement qui ne mérite pas son propre « retour » —
+   * passer d'un jour au suivant dans le même écran ne doit pas obliger à
+   * remonter tous les jours consultés un par un pour sortir.
+   */
+  const goTab = useCallback((nextTab, nextSub = null, { replace = false } = {}) => {
     const next = [base, nextTab, nextSub && encodeURIComponent(nextSub)]
       .filter(Boolean)
       .join('/')
     // Retaper sur l'onglet déjà ouvert ne doit pas empiler un doublon dans
     // l'historique, sinon « retour » ne fait visuellement rien.
-    if (next !== pathname) navigate(next)
+    if (next !== pathname) navigate(next, { replace })
   }, [base, navigate, pathname])
 
   /**

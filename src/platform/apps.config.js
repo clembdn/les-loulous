@@ -1,7 +1,8 @@
-import { Wallet, ShoppingCart, Dumbbell } from 'lucide-react'
+import { Wallet, ShoppingCart, Dumbbell, Plane } from 'lucide-react'
 
 // Registre des apps. Source unique de vérité pour les cards du dashboard.
-// Ajouter une app = (1) une entrée ici + (2) une <Route> dans src/App.jsx.
+// Ajouter une app = (1) une entrée ici + (2) une <Route> dans src/App.jsx
+// + (3) son accent `[data-accent="…"]` dans src/styles.css.
 export const APPS = [
   {
     id: 'finauzi',
@@ -9,7 +10,7 @@ export const APPS = [
     description: 'Notre trésorerie pour l’Australie',
     path: '/finauzi',
     icon: Wallet,
-    accent: 'amber',   // clé de COLOR_BY_ID (people.js)
+    accent: 'amber',   // clé [data-accent] de src/styles.css
     theme: 'dark',     // mode de l'app (data-theme)
     status: 'live',    // 'live' | 'soon'
   },
@@ -32,5 +33,16 @@ export const APPS = [
     accent: 'red',
     theme: 'dark',
     status: 'live',
+  },
+  {
+    id: 'trip',
+    name: 'Trip Planner',
+    description: 'Nos voyages, jour par jour',
+    path: '/trip',
+    icon: Plane,
+    accent: 'lagoon',
+    theme: 'light',
+    // Passe à 'live' quand la V1 est complète (vues jour et « Aujourd'hui »).
+    status: 'soon',
   },
 ]

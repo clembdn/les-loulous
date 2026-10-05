@@ -548,6 +548,208 @@ service cloud.firestore {
       allow delete: if isOwner(uid);
     }
 
+    // ---------------------------------------------------------------
+    // Trip Planner
+    // ---------------------------------------------------------------
+    //
+    // Espace PARTAGÉ, comme Cook'It : les deux comptes créent, modifient et
+    // suppriment tout. Chaque sous-collection du voyage a son propre `match`
+    // et sa forme validée — pas de `{document=**}` sous un voyage, qui
+    // laisserait écrire n'importe quoi à n'importe quelle profondeur.
+
+    // Chaîne facultative : absente, nulle, ou bornée.
+    function optStr(data, key, max) {
+      return !(key in data) || data[key] == null
+        || (data[key] is string && data[key].size() <= max);
+    }
+
+    function optNum(data, key) {
+      return !(key in data) || data[key] == null || data[key] is number;
+    }
+
+    // Coordonnées facultatives : un lieu saisi hors-ligne, par son seul nom,
+    // n'est localisé que plus tard.
+    function optCoords(data) {
+      return (!('lat' in data) || data.lat == null
+              || (data.lat is number && data.lat >= -90 && data.lat <= 90))
+        && (!('lng' in data) || data.lng == null
+            || (data.lng is number && data.lng >= -180 && data.lng <= 180));
+    }
+
+    function hasValidMoney(data) {
+      return (!('price' in data) || data.price == null
+              || (data.price is number && data.price >= 0))
+        && optStr(data, 'currency', 3);
+    }
+
+    // Un instant de réservation : une date, et une heure MURALE facultative.
+    // Aucun fuseau : « 08:12 » est l'heure imprimée sur le billet, et reste
+    // 08:12 quel que soit le pays du téléphone.
+    function isTimePoint(p) {
+      return p is map
+        && p.date is string && isDateId(p.date)
+        && (!('time' in p) || p.time == null
+            || (p.time is string && p.time.matches('^[0-2][0-9]:[0-5][0-9]$')));
+    }
+
+    // Une extrémité de trajet : l'instant, plus un lieu facultatif.
+    function isEndpoint(p) {
+      return isTimePoint(p)
+        && optStr(p, 'name', 160)
+        && optStr(p, 'address', 300)
+        && optStr(p, 'mapsUrl', 2000)
+        && optCoords(p);
+    }
+
+    function hasValidTripShape(data) {
+      return data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 120
+        && data.startDate is string && isDateId(data.startDate)
+        && data.endDate is string && isDateId(data.endDate)
+        && data.endDate >= data.startDate
+        && optStr(data, 'notes', 2000);
+    }
+
+    function hasValidStayShape(data) {
+      return data.kind in ['hotel', 'airbnb', 'camping', 'hostel', 'other']
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && isTimePoint(data.checkIn)
+        && isTimePoint(data.checkOut)
+        && data.checkOut.date >= data.checkIn.date
+        && optCoords(data)
+        && optStr(data, 'address', 300)
+        && optStr(data, 'mapsUrl', 2000)
+        && optStr(data, 'confirmation', 120)
+        && optStr(data, 'accessCode', 120)
+        && optStr(data, 'phone', 40)
+        && optStr(data, 'mailUrl', 2000)
+        && optStr(data, 'notes', 2000)
+        && hasValidMoney(data);
+    }
+
+    function hasValidTransportShape(data) {
+      return data.mode in ['flight', 'train', 'bus', 'ferry', 'car', 'other']
+        && isEndpoint(data.from)
+        && isEndpoint(data.to)
+        && data.to.date >= data.from.date
+        && optStr(data, 'ref', 120)
+        && optStr(data, 'seat', 60)
+        && optStr(data, 'confirmation', 120)
+        && optStr(data, 'mailUrl', 2000)
+        && optStr(data, 'notes', 2000)
+        && hasValidMoney(data);
+    }
+
+    // `stops`, `title` et `notes` ne sont validés QUE s'ils sont là : une
+    // journée s'écrit par fusion, champ par champ (cf. les mésaventures de
+    // `program/{parity}` plus haut).
+    function hasValidTripDayShape(data, dateId) {
+      return isDateId(dateId)
+        && data.date == dateId
+        && (!('stops' in data) || (data.stops is list && data.stops.size() <= 40))
+        && optStr(data, 'title', 120)
+        && optStr(data, 'notes', 2000);
+    }
+
+    // Une capture d'écran en base64. Le document entier ne peut dépasser
+    // 1 Mo ; l'app compresse sous 900 000 caractères, la règle laisse un peu
+    // de marge pour les métadonnées.
+    function hasValidAttachmentShape(data) {
+      return data.parentKind in ['stay', 'transport']
+        && data.parentId is string
+        && data.parentId.size() > 0
+        && data.parentId.size() <= 128
+        && data.mime in ['image/webp', 'image/jpeg', 'image/png']
+        && data.data is string
+        && data.data.size() > 0
+        && data.data.size() <= 1000000
+        && optStr(data, 'name', 200)
+        && optNum(data, 'width')
+        && optNum(data, 'height');
+    }
+
+    match /couples/main/trips/{tripId} {
+      allow read: if isAuthorizedUser();
+
+      allow create: if isAuthorizedUser()
+        && hasValidTripShape(request.resource.data)
+        && hasValidMetadata(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isAuthorizedUser()
+        && hasValidTripShape(request.resource.data)
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isAuthorizedUser();
+    }
+
+    // Hébergements : un hôtel couvre des nuits, il n'appartient à aucun jour.
+    match /couples/main/trips/{tripId}/stays/{stayId} {
+      allow read: if isAuthorizedUser();
+
+      allow create: if isAuthorizedUser()
+        && hasValidStayShape(request.resource.data)
+        && hasValidMetadata(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isAuthorizedUser()
+        && hasValidStayShape(request.resource.data)
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isAuthorizedUser();
+    }
+
+    // Trajets réservés : train, bus, avion, ferry, location de voiture.
+    match /couples/main/trips/{tripId}/transports/{transportId} {
+      allow read: if isAuthorizedUser();
+
+      allow create: if isAuthorizedUser()
+        && hasValidTransportShape(request.resource.data)
+        && hasValidMetadata(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isAuthorizedUser()
+        && hasValidTransportShape(request.resource.data)
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isAuthorizedUser();
+    }
+
+    // Une page par jour (clé AAAA-MM-JJ), ses étapes dans l'ordre.
+    match /couples/main/trips/{tripId}/days/{dateId} {
+      allow read: if isAuthorizedUser();
+
+      allow create: if isAuthorizedUser()
+        && hasValidTripDayShape(request.resource.data, dateId)
+        && hasValidMetadata(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isAuthorizedUser()
+        && hasValidTripDayShape(request.resource.data, dateId)
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isAuthorizedUser();
+    }
+
+    // Justificatifs : une capture par document (limite de 1 Mo par document),
+    // rattachée à un hébergement ou à un trajet.
+    match /couples/main/trips/{tripId}/attachments/{attachmentId} {
+      allow read: if isAuthorizedUser();
+
+      allow create: if isAuthorizedUser()
+        && hasValidAttachmentShape(request.resource.data)
+        && hasValidMetadata(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      // Une capture ne se modifie pas : on la retire et on en ajoute une autre.
+      allow update: if false;
+
+      allow delete: if isAuthorizedUser();
+    }
+
     // Deny everything else.
     match /{document=**} {
       allow read, write: if false;

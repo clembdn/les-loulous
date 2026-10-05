@@ -7,7 +7,7 @@ import { subscribeToSessions } from '../services/sessionsService.js'
 import { subscribeToWeights } from '../services/weightsService.js'
 import { subscribeToNotes } from '../services/notesService.js'
 import { DEFAULT_SETTINGS, subscribeToSettings } from '../services/settingsService.js'
-import { useToday } from '../hooks/useToday.js'
+import { useToday } from '@/shared/lib/useToday.js'
 
 /**
  * Source unique — UN jeu d'abonnements Firestore pour toute l'application.
