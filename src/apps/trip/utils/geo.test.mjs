@@ -4,7 +4,9 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { formatDistance, hasCoords, haversineM, projectPoints } from './geo.js'
+import {
+  curvePath, formatDistance, groupCoincident, hasCoords, haversineM, projectPoints,
+} from './geo.js'
 
 const LISBONNE = { lat: 38.7223, lng: -9.1393 }
 const PORTO = { lat: 41.1579, lng: -8.6291 }
@@ -56,4 +58,15 @@ test('deux étapes voisines restent proches au lieu d’occuper tout le cadre', 
 test('un parcours à cheval sur l’antiméridien est recousu', () => {
   const [fidji, samoa] = projectPoints([{ lat: -17.7, lng: 178.0 }, { lat: -13.8, lng: -172.0 }], 340, 170, 20)
   assert.ok(samoa[0] > fidji[0], 'les Samoa à l’est des Fidji, pas à l’autre bout du monde')
+})
+
+test('points confondus regroupés en un seul repère', () => {
+  assert.deepEqual(groupCoincident([[10, 10], [100, 50], [12, 11], [100, 80]]), [[0, 2], [1], [3]])
+  assert.deepEqual(groupCoincident([]), [])
+})
+
+test('tracé en petites courbes alternées', () => {
+  assert.equal(curvePath([]), '')
+  assert.equal(curvePath([[0, 0]]), 'M0.0,0.0')
+  assert.match(curvePath([[0, 0], [100, 0], [100, 100]]), /^M0\.0,0\.0 Q50\.0,18\.0 100\.0,0\.0 Q\S+ 100\.0,100\.0$/)
 })

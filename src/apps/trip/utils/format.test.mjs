@@ -4,7 +4,10 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { formatProgress, formatTripRange, plural } from './format.js'
+import {
+  dayChip, formatDuration, formatPrice, formatProgress, formatShortRange, formatTripRange, plural,
+  totalsByCurrency,
+} from './format.js'
 
 test('pluriel', () => {
   assert.equal(plural(1, 'jour'), '1 jour')
@@ -27,4 +30,34 @@ test('progression en une ligne', () => {
   assert.equal(formatProgress({ status: 'past', daysSince: 1 }), 'Rentrés hier')
   assert.equal(formatProgress({ status: 'past', daysSince: 20 }), 'Rentrés il y a 20 jours')
   assert.equal(formatProgress({ status: 'past', daysSince: 400 }, '2026-08-14'), 'Août 2026')
+})
+
+test('pastilles de jour et durées', () => {
+  assert.deepEqual(dayChip('2027-05-14'), { dow: 'Ven', day: 14, month: 'mai' })
+  assert.equal(formatDuration(45), '45 min')
+  assert.equal(formatDuration(60), '1 h')
+  assert.equal(formatDuration(90), '1 h 30')
+  assert.equal(formatDuration(125), '2 h 05')
+  assert.equal(formatDuration(null), '')
+})
+
+test('prix dans leur devise, totaux jamais mélangés', () => {
+  const plain = (s) => s.replace(/[\u202f\u00a0]/g, ' ')
+  assert.equal(plain(formatPrice(284, 'EUR')), '284 €')
+  assert.equal(plain(formatPrice(162.5, 'EUR')), '162,50 €')
+  assert.equal(plain(formatPrice(1250, 'EUR')), '1 250 €')
+  assert.equal(formatPrice(null, 'EUR'), '')
+  assert.deepEqual(
+    totalsByCurrency([
+      { price: 284, currency: 'EUR' }, { price: 162.5, currency: 'EUR' },
+      { price: 540, currency: 'AUD' }, { price: null, currency: 'AUD' }, { price: 10 },
+    ]),
+    [{ currency: 'AUD', total: 540 }, { currency: 'EUR', total: 456.5 }],
+  )
+})
+
+test('plages courtes, sans l’année', () => {
+  assert.equal(formatShortRange('2027-05-12', '2027-05-14'), '12 → 14 mai')
+  assert.equal(formatShortRange('2027-04-28', '2027-05-03'), '28 avr → 3 mai')
+  assert.equal(formatShortRange('2027-05-12', '2027-05-12'), '12 mai')
 })

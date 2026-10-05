@@ -2,7 +2,7 @@ import { doc, onSnapshot, writeBatch } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
 import { STAY_KIND_IDS, TRANSPORT_MODE_IDS } from '../config/reservations.js'
 import {
-  currencyCode, enumValue, money, optText, place, readMeta, stamp, text, timePoint,
+  currencyCode, enumValue, money, optText, place, readMeta, stamp, timePoint,
 } from '../utils/fields.js'
 import { queueAttachmentChanges } from './attachmentsService.js'
 import { partCol, partDoc } from './refs.js'
@@ -98,8 +98,3 @@ export function deleteReservation(kind, tripId, id, attachmentIds = []) {
   return batch.commit()
 }
 
-/** Libellé court d'une réservation, pour un toast ou une confirmation. */
-export function reservationTitle(kind, reservation) {
-  if (kind === 'stay') return reservation.name
-  return text(reservation.ref, 120) || [reservation.from.name, reservation.to.name].filter(Boolean).join(' → ') || 'Trajet'
-}

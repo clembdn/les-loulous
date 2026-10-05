@@ -67,3 +67,38 @@ export function projectPoints(points, width, height, pad = 0) {
   const offsetY = (height - spanY * scale) / 2
   return xs.map((x, i) => [offsetX + (x - minX) * scale, offsetY + (ys[i] - minY) * scale])
 }
+
+/**
+ * Regroupe les points projetés qui se superposent (à `eps` pixels près) :
+ * deux étapes au même endroit — on part de l'hôtel, on y revient — donnent
+ * un seul repère « 1·4 » au lieu de deux pastilles empilées.
+ * Rend des groupes d'index, dans l'ordre du premier point de chaque groupe.
+ */
+export function groupCoincident(projected, eps = 6) {
+  const groups = []
+  projected.forEach(([x, y], i) => {
+    const group = groups.find(({ at }) => Math.hypot(at[0] - x, at[1] - y) <= eps)
+    if (group) group.indexes.push(i)
+    else groups.push({ at: [x, y], indexes: [i] })
+  })
+  return groups.map((g) => g.indexes)
+}
+
+/**
+ * Tracé « routier » stylisé entre des points projetés : de petites courbes
+ * alternées plutôt que des segments raides — un dessin de parcours, pas un
+ * itinéraire. Rend l'attribut `d` d'un <path>.
+ */
+export function curvePath(points, bend = 0.18) {
+  if (!points.length) return ''
+  let d = `M${points[0][0].toFixed(1)},${points[0][1].toFixed(1)}`
+  for (let i = 1; i < points.length; i++) {
+    const [x0, y0] = points[i - 1]
+    const [x1, y1] = points[i]
+    const k = i % 2 ? bend : -bend
+    const cx = (x0 + x1) / 2 - (y1 - y0) * k
+    const cy = (y0 + y1) / 2 + (x1 - x0) * k
+    d += ` Q${cx.toFixed(1)},${cy.toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`
+  }
+  return d
+}

@@ -3,16 +3,39 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath, URL } from 'node:url'
 
+// En dev, sert les fonctions Vercel de `api/` comme en production : même
+// fichier, même signature Node `(req, res)`. Rechargées à chaque requête
+// (ssrLoadModule) : on les modifie sans redémarrer, et `npm run dev` suffit,
+// sans CLI Vercel ni compte.
+function vercelApiDev() {
+  return {
+    name: 'vercel-api-dev',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        const match = req.url?.match(/^\/api\/([\w-]+)(?:\?|$)/)
+        if (!match) return next()
+        try {
+          const mod = await server.ssrLoadModule(`/api/${match[1]}.js`)
+          await mod.default(req, res)
+        } catch (err) {
+          next(err)
+        }
+      })
+    },
+  }
+}
+
 export default defineConfig({
   plugins: [
     react(),
+    vercelApiDev(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'favicon-96x96.png', 'apple-touch-icon-180x180.png'],
       manifest: {
         name: 'Loulous',
         short_name: 'Loulous',
-        description: 'Notre espace à deux — cuisine, budget et séances',
+        description: 'Notre espace à deux — cuisine, budget, séances et voyages',
         lang: 'fr',
         theme_color: '#0B0E13',
         background_color: '#0B0E13',
@@ -36,7 +59,8 @@ export default defineConfig({
         navigateFallback: '/index.html',
         // Le service worker ne doit pas intercepter les requêtes du worker OCR
         // vers ses propres fichiers autrement que par la règle ci-dessous.
-        navigateFallbackDenylist: [/^\/tesseract\//],
+        // Ni répondre l'app à la place d'une fonction serveur ouverte à la main.
+        navigateFallbackDenylist: [/^\/tesseract\//, /^\/api\//],
         runtimeCaching: [
           {
             // Une fois téléchargé, le moteur reste disponible hors-ligne — c'est

@@ -3,9 +3,8 @@ import { tripProgress } from '../utils/tripDates.js'
 import { formatProgress, formatTripRange, plural } from '../utils/format.js'
 import { TRIP_TABS } from '../config/navigation.js'
 
-// PROVISOIRE — lot 1. Les écrans Jours et Résas arrivent au lot 2,
-// Aujourd'hui au lot 3 ; ce fichier disparaît avec eux.
-const LOT_BY_TAB = { jours: 2, resas: 2, aujourdhui: 3 }
+// PROVISOIRE — l'écran Aujourd'hui arrive au lot 3 ; ce fichier disparaît avec lui.
+const LOT_BY_TAB = { aujourdhui: 3 }
 
 export default function PendingView({ trip, tab }) {
   const today = useToday()
