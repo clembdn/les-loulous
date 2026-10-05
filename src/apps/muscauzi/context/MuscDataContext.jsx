@@ -6,6 +6,7 @@ import { subscribeToProgram, emptyProgram } from '../services/programService.js'
 import { subscribeToSessions } from '../services/sessionsService.js'
 import { subscribeToWeights } from '../services/weightsService.js'
 import { subscribeToNotes } from '../services/notesService.js'
+import { DEFAULT_SETTINGS, subscribeToSettings } from '../services/settingsService.js'
 import { useToday } from '../hooks/useToday.js'
 
 /**
@@ -49,7 +50,8 @@ const EMPTY = {
   recentSessions: [],
   alternateWeeks: true,
   settingsReady: false,
-
+  weightTarget: null,
+  prefsReady: false,
   isLoading: true,
 }
 
@@ -62,11 +64,12 @@ export function MuscDataProvider({ children }) {
   const [notes, setNotes] = useState({})
   const [weights, setWeights] = useState([])
   const [sessions, setSessions] = useState([])
+  const [prefs, setPrefs] = useState(DEFAULT_SETTINGS)
 
   // Un drapeau par flux : « chargé » ne veut rien dire tant que le catalogue
   // n'est pas là pour donner un nom aux lignes du programme.
   const [ready, setReady] = useState({
-    exercises: false, even: false, odd: false, notes: false, weights: false, sessions: false,
+    exercises: false, even: false, odd: false, notes: false, weights: false, sessions: false, prefs: false,
   })
 
   useEffect(() => {
@@ -98,6 +101,11 @@ export function MuscDataProvider({ children }) {
         currentUid,
         (w) => { setWeights(w); done('weights') },
         () => done('weights'),
+      ),
+      subscribeToSettings(
+        currentUid,
+        (x) => { setPrefs(x); done('prefs') },
+        () => done('prefs'),
       ),
     ]
     return () => unsubs.forEach((u) => u())
@@ -140,11 +148,14 @@ export function MuscDataProvider({ children }) {
     // d'annoncer une parité.
     alternateWeeks: programs.even.alternateWeeks !== false,
     settingsReady: ready.even,
+    // Réglages du profil (`meta/muscauzi`) : cible de poids.
+    weightTarget: prefs.weightTarget,
+    prefsReady: ready.prefs,
     isLoading: !Object.values(ready).every(Boolean),
     // Le catalogue seul décide si une ligne de programme est orpheline ; les
     // vues en ont besoin séparément du chargement global.
     catalogueReady: ready.exercises,
-  }), [today, exercises, exerciseById, programs, notes, weights, sessions, recentSessions, ready])
+  }), [today, exercises, exerciseById, programs, notes, weights, sessions, recentSessions, prefs, ready])
 
   return <MuscDataContext.Provider value={value}>{children}</MuscDataContext.Provider>
 }

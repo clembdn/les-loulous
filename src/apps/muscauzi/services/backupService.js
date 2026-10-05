@@ -38,11 +38,14 @@ async function readDoc(uid, ...path) {
 
 /** Tout le profil, en un objet sérialisable. */
 export async function collectBackup(uid) {
-  const [exercises, sessions, exerciseNotes, weights, ...programs] = await Promise.all([
+  const [exercises, sessions, exerciseNotes, weights, settings, ...programs] = await Promise.all([
     readCollection(uid, 'exercises'),
     readCollection(uid, 'sessions'),
     readCollection(uid, 'exerciseNotes'),
     readCollection(uid, 'weights'),
+    // Tant que les règles ne l'autorisent pas, ce document se lit en erreur :
+    // la sauvegarde ne doit pas échouer pour autant.
+    readDoc(uid, 'meta', 'muscauzi').catch(() => null),
     ...PARITIES.map((parity) => readDoc(uid, 'program', parity)),
   ])
 
@@ -56,6 +59,7 @@ export async function collectBackup(uid) {
     sessions,
     exerciseNotes,
     weights,
+    settings,
     // `meta/lastPerf` n'est plus exporté. Ce cache n'est plus écrit depuis le
     // 28 août 2026 (le repère « dernière fois » se calcule désormais dans
     // `utils/previous.js`) : l'exporter faisait croire à une donnée vivante

@@ -19,6 +19,7 @@ import { buildBestIndex, buildRecordIndex } from '../utils/records.js'
 import { progressValue, setScore } from '../utils/metrics.js'
 import { buildProgressIndex } from '../utils/progression.js'
 import { entryRange, programRangeIndex } from '../utils/repRange.js'
+import { needsWeighIn } from '../utils/weightTrend.js'
 import { isBodyweight } from '../config/exercises.js'
 import { newInstanceId } from '../utils/ids.js'
 import SessionOverview, { EmptyDay } from '../components/session/SessionOverview.jsx'
@@ -454,7 +455,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
             <div className="min-w-0">{done || focus}</div>
           </div>
         )}
-        <WeighInNudge show={isToday && dayOfWeek === 1} weights={weights} dateKey={dateKey} onGo={onOpenWeight} />
+        <WeighInNudge isToday={isToday} dayOfWeek={dayOfWeek} weights={weights} dateKey={dateKey} onGo={onOpenWeight} />
       {sheets}
       </div>
     )
@@ -514,7 +515,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
         </Button>
       )}
 
-      <WeighInNudge show={isToday && dayOfWeek === 1} weights={weights} dateKey={dateKey} onGo={onOpenWeight} />
+      <WeighInNudge isToday={isToday} dayOfWeek={dayOfWeek} weights={weights} dateKey={dateKey} onGo={onOpenWeight} />
       {sheets}
     </div>
   )
@@ -539,17 +540,21 @@ function DateNav({ onClick, disabled, label, children }) {
 }
 
 /**
- * Le lundi, la pesée se fait en début de séance.
+ * Le rappel de pesée : le lundi en début de séance, et n'importe quel jour
+ * après trois jours sans pesée — la moyenne et le rythme du poids ne valent
+ * que par des mesures régulières (cf. utils/weightTrend).
  *
  * En PIED d'écran, plus en tête : posé au-dessus de la liste, il décalait
- * chaque lundi tout ce qu'on venait ouvrir. C'est un rappel, pas une étape.
+ * tout ce qu'on venait ouvrir. C'est un rappel, pas une étape.
  */
-function WeighInNudge({ show, weights, dateKey, onGo }) {
+function WeighInNudge({ isToday, dayOfWeek, weights, dateKey, onGo }) {
   const [dismissed, setDismissed] = useState(false)
   useEffect(() => { setDismissed(false) }, [dateKey])
 
-  if (!show || dismissed) return null
+  if (!isToday || dismissed) return null
   if (weights.some((w) => w.date === dateKey)) return null
+  const overdue = needsWeighIn(weights, dateKey)
+  if (dayOfWeek !== 1 && !overdue) return null
 
   return (
     <button
@@ -557,7 +562,9 @@ function WeighInNudge({ show, weights, dateKey, onGo }) {
       className="w-full mt-6 flex items-center gap-3 px-4 py-3 rounded-2xl border border-accent/30 bg-accent/5 text-left"
     >
       <Scale size={18} className="shrink-0 text-accent" />
-      <span className="flex-1 text-sm text-fg">Pesée du lundi — c'est le moment</span>
+      <span className="flex-1 text-sm text-fg">
+        {dayOfWeek === 1 ? 'Pesée du lundi — c\'est le moment' : 'Pas de pesée depuis quelques jours — c\'est le moment'}
+      </span>
       <ArrowRight size={16} className="shrink-0 text-accent" />
     </button>
   )

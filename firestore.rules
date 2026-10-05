@@ -482,6 +482,22 @@ service cloud.firestore {
       allow create, update: if false;
     }
 
+    // Réglages MuscAuzi, par personne : zone cible du rythme de poids
+    // (kg/semaine). L'alternance paire/impaire, elle, vit sur `program/even`.
+    match /users/{uid}/meta/muscauzi {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && (!("weightRateMin" in request.resource.data) || request.resource.data.weightRateMin == null
+            || (request.resource.data.weightRateMin is number
+                && request.resource.data.weightRateMin >= -2
+                && request.resource.data.weightRateMin <= 2))
+        && (!("weightRateMax" in request.resource.data) || request.resource.data.weightRateMax == null
+            || (request.resource.data.weightRateMax is number
+                && request.resource.data.weightRateMax >= -2
+                && request.resource.data.weightRateMax <= 2));
+      allow delete: if isOwner(uid);
+    }
+
     // Journal alimentaire, un document par jour et par personne. Les macros sont
     // figees dans chaque entree a l'ajout : l'historique ne bouge plus ensuite.
     match /users/{uid}/foodLog/{dateId} {

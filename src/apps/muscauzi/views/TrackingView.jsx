@@ -8,7 +8,10 @@ import { Skeleton } from '@/shared/ui/Skeleton.jsx'
 import { fromLocalDateKey, formatDayFr, formatDateShortFr, formatDateFr } from '@/shared/lib/dates.js'
 import { useMuscData } from '../context/MuscDataContext.jsx'
 import { recordWeight } from '../services/weightsService.js'
+import { saveWeightTarget } from '../services/settingsService.js'
+import { daysSinceLastWeighIn, movingAverage, needsWeighIn } from '../utils/weightTrend.js'
 import WeightScale from '../components/weight/WeightScale.jsx'
+import WeightPace from '../components/weight/WeightPace.jsx'
 import ConsistencyCalendar from '../components/tracking/ConsistencyCalendar.jsx'
 import PageHeader from '../components/layout/PageHeader.jsx'
 
@@ -16,7 +19,7 @@ const FALLBACK_KG = 70
 
 export default function TrackingView() {
   const { currentUid } = useAuth()
-  const { weights, today: todayId, isLoading } = useMuscData()
+  const { weights, today: todayId, isLoading, weightTarget, prefsReady } = useMuscData()
 
   const last = weights.length > 0 ? weights[weights.length - 1] : null
 
@@ -43,10 +46,22 @@ export default function TrackingView() {
     setValue(last ? last.value : FALLBACK_KG)
   }, [isLoading, last])
 
-  const series = useMemo(
-    () => weights.map((w) => ({ date: w.date, value: w.value })),
-    [weights],
-  )
+  /**
+   * Les pesées ET leur moyenne glissante sur 7 jours. C'est la moyenne que la
+   * courbe met en avant : une pesée isolée bouge d'un kilo pour rien, la
+   * tendance seule dit si l'on prend ou perd (cf. utils/weightTrend).
+   */
+  const smoothed = useMemo(() => movingAverage(weights), [weights])
+  const series = useMemo(() => smoothed.map((w) => ({ date: w.date, value: w.value })), [smoothed])
+  const trend = useMemo(() => smoothed.map((w) => w.average), [smoothed])
+
+  const sinceLast = daysSinceLastWeighIn(weights, todayId)
+  const remind = needsWeighIn(weights, todayId)
+
+  const saveTarget = (target) => {
+    saveWeightTarget(currentUid, target, currentUid)
+      .catch(() => toast.error('Enregistrement impossible'))
+  }
 
   const alreadyToday = weights.some((w) => w.date === todayId)
 
@@ -83,11 +98,22 @@ export default function TrackingView() {
             Première pesée à enregistrer ci-dessous.
           </p>
         ) : (
-          <LineChart
-            data={series}
-            formatValue={(v) => `${v.toFixed(1)} kg`}
-            formatLabel={(d) => formatDateShortFr(fromLocalDateKey(d.date))}
-          />
+          <>
+            <LineChart
+              data={series}
+              trend={trend}
+              trendLabel="moyenne 7 j"
+              formatValue={(v) => `${v.toFixed(1)} kg`}
+              formatLabel={(d) => formatDateShortFr(fromLocalDateKey(d.date))}
+            />
+            <WeightPace
+              weights={weights}
+              today={todayId}
+              target={weightTarget}
+              canEdit={prefsReady}
+              onSaveTarget={saveTarget}
+            />
+          </>
         )}
       </div>
 
@@ -102,6 +128,14 @@ export default function TrackingView() {
         {alreadyToday && (
           <p className="text-[11px] text-faint mb-2">
             Déjà pesé aujourd'hui : enregistrer à nouveau remplace la valeur.
+          </p>
+        )}
+        {/* Un rappel, pas une alarme : la moyenne et le rythme ne valent que
+            par la régularité des pesées. */}
+        {remind && (
+          <p className="flex items-center gap-1.5 text-[11px] text-muted mb-2">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" aria-hidden="true" />
+            Pas de pesée depuis {sinceLast} jours — la tendance a besoin de mesures régulières.
           </p>
         )}
 

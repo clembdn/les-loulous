@@ -1,4 +1,4 @@
-# Conception — MuscAuzi : barre d'XP, fourchettes, échauffements, alternance optionnelle
+# Conception — MuscAuzi : barre d'XP, fourchettes, échauffements, alternance, poids lissé
 
 **Date :** 2026-10-05
 **Périmètre :** MuscAuzi (`src/apps/muscauzi`). Deux comptes (Clément, Lise), données sous
@@ -28,15 +28,18 @@ Aucune migration : un document ancien se relit comme avant.
 | Série | `warmup: true` (écrit seulement si vrai) | série de travail |
 | Exercice | `incrementKg`, stocké seulement s'il diffère du défaut du type | défaut : haltères 2, barre 2,5, machine 7, poids du corps 0 |
 | `program/even` | `alternateWeeks: false` pour couper l'alternance | absent = alternance active |
+| **Nouveau** `meta/muscauzi` | `weightRateMin`, `weightRateMax` (kg/sem) | rien de réglé |
 
-**Règles Firestore inchangées** : sur `program/{parity}` seuls `days` et `dayNames` sont
-validés, sur `sessions` seul `entries`, sur `exercises` seuls `name` et `type`.
+**Règles Firestore** : rien à changer pour les champs ci-dessus — sur `program/{parity}` seuls
+`days` et `dayNames` sont validés, sur `sessions` seul `entries`, sur `exercises` seuls `name`
+et `type`. Seul le nouveau document `meta/muscauzi` demande un bloc `match` (à publier dans la
+console Firebase).
 
 **Le piège des normaliseurs** : chacun ne garde que les champs qu'il connaît. Les nouveaux champs
 passent par `normalizeLine` / `copyLines` (`programService`), `normalizeEntry` / `normalizeSet` /
 `saveEntry` (`sessionsService`), `normalize` / `addExercise` / `updateExercise`
 (`exercisesService`). La sauvegarde JSON est brute (tout y
-est) ; le CSV gagne en fin de ligne les colonnes `echauffement`,
+est, `meta/muscauzi` compris) ; le CSV gagne en fin de ligne les colonnes `echauffement`,
 `reps_min`, `reps_max`, `pas_kg`.
 
 ## 3. Logique — modules purs testés
@@ -93,3 +96,14 @@ pair, l'onglet impair et les copies vers l'autre semaine disparaissent, `program
 intact. La séance **enregistre toujours sa vraie parité** ; le bilan et les groupes de séances
 comparent alors au seul jour de la semaine. Active : comportement d'avant, plus la mention
 « Semaine paire / impaire » en tête de la séance du jour.
+
+## 6. Poids lissé (`utils/weightTrend.js`)
+
+- **Moyenne glissante sur 7 jours calendaires**, tracée en accent sous les pesées brutes
+  (`LineChart` gagne une seconde série optionnelle, `trend`).
+- **Rythme** en kg/semaine : la pente (moindres carrés) des pesées des 14 derniers jours, dès
+  trois pesées étalées sur au moins une semaine.
+- **Zone cible réglable** par compte (proposée à +0,30 à +0,40 kg/sem) : jauge, verdict (dans la
+  cible / sous / au-dessus) et consigne (« Continue », « Ajoute un peu à tes repas », « Réduis
+  un peu tes repas »).
+- **Rappel discret** après 3 jours sans pesée, dans Suivi et en pied de la séance du jour.

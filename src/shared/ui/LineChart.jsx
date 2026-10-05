@@ -3,6 +3,11 @@ import { useMemo, useRef, useState, useEffect, useId } from 'react'
 // Courbe SVG minimaliste, sans dépendance : une série, un axe Y implicite
 // (min/max annotés), scrub tactile. Suffit pour une progression de charge ou
 // une courbe de poids — pas de grille, pas de librairie de 200 ko.
+//
+// Une seconde série optionnelle (`trend`, une valeur par point de `data`) se
+// trace par-dessus : c'est ELLE qui porte l'accent, la série brute passant en
+// discret. Fait pour la tendance d'une mesure bruitée — la moyenne glissante
+// des pesées — où c'est la tendance qu'on doit lire, pas le bruit du jour.
 
 const PAD_TOP = 14
 const PAD_BOTTOM = 22
@@ -48,7 +53,9 @@ function curvePath(pts) {
   return path
 }
 
-export default function LineChart({ data, height = 220, formatValue = String, formatLabel = String }) {
+export default function LineChart({
+  data, height = 220, formatValue = String, formatLabel = String, trend = null, trendLabel = 'tendance',
+}) {
   const gradientId = useId().replace(/:/g, '')
   const containerRef = useRef(null)
   const [width, setWidth] = useState(0)
@@ -63,39 +70,46 @@ export default function LineChart({ data, height = 220, formatValue = String, fo
     return () => ro.disconnect()
   }, [])
 
-  const { pts, min, max } = useMemo(() => {
-    if (!width || !data?.length) return { pts: [], min: 0, max: 0 }
+  const hasTrend = Array.isArray(trend) && trend.length === data?.length
+
+  const { pts, trendPts, min, max } = useMemo(() => {
+    if (!width || !data?.length) return { pts: [], trendPts: [], min: 0, max: 0 }
     const values = data.map((d) => d.value)
-    const lo = Math.min(...values)
-    const hi = Math.max(...values)
+    // L'échelle couvre les DEUX séries : la tendance ne doit pas sortir du cadre.
+    const scaleValues = hasTrend ? [...values, ...trend.filter(Number.isFinite)] : values
+    const lo = Math.min(...scaleValues)
+    const hi = Math.max(...scaleValues)
     const flat = hi === lo
     const usableH = height - PAD_TOP - PAD_BOTTOM
     const usableW = Math.max(width - PAD_X * 2, 1)
     const step = data.length > 1 ? usableW / (data.length - 1) : 0
+    const xAt = (i) => PAD_X + (data.length > 1 ? i * step : usableW / 2)
+    // Série plate : la ligne reste au milieu plutôt que collée en haut.
+    const yAt = (v) => (flat ? PAD_TOP + usableH / 2 : PAD_TOP + usableH * (1 - (v - lo) / (hi - lo)))
     return {
-      min: lo,
-      max: hi,
-      pts: data.map((d, i) => ({
-        x: PAD_X + (data.length > 1 ? i * step : usableW / 2),
-        // Série plate : la ligne reste au milieu plutôt que collée en haut.
-        y: flat
-          ? PAD_TOP + usableH / 2
-          : PAD_TOP + usableH * (1 - (d.value - lo) / (hi - lo)),
-        d,
-        i,
-      })),
+      min: Math.min(...values),
+      max: Math.max(...values),
+      pts: data.map((d, i) => ({ x: xAt(i), y: yAt(d.value), d, i })),
+      trendPts: hasTrend
+        ? trend.map((v, i) => (Number.isFinite(v) ? { x: xAt(i), y: yAt(v), v, i } : null)).filter(Boolean)
+        : [],
     }
-  }, [data, width, height])
+  }, [data, width, height, trend, hasTrend])
 
   if (!data?.length) return null
 
   const path = curvePath(pts)
-  const areaPath = pts.length > 1
-    ? `${path} L${pts[pts.length - 1].x},${height - PAD_BOTTOM} L${pts[0].x},${height - PAD_BOTTOM} Z`
+  const trendPath = curvePath(trendPts)
+  // Le dégradé suit la série qui porte l'accent.
+  const accentPts = hasTrend ? trendPts : pts
+  const accentPath = hasTrend ? trendPath : path
+  const areaPath = accentPts.length > 1
+    ? `${accentPath} L${accentPts[accentPts.length - 1].x},${height - PAD_BOTTOM} L${accentPts[0].x},${height - PAD_BOTTOM} Z`
     : ''
   // Au premier rendu la largeur n'est pas encore mesurée : le conteneur doit
   // quand même être monté pour que le ResizeObserver s'y accroche.
   const active = pts.length > 0 ? (pts[hoverIdx] || pts[pts.length - 1]) : null
+  const activeTrend = active ? trendPts.find((p) => p.i === active.i) || null : null
 
   const pick = (clientX) => {
     const rect = containerRef.current?.getBoundingClientRect()
@@ -119,7 +133,12 @@ export default function LineChart({ data, height = 220, formatValue = String, fo
             </div>
             {/* Les bornes sont annoncées ici plutôt que posées sur le tracé :
                 dans le graphe elles tombent pile sur les points extrêmes. */}
-            {min !== max && (
+            {activeTrend ? (
+              <p className="text-[11px] text-faint tabular mt-0.5">
+                <span className="text-accent font-medium">{trendLabel} {formatValue(activeTrend.v)}</span>
+                {min !== max && <> · min {formatValue(min)} · max {formatValue(max)}</>}
+              </p>
+            ) : min !== max && (
               <p className="text-[11px] text-faint tabular mt-0.5">
                 min {formatValue(min)} · max {formatValue(max)}
               </p>
@@ -151,18 +170,32 @@ export default function LineChart({ data, height = 220, formatValue = String, fo
               <path
                 d={path}
                 fill="none"
-                stroke="rgb(var(--accent))"
-                strokeWidth="2.5"
+                stroke={hasTrend ? 'rgb(var(--fg) / 0.28)' : 'rgb(var(--accent))'}
+                strokeWidth={hasTrend ? 1.5 : 2.5}
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 pathLength="1"
                 className="chart-line"
               />
+              {hasTrend && (
+                <path
+                  d={trendPath}
+                  fill="none"
+                  stroke="rgb(var(--accent))"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  pathLength="1"
+                  className="chart-line"
+                />
+              )}
 
               {/* Points visibles quand la série est courte — une progression se
                   compte en séances, pas en milliers de ticks. */}
-              {pts.length <= 30 && pts.map((p) => (
-                <circle key={p.i} cx={p.x} cy={p.y} r="3" fill="rgb(var(--bg))" stroke="rgb(var(--accent))" strokeWidth="2" />
+              {pts.length <= (hasTrend ? 60 : 30) && pts.map((p) => (
+                hasTrend
+                  ? <circle key={p.i} cx={p.x} cy={p.y} r="2.5" fill="rgb(var(--fg) / 0.45)" />
+                  : <circle key={p.i} cx={p.x} cy={p.y} r="3" fill="rgb(var(--bg))" stroke="rgb(var(--accent))" strokeWidth="2" />
               ))}
 
               {hoverIdx != null && (
@@ -171,7 +204,16 @@ export default function LineChart({ data, height = 220, formatValue = String, fo
                   stroke="rgb(var(--fg) / 0.18)" strokeWidth="1"
                 />
               )}
-              <circle cx={active.x} cy={active.y} r="5" fill="rgb(var(--accent))" stroke="rgb(var(--bg))" strokeWidth="2.5" />
+              {hasTrend && (
+                <circle cx={active.x} cy={active.y} r="3.5" fill="rgb(var(--fg))" stroke="rgb(var(--bg))" strokeWidth="2" />
+              )}
+              {(activeTrend || !hasTrend) && (
+                <circle
+                  cx={activeTrend ? activeTrend.x : active.x}
+                  cy={activeTrend ? activeTrend.y : active.y}
+                  r="5" fill="rgb(var(--accent))" stroke="rgb(var(--bg))" strokeWidth="2.5"
+                />
+              )}
             </svg>
 
             <div className="absolute inset-x-0 bottom-0 flex justify-between text-[10px] text-faint pointer-events-none">
