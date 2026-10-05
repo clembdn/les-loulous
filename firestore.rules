@@ -483,7 +483,8 @@ service cloud.firestore {
     }
 
     // Réglages MuscAuzi, par personne : zone cible du rythme de poids
-    // (kg/semaine). L'alternance paire/impaire, elle, vit sur `program/even`.
+    // (kg/semaine) et jour de lancement de la semaine allégée. L'alternance
+    // paire/impaire, elle, vit sur `program/even`.
     match /users/{uid}/meta/muscauzi {
       allow read: if isOwner(uid);
       allow create, update: if isOwner(uid)
@@ -494,7 +495,10 @@ service cloud.firestore {
         && (!("weightRateMax" in request.resource.data) || request.resource.data.weightRateMax == null
             || (request.resource.data.weightRateMax is number
                 && request.resource.data.weightRateMax >= -2
-                && request.resource.data.weightRateMax <= 2));
+                && request.resource.data.weightRateMax <= 2))
+        && (!("lightWeekStart" in request.resource.data) || request.resource.data.lightWeekStart == null
+            || (request.resource.data.lightWeekStart is string
+                && isDateId(request.resource.data.lightWeekStart)));
       allow delete: if isOwner(uid);
     }
 

@@ -293,3 +293,11 @@ test('charge conseillée atteinte', () => {
   assert.equal(reachedLoad([set(18, 10)], 20), false)
   assert.equal(reachedLoad([set(20, 0)], 20), false, 'une charge sans reps n\'est pas une série')
 })
+
+test('les séances d\'une semaine allégée ne comptent pas pour la barre', () => {
+  const full = session('2026-09-21', [set(18, 10), set(18, 10), set(18, 10), set(18, 10)])
+  const light = { ...session('2026-09-28', [set(18, 8), set(18, 7), set(18, 7)], { n: 3 }), lightWeek: true }
+  const index = buildProgressIndex([full, light], '2026-10-05', () => ({ incrementKg: 2 }))
+  assert.equal(index.ex.last.date, '2026-09-21', 'la dernière VRAIE séance')
+  assert.deepEqual(index.ex.suggestion, { kind: 'levelUp', load: 20 })
+})

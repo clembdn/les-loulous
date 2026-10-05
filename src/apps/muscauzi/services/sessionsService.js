@@ -153,6 +153,9 @@ export function normalizeSession(id, raw) {
     // dans le programme ne doit pas réécrire six mois d'historique, ni faire
     // basculer d'anciennes séances dans une autre famille de comparaison.
     name: typeof raw.name === 'string' ? raw.name : '',
+    // Séance faite pendant une semaine allégée : la barre d'XP l'ignore
+    // (cf. utils/lightWeek.js). Absent des séances d'avant : elles comptent.
+    lightWeek: raw.lightWeek === true,
     entries,
   }
 }
@@ -183,9 +186,11 @@ export function subscribeToSessions(uid, callback, onError) {
 /**
  * Écrit une entrée dans la séance d'une date.
  *
- * `plan` ({ parity, dayOfWeek, name }) décrit la séance affichée au moment de
- * la saisie. Il est réécrit à chaque fois — c'est une métadonnée, plus une
- * copie dont dépend l'affichage.
+ * `plan` ({ parity, dayOfWeek, name, lightWeek }) décrit la séance affichée au
+ * moment de la saisie. Il est réécrit à chaque fois — c'est une métadonnée,
+ * plus une copie dont dépend l'affichage. `lightWeek` n'est écrit que vrai ;
+ * faux, il est effacé : arrêter la semaine allégée en cours de séance rend la
+ * séance à la barre d'XP.
  *
  * Aucun `await` côté UI : le cache Firestore encaisse l'écriture et la
  * synchronise au retour du réseau — la salle capte mal.
@@ -209,6 +214,7 @@ export function saveEntry(uid, dateKey, entry, plan, currentUid) {
     parity: plan.parity,
     dayOfWeek: plan.dayOfWeek,
     name: plan.name || '',
+    lightWeek: plan.lightWeek === true ? true : deleteField(),
     entries: { [entry.instanceId]: clean },
     updatedAt: now,
     updatedBy: currentUid,

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
-  CalendarRange, ChevronDown, ChevronUp, Copy, Minus, Plus, Search, Tag, Trash2, X,
+  CalendarRange, ChevronDown, ChevronUp, Copy, Feather, Minus, Plus, Search, Tag, Trash2, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
@@ -9,13 +9,17 @@ import ConfirmDialog from '@/shared/ui/ConfirmDialog.jsx'
 import { SkeletonList } from '@/shared/ui/Skeleton.jsx'
 import { Input } from '@/shared/ui/Input.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
-import { dayLabel, isoDayOfWeek, weekParity } from '@/shared/lib/dates.js'
+import {
+  dayLabel, formatDayFr, fromLocalDateKey, isoDayOfWeek, weekParity,
+} from '@/shared/lib/dates.js'
 import { cn } from '@/shared/lib/utils.js'
 import { useMuscData } from '../context/MuscDataContext.jsx'
 import {
   DOWS, MAX_DAY_NAME, copyLines, resolveLineName, saveAlternateWeeks, saveProgramDay, saveProgramDayName,
   saveProgramWeek, withoutOrphans,
 } from '../services/programService.js'
+import { saveLightWeekStart } from '../services/settingsService.js'
+import { isInLightWeek, lightWeekEnd } from '../utils/lightWeek.js'
 import { SETTINGS_SUBS } from '../config/navigation.js'
 import PageHeader from '../components/layout/PageHeader.jsx'
 import DayPicker from '../components/program/DayPicker.jsx'
@@ -52,6 +56,7 @@ export default function ProgramView({ onNavigate }) {
   const { currentUid } = useAuth()
   const {
     exercises, exerciseById, programs, catalogueReady, isLoading, alternateWeeks, settingsReady,
+    today, lightWeekStart, prefsReady,
   } = useMuscData()
 
   const [chosenParity, setParity] = useState(() => weekParity(new Date()))
@@ -192,6 +197,17 @@ export default function ProgramView({ onNavigate }) {
             <AlternateToggle checked={alternateWeeks} onChange={toggleAlternate} />
           )}
 
+          {prefsReady && (
+            <LightWeekCard
+              start={lightWeekStart}
+              today={today}
+              onStart={() => saveLightWeekStart(currentUid, today, currentUid)
+                .then(() => toast.success('Semaine allégée lancée pour 7 jours'))
+                .catch(() => toast.error('Enregistrement impossible'))}
+              onStop={() => saveLightWeekStart(currentUid, null, currentUid)
+                .catch(() => toast.error('Enregistrement impossible'))}
+            />
+          )}
 
           {alternateWeeks && (
             <SegmentedTabs
@@ -421,6 +437,33 @@ function RangeSteppers({ min, max, onChange }) {
         max={MAX_REPS}
         onChange={(v) => onChange({ min: Math.min(min, v), max: v })}
       />
+    </div>
+  )
+}
+
+/**
+ * La semaine allégée : souffler 7 jours sans toucher au programme.
+ *
+ * Une série de moins par exercice (minimum 2), les mêmes charges, et ces
+ * séances ne comptent pas dans la barre d'XP (cf. utils/lightWeek.js). Elle
+ * se lance d'ici et s'arrête d'ici ou depuis la séance du jour.
+ */
+function LightWeekCard({ start, today, onStart, onStop }) {
+  const active = isInLightWeek(today, start)
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 mb-3 rounded-xl border border-border bg-surface">
+      <Feather size={16} className="shrink-0 text-accent" />
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-medium text-fg">Semaine allégée</span>
+        <span className="block text-xs text-muted mt-0.5">
+          {active
+            ? `En cours jusqu'au ${formatDayFr(fromLocalDateKey(lightWeekEnd(start)))}.`
+            : 'Sept jours à une série de moins, mêmes charges, hors barre d’XP.'}
+        </span>
+      </span>
+      <Button variant={active ? 'outline' : 'secondary'} size="sm" className="shrink-0" onClick={active ? onStop : onStart}>
+        {active ? 'Arrêter' : 'Lancer'}
+      </Button>
     </div>
   )
 }

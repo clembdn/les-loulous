@@ -51,6 +51,7 @@ const EMPTY = {
   alternateWeeks: true,
   settingsReady: false,
   weightTarget: null,
+  lightWeekStart: null,
   prefsReady: false,
   isLoading: true,
 }
@@ -148,8 +149,9 @@ export function MuscDataProvider({ children }) {
     // d'annoncer une parité.
     alternateWeeks: programs.even.alternateWeeks !== false,
     settingsReady: ready.even,
-    // Réglages du profil (`meta/muscauzi`) : cible de poids.
+    // Réglages du profil (`meta/muscauzi`) : cible de poids, semaine allégée.
     weightTarget: prefs.weightTarget,
+    lightWeekStart: prefs.lightWeekStart,
     prefsReady: ready.prefs,
     isLoading: !Object.values(ready).every(Boolean),
     // Le catalogue seul décide si une ligne de programme est orpheline ; les

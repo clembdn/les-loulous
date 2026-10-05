@@ -75,7 +75,13 @@ export default function XpCard({
       <div className="px-4 pt-3 pb-3.5">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[10px] uppercase tracking-[0.16em] text-faint truncate">
-            Barre d’XP · {live ? 'aujourd’hui' : 'dernière séance'}
+            {/* Après une semaine allégée, la barre se juge sur la dernière VRAIE
+                séance, plus ancienne que « la dernière fois » : on la date. */}
+            Barre d’XP · {live
+              ? 'aujourd’hui'
+              : last && previous?.date && last.date !== previous.date
+                ? `séance du ${formatDateFr(fromLocalDateKey(last.date))}`
+                : 'dernière séance'}
           </p>
           <p className="shrink-0 text-xs text-muted tabular">
             <span className={cn('text-sm font-semibold', value >= 1 ? 'text-accent' : 'text-fg')}>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowRight, ChevronLeft, ChevronRight, Plus, Scale, X } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight, Feather, Plus, Scale, X } from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import {
   formatDayFr, fromLocalDateKey, isoDayOfWeek, shiftDateKey, toLocalDateKey, weekParity,
@@ -9,6 +9,7 @@ import { useMediaQuery } from '@/shared/lib/useMediaQuery.js'
 import { Button } from '@/shared/ui/Button.jsx'
 import { ProgressRing } from '@/shared/ui/Progress.jsx'
 import { SkeletonList } from '@/shared/ui/Skeleton.jsx'
+import { toast } from '@/shared/ui/sonner.jsx'
 import { useMuscData } from '../context/MuscDataContext.jsx'
 import { clearEntry, saveEntry } from '../services/sessionsService.js'
 import { withoutOrphans } from '../services/programService.js'
@@ -19,7 +20,9 @@ import { buildBestIndex, buildRecordIndex } from '../utils/records.js'
 import { progressValue, setScore } from '../utils/metrics.js'
 import { buildProgressIndex } from '../utils/progression.js'
 import { entryRange, programRangeIndex } from '../utils/repRange.js'
+import { isInLightWeek, lightSets, lightWeekEnd } from '../utils/lightWeek.js'
 import { needsWeighIn } from '../utils/weightTrend.js'
+import { saveLightWeekStart } from '../services/settingsService.js'
 import { isBodyweight } from '../config/exercises.js'
 import { newInstanceId } from '../utils/ids.js'
 import SessionOverview, { EmptyDay } from '../components/session/SessionOverview.jsx'
@@ -60,7 +63,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
   const { currentUid } = useAuth()
   const {
     today, exercises, exerciseById, programs, notes, weights,
-    sessions, recentSessions, catalogueReady, isLoading, alternateWeeks, settingsReady,
+    sessions, recentSessions, catalogueReady, isLoading, alternateWeeks, settingsReady, lightWeekStart,
   } = useMuscData()
 
   const [dateKey, setDateKey] = useState(today)
@@ -108,6 +111,10 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
   }, [dateKey])
   const programParity = alternateWeeks ? parity : 'even'
 
+  // Semaine allégée : une série de moins par exercice du programme, mêmes
+  // charges, et la séance marquée pour que la barre d'XP l'ignore.
+  const light = isInLightWeek(dateKey, lightWeekStart)
+
   // La séance du jour se lit dans la fenêtre déjà ouverte par le contexte :
   // pas d'écoute supplémentaire pour un document qu'on a déjà.
   const session = useMemo(
@@ -132,7 +139,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
         exerciseId: l.exerciseId,
         name: exerciseById[l.exerciseId]?.name || l.name || '',
         order: i,
-        prescribedSets: l.sets,
+        prescribedSets: light ? lightSets(l.sets) : l.sets,
         prescribedReps: l.repsMax,
         prescribedRepsMin: l.repsMin,
         prescribedRepsMax: l.repsMax,
@@ -158,7 +165,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
     // garde de la liste locale que ce qui n'est pas encore enregistré.
     const saved = new Set(off.map((l) => l.instanceId))
     return { lines: prescribed, extras: [...off, ...added.filter((l) => !saved.has(l.instanceId))] }
-  }, [programDays, dayOfWeek, exerciseById, session, catalogueReady, added, rangeIndex])
+  }, [programDays, dayOfWeek, exerciseById, session, catalogueReady, added, rangeIndex, light])
 
   // L'ordre de parcours : la prescription du jour, puis le hors-programme.
   const walk = useMemo(() => [...lines, ...extras], [lines, extras])
@@ -260,9 +267,9 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
     saveEntry(
       currentUid, dateKey,
       { ...line, sets, skipped },
-      { parity, dayOfWeek, name: sessionName }, currentUid,
+      { parity, dayOfWeek, name: sessionName, lightWeek: light }, currentUid,
     )
-  }, [currentUid, dateKey, parity, dayOfWeek, sessionName])
+  }, [currentUid, dateKey, parity, dayOfWeek, sessionName, light])
 
   const total = walk.length
   const doneCount = walk.filter(
@@ -339,6 +346,26 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
           <span className="text-sm text-muted">
             sur {total} exercice{total > 1 ? 's' : ''}
           </span>
+        </div>
+      )}
+
+      {light && (
+        <div className="mt-3 flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-border bg-surface text-left">
+          <Feather size={16} className="shrink-0 text-accent" />
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-medium text-fg">
+              Semaine allégée · jusqu'au {formatDayFr(fromLocalDateKey(lightWeekEnd(lightWeekStart)))}
+            </span>
+            <span className="block text-[11px] text-muted mt-0.5">
+              Une série de moins, mêmes charges — ne compte pas dans la barre d'XP.
+            </span>
+          </span>
+          <button
+            onClick={() => saveLightWeekStart(currentUid, null, currentUid).catch(() => toast.error('Enregistrement impossible'))}
+            className="shrink-0 h-9 px-2 text-xs text-muted hover:text-fg transition"
+          >
+            Arrêter
+          </button>
         </div>
       )}
 

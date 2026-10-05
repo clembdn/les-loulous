@@ -36,9 +36,9 @@ const SET_HEADERS = [
   // Ajoutées en DERNIER : les colonnes existantes ne bougent pas pour ce qui
   // lisait déjà ce fichier. 1 = échauffement, exclu de toute progression ;
   // reps_min / reps_max = la fourchette prescrite ce jour-là (min = max pour
-  // une séance d'avant les fourchettes) ; pas_kg = le pas de charge ACTUEL de
-  // l'exercice, comme son nom et son type.
-  'echauffement', 'reps_min', 'reps_max', 'pas_kg',
+  // une séance d'avant les fourchettes) ; 1 = séance de semaine allégée ;
+  // pas_kg = le pas de charge ACTUEL de l'exercice, comme son nom et son type.
+  'echauffement', 'reps_min', 'reps_max', 'semaine_allegee', 'pas_kg',
 ]
 
 const PARITY_LABEL = { even: 'paire', odd: 'impaire' }
@@ -111,6 +111,7 @@ export function buildSetsCsv(sessions, exerciseById) {
           isWarmup(set) ? 1 : 0,
           range.min,
           range.max,
+          session.lightWeek ? 1 : 0,
           exercise ? num(exercise.incrementKg, 2) : '',
         ]))
       }

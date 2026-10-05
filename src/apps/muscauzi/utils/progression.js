@@ -117,7 +117,10 @@ export function passageXp(passage, { bodyweight = false } = {}) {
  * jour : changer le programme aujourd'hui ne réécrit pas le verdict d'hier.
  * Seule exception, les séances d'avant les fourchettes, qui n'en portent pas :
  * `rangeOf` leur prête celle du programme actuel (cf. `entryRange`).
-
+ *
+ * Les séances d'une SEMAINE ALLÉGÉE sont écartées : une série de moins par
+ * exercice, voulue, ne doit ni vider la barre ni compter comme une montée
+ * (cf. utils/lightWeek.js). La suggestion repart de la dernière vraie séance.
  *
  * @param {Array} sessions  séances normalisées, triées par date croissante
  * @param {string} beforeDate  exclue, ainsi que tout ce qui suit
@@ -126,7 +129,8 @@ export function passageXp(passage, { bodyweight = false } = {}) {
  */
 export function buildPassageIndex(sessions, beforeDate, rangeOf) {
   const out = {}
-  for (const [exerciseId, passages] of Object.entries(passagesByExercise(sessions, beforeDate))) {
+  const counted = (sessions || []).filter((s) => !s?.lightWeek)
+  for (const [exerciseId, passages] of Object.entries(passagesByExercise(counted, beforeDate))) {
     out[exerciseId] = passages.map(({ date, entries, sets }) => ({
       date,
       prescribedSets: entries[0].prescribedSets,

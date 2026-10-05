@@ -1,4 +1,4 @@
-# Conception — MuscAuzi : barre d'XP, fourchettes, échauffements, alternance, poids lissé
+# Conception — MuscAuzi : barre d'XP, fourchettes, échauffements, alternance, poids lissé, semaine allégée
 
 **Date :** 2026-10-05
 **Périmètre :** MuscAuzi (`src/apps/muscauzi`). Deux comptes (Clément, Lise), données sous
@@ -28,7 +28,8 @@ Aucune migration : un document ancien se relit comme avant.
 | Série | `warmup: true` (écrit seulement si vrai) | série de travail |
 | Exercice | `incrementKg`, stocké seulement s'il diffère du défaut du type | défaut : haltères 2, barre 2,5, machine 7, poids du corps 0 |
 | `program/even` | `alternateWeeks: false` pour couper l'alternance | absent = alternance active |
-| **Nouveau** `meta/muscauzi` | `weightRateMin`, `weightRateMax` (kg/sem) | rien de réglé |
+| Séance | `lightWeek: true` (séance de semaine allégée) | séance normale |
+| **Nouveau** `meta/muscauzi` | `weightRateMin`, `weightRateMax` (kg/sem), `lightWeekStart` (clé de date) | rien de réglé |
 
 **Règles Firestore** : rien à changer pour les champs ci-dessus — sur `program/{parity}` seuls
 `days` et `dayNames` sont validés, sur `sessions` seul `entries`, sur `exercises` seuls `name`
@@ -38,9 +39,9 @@ console Firebase).
 **Le piège des normaliseurs** : chacun ne garde que les champs qu'il connaît. Les nouveaux champs
 passent par `normalizeLine` / `copyLines` (`programService`), `normalizeEntry` / `normalizeSet` /
 `saveEntry` (`sessionsService`), `normalize` / `addExercise` / `updateExercise`
-(`exercisesService`). La sauvegarde JSON est brute (tout y
+(`exercisesService`), `normalizeSession` pour `lightWeek`. La sauvegarde JSON est brute (tout y
 est, `meta/muscauzi` compris) ; le CSV gagne en fin de ligne les colonnes `echauffement`,
-`reps_min`, `reps_max`, `pas_kg`.
+`reps_min`, `reps_max`, `semaine_allegee`, `pas_kg`.
 
 ## 3. Logique — modules purs testés
 
@@ -107,3 +108,12 @@ comparent alors au seul jour de la semaine. Active : comportement d'avant, plus 
   cible / sous / au-dessus) et consigne (« Continue », « Ajoute un peu à tes repas », « Réduis
   un peu tes repas »).
 - **Rappel discret** après 3 jours sans pesée, dans Suivi et en pied de la séance du jour.
+
+## 7. Semaine allégée (`utils/lightWeek.js`)
+
+- Lancée depuis Réglages › Programme, pour 7 jours à partir d'aujourd'hui ; arrêtable depuis le
+  même endroit ou le bandeau de la séance du jour.
+- Une série de moins par exercice du programme, jamais sous deux (ni plus qu'avant) ; programme
+  et charges intacts.
+- Les séances sont marquées `lightWeek` et la barre d'XP les ignore : la suggestion repart de la
+  dernière vraie séance, datée sur la carte.
