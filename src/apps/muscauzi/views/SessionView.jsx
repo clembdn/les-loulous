@@ -14,7 +14,8 @@ import { useMuscData } from '../context/MuscDataContext.jsx'
 import { clearEntry, saveEntry } from '../services/sessionsService.js'
 import { withoutOrphans } from '../services/programService.js'
 import { saveNote } from '../services/notesService.js'
-import { hasWork, isEntryComplete } from '../utils/sets.js'
+import { isEntryComplete } from '../utils/sets.js'
+import { ADDED_ORDER, attachEntries } from '../utils/sessionLines.js'
 import { buildPreviousIndex } from '../utils/previous.js'
 import { buildBestIndex, buildRecordIndex } from '../utils/records.js'
 import { progressValue, setScore } from '../utils/metrics.js'
@@ -144,10 +145,11 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
         prescribedRepsMin: l.repsMin,
         prescribedRepsMax: l.repsMax,
       }))
-    const known = new Set(prescribed.map((l) => l.instanceId))
-    const off = Object.values(session?.entries || {})
-      .filter((e) => !known.has(e.instanceId) && hasWork(e))
-      .sort((a, b) => a.order - b.order)
+    // Une séance faite sous un ANCIEN programme (identifiants de lignes
+    // différents) se rattache par exercice aux lignes d'aujourd'hui, au lieu
+    // de tout afficher en « hors programme » (cf. utils/sessionLines.js).
+    const attached = attachEntries(prescribed, Object.values(session?.entries || {}))
+    const off = attached.orphans
       .map((e) => {
         const range = entryRange(e, rangeIndex[e.exerciseId])
         return {
@@ -163,8 +165,10 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
       })
     // Un ajout qui a reçu sa première série est déjà revenu par `off` : on ne
     // garde de la liste locale que ce qui n'est pas encore enregistré.
-    const saved = new Set(off.map((l) => l.instanceId))
-    return { lines: prescribed, extras: [...off, ...added.filter((l) => !saved.has(l.instanceId))] }
+    return {
+      lines: attached.lines,
+      extras: [...off, ...added.filter((l) => !attached.savedIds.has(l.instanceId))],
+    }
   }, [programDays, dayOfWeek, exerciseById, session, catalogueReady, added, rangeIndex, light])
 
   // L'ordre de parcours : la prescription du jour, puis le hors-programme.
@@ -235,7 +239,9 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
       instanceId: newInstanceId(),
       exerciseId: exercise.id,
       name: exercise.name,
-      order: 1000 + added.length,
+      // Rang ≥ ADDED_ORDER : un ajout à la volée n'est jamais rattaché à une
+      // ligne du programme (cf. utils/sessionLines.js).
+      order: ADDED_ORDER + added.length,
       prescribedSets: progressIndex[exercise.id]?.last?.prescribedSets || previous?.sets?.length || 3,
       prescribedReps: lastRange?.max || reps,
       prescribedRepsMin: lastRange?.min || reps,
