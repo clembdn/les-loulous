@@ -1,6 +1,7 @@
 import { getDocsFromServer } from 'firebase/firestore'
 import { tripsToPrewarm } from '../utils/tripDates.js'
 import { partCol, TRIP_PARTS } from './refs.js'
+import { prefetchTripTiles } from './mapTiles.js'
 
 // Ce qui est emporté hors-ligne, et depuis quand.
 //
@@ -10,7 +11,8 @@ import { partCol, TRIP_PARTS } from './refs.js'
 //    fois — c'est « disponible hors-ligne · synchro 14:32 » ;
 //  · qu'il l'a bien été AVANT de partir, même si on n'a pas rouvert ses
 //    jours : les voyages en cours ou qui partent sous 14 jours sont relus à
-//    l'ouverture de l'app (`prewarmTrips`).
+//    l'ouverture de l'app (`prewarmTrips`), et leurs cartes téléchargées
+//    (services/mapTiles.js).
 //
 // L'heure de synchro est propre à l'appareil — c'est SON cache qu'elle
 // décrit — donc en localStorage, pas dans Firestore.
@@ -82,7 +84,12 @@ export function prewarmTrips(trips, today) {
     if (warming.has(trip.id) || (last && Date.now() - last < PREWARM_EVERY_MS)) continue
     warming.add(trip.id)
     Promise.all(TRIP_PARTS.map((part) => getDocsFromServer(partCol(trip.id, part))))
-      .then(() => markSynced(trip.id))
+      .then((snaps) => {
+        markSynced(trip.id)
+        // Les cartes aussi : les tuiles autour de chaque lieu, sans attendre.
+        const docs = Object.fromEntries(TRIP_PARTS.map((part, i) => [part, snaps[i].docs.map((d) => d.data())]))
+        prefetchTripTiles(trip.id, docs)
+      })
       .catch((err) => console.warn('[Trip] préchargement impossible :', err))
       .finally(() => warming.delete(trip.id))
   }

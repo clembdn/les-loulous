@@ -13,7 +13,8 @@ function locationOf(item) {
 }
 
 /**
- * Les points de la journée, dans l'ordre de la frise :
+ * Les points de la journée, dans l'ordre de la frise (`itemKey` : la clé de
+ * l'élément de frise d'où vient le point, pour allumer l'un avec l'autre) :
  *  · `stop` — une étape localisée, avec son numéro ;
  *  · `stay` — un hébergement qu'on quitte ou qu'on rejoint ;
  *  · `transport` — le départ et/ou l'arrivée d'un trajet réservé.
@@ -29,19 +30,19 @@ export function dayRoute(items, { home = null } = {}) {
     if (item.type === 'transport') {
       const t = item.transport
       if (item.phase !== 'arrival' && hasCoords(t.from)) {
-        points.push({ key: `${item.key}:from`, lat: t.from.lat, lng: t.from.lng, kind: 'transport', mode: t.mode, transportId: t.id, name: t.from.name })
+        points.push({ key: `${item.key}:from`, itemKey: item.key, lat: t.from.lat, lng: t.from.lng, kind: 'transport', mode: t.mode, transportId: t.id, name: t.from.name })
       }
       if (item.phase !== 'departure' && hasCoords(t.to)) {
-        points.push({ key: `${item.key}:to`, lat: t.to.lat, lng: t.to.lng, kind: 'transport', mode: t.mode, transportId: t.id, name: t.to.name })
+        points.push({ key: `${item.key}:to`, itemKey: item.key, lat: t.to.lat, lng: t.to.lng, kind: 'transport', mode: t.mode, transportId: t.id, name: t.to.name })
       }
       continue
     }
     const at = locationOf(item)
     if (!hasCoords(at)) continue
     if (item.type === 'stop') {
-      points.push({ key: item.key, lat: at.lat, lng: at.lng, kind: 'stop', number: item.number, name: at.name })
+      points.push({ key: item.key, itemKey: item.key, lat: at.lat, lng: at.lng, kind: 'stop', number: item.number, category: at.category, name: at.name })
     } else {
-      points.push({ key: item.key, lat: at.lat, lng: at.lng, kind: 'stay', stayId: item.stay.id, name: at.name })
+      points.push({ key: item.key, itemKey: item.key, lat: at.lat, lng: at.lng, kind: 'stay', stayId: item.stay.id, name: at.name })
     }
   }
 
@@ -53,7 +54,7 @@ export function dayRoute(items, { home = null } = {}) {
   }
 
   const homePoint = home && hasCoords(home) && !points.some((p) => p.stayId === home.id)
-    ? { key: `home-${home.id}`, lat: home.lat, lng: home.lng, kind: 'home', stayId: home.id, name: home.name }
+    ? { key: `home-${home.id}`, itemKey: `home-${home.id}`, lat: home.lat, lng: home.lng, kind: 'home', stayId: home.id, name: home.name }
     : null
 
   return { points, segments, home: homePoint }
