@@ -5,8 +5,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  dayChip, formatDuration, formatPrice, formatProgress, formatShortRange, formatTripRange, plural,
-  totalsByCurrency,
+  dayChip, formatDuration, formatPrice, formatProgress, formatShortRange, formatSyncTime, formatTripRange,
+  formatUntil, plural, totalsByCurrency,
 } from './format.js'
 
 test('pluriel', () => {
@@ -60,4 +60,21 @@ test('plages courtes, sans l’année', () => {
   assert.equal(formatShortRange('2027-05-12', '2027-05-14'), '12 → 14 mai')
   assert.equal(formatShortRange('2027-04-28', '2027-05-03'), '28 avr → 3 mai')
   assert.equal(formatShortRange('2027-05-12', '2027-05-12'), '12 mai')
+})
+
+test('compte à rebours jusqu’au prochain élément', () => {
+  assert.equal(formatUntil(0), 'maintenant')
+  assert.equal(formatUntil(-5), 'maintenant')
+  assert.equal(formatUntil(12), 'dans 12 min')
+  assert.equal(formatUntil(80), 'dans 1 h 20')
+  assert.equal(formatUntil(120), 'dans 2 h')
+})
+
+test('heure de la dernière synchro, en heure locale', () => {
+  const now = new Date(2027, 4, 14, 9, 5)
+  assert.equal(formatSyncTime(new Date(2027, 4, 14, 8, 2), now), '08:02')
+  assert.equal(formatSyncTime(new Date(2027, 4, 13, 22, 47).getTime(), now), 'hier 22:47')
+  assert.equal(formatSyncTime(new Date(2027, 4, 2, 10, 0), now), '2 mai')
+  // À cheval sur un mois.
+  assert.equal(formatSyncTime(new Date(2027, 4, 31, 23, 59), new Date(2027, 5, 1, 0, 1)), 'hier 23:59')
 })

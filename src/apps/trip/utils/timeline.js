@@ -115,6 +115,31 @@ export function isPast(item, now) {
   return end < toMinutes(now)
 }
 
+/** Index du dernier élément daté déjà commencé à l'heure `now` (−1 si aucun). */
+export function lastStartedIndex(items, now) {
+  const nowMin = toMinutes(now)
+  let last = -1
+  items.forEach((item, i) => {
+    const start = toMinutes(item.time)
+    if (start !== null && start <= nowMin) last = i
+  })
+  return last
+}
+
+/**
+ * Les clés des éléments à griser à l'heure `now` : les éléments datés
+ * terminés, et les éléments sans heure rangés AVANT le dernier élément
+ * commencé — on est passé à la suite, ils sont derrière nous.
+ */
+export function pastKeys(items, now) {
+  const last = lastStartedIndex(items, now)
+  const keys = new Set()
+  items.forEach((item, i) => {
+    if (item.time ? isPast(item, now) : i < last) keys.add(item.key)
+  })
+  return keys
+}
+
 /**
  * Où en est la journée à l'heure `now` :
  *  · `current` — commencé et pas fini (heure + durée connues) ;

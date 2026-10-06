@@ -1,17 +1,21 @@
 import { Link } from 'react-router-dom'
-import { Pencil } from 'lucide-react'
+import { CircleCheck, Pencil } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { tripProgress } from '../../utils/tripDates.js'
 import { formatProgress, formatTripRange, plural } from '../../utils/format.js'
 import { tripPath } from '../../config/navigation.js'
+import { useSyncedAt } from '../../hooks/useSyncedAt.js'
 
 // Une carte de la liste. Le voyage en cours s'ouvre sur « Aujourd'hui », les
 // autres sur leurs jours. Le crayon est un bouton FRÈRE du lien, pas un
 // enfant : un bouton dans un lien est invalide, et le clic ouvrirait les deux.
+// « ✓ hors-ligne » : le voyage a été lu en entier sur cet appareil (cf.
+// offlineService) — utile avant de partir, inutile une fois rentrés.
 export default function TripCard({ trip, today, onEdit }) {
   const progress = tripProgress(trip, today)
   const ongoing = progress.status === 'ongoing'
   const past = progress.status === 'past'
+  const offline = useSyncedAt(trip.id) !== null && !past
 
   return (
     <div
@@ -39,6 +43,11 @@ export default function TripCard({ trip, today, onEdit }) {
         >
           {ongoing && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
           {formatProgress(progress, trip.endDate)}
+          {offline && (
+            <span className="inline-flex items-center gap-1 font-normal text-faint" title="Lisible sans réseau sur cet appareil">
+              · <CircleCheck size={12} className="text-emerald-600" aria-hidden="true" /> hors-ligne
+            </span>
+          )}
         </p>
       </Link>
       <button

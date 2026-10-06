@@ -1,5 +1,6 @@
-import { doc, onSnapshot } from 'firebase/firestore'
+import { doc } from 'firebase/firestore'
 import { optNumber, optText, readMeta } from '../utils/fields.js'
+import { listen } from './listen.js'
 import { partCol, partDoc } from './refs.js'
 
 // Justificatifs : une capture d'écran par document, en base64.
@@ -28,12 +29,13 @@ function normalizeAttachment(raw) {
   }
 }
 
-export function subscribeToAttachments(tripId, callback, onError) {
-  return onSnapshot(partCol(tripId, 'attachments'), (snap) => {
-    callback(snap.docs.map((d) => normalizeAttachment({ id: d.id, ...d.data() })))
-  }, (err) => {
-    console.error('[Trip] attachments error:', err)
-    onError?.(err)
+/** `onSync` : cf. listen.js. */
+export function subscribeToAttachments(tripId, callback, onError, onSync) {
+  return listen(partCol(tripId, 'attachments'), {
+    label: 'attachments',
+    onData: (snap) => callback(snap.docs.map((d) => normalizeAttachment({ id: d.id, ...d.data() }))),
+    onSync,
+    onError,
   })
 }
 

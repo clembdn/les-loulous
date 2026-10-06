@@ -90,6 +90,23 @@ export function currentTrip(trips, today) {
   return ongoing[0] || null
 }
 
+// Un voyage qui commence dans deux semaines se prépare encore, et le départ
+// se fait souvent sans avoir rouvert l'app : on l'emporte dès maintenant.
+export const PREWARM_DAYS = 14
+
+/**
+ * Les voyages à garder sous la main hors-ligne : en cours, ou qui commencent
+ * dans `PREWARM_DAYS` jours au plus. Le plus proche d'abord.
+ */
+export function tripsToPrewarm(trips, today, horizon = PREWARM_DAYS) {
+  return trips
+    .filter((trip) => {
+      const status = tripStatus(trip, today)
+      return status === 'ongoing' || (status === 'upcoming' && daysBetween(today, trip.startDate) <= horizon)
+    })
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))
+}
+
 /** Le jour ouvert par défaut : aujourd'hui s'il fait partie du voyage, sinon le premier. */
 export function defaultDay(trip, today) {
   if (!hasValidRange(trip)) return null

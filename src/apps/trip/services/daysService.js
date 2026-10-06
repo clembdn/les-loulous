@@ -1,9 +1,10 @@
-import { onSnapshot, setDoc, writeBatch } from 'firebase/firestore'
+import { setDoc, writeBatch } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
 import { DEFAULT_CATEGORY, STOP_CATEGORY_IDS } from '../config/categories.js'
 import {
   dateKey, enumValue, optNumber, optText, place, readMeta, stamp, text, timeOfDay,
 } from '../utils/fields.js'
+import { listen } from './listen.js'
 import { partCol, partDoc } from './refs.js'
 
 // Une page par jour, comme le planning de Cook'It :
@@ -47,15 +48,17 @@ function normalizeDay(raw) {
   }
 }
 
-/** Les jours enregistrés d'un voyage, en map `{ [date]: jour }`. */
-export function subscribeToDays(tripId, callback, onError) {
-  return onSnapshot(partCol(tripId, 'days'), (snap) => {
-    const map = {}
-    snap.docs.forEach((d) => { map[d.id] = normalizeDay({ id: d.id, ...d.data() }) })
-    callback(map)
-  }, (err) => {
-    console.error('[Trip] days error:', err)
-    onError?.(err)
+/** Les jours enregistrés d'un voyage, en map `{ [date]: jour }`. `onSync` : cf. listen.js. */
+export function subscribeToDays(tripId, callback, onError, onSync) {
+  return listen(partCol(tripId, 'days'), {
+    label: 'days',
+    onData: (snap) => {
+      const map = {}
+      snap.docs.forEach((d) => { map[d.id] = normalizeDay({ id: d.id, ...d.data() }) })
+      callback(map)
+    },
+    onSync,
+    onError,
   })
 }
 

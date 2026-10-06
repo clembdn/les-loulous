@@ -8,6 +8,7 @@ import { MAX_STOPS_PER_DAY } from '../../services/daysService.js'
 import TripHeader from '../trips/TripHeader.jsx'
 import MiniMap from '../map/MiniMap.jsx'
 import TonightCard from '../resas/TonightCard.jsx'
+import { DayWeather } from '../weather/WeatherBadge.jsx'
 import DayStrip from './DayStrip.jsx'
 import DayTimeline from './DayTimeline.jsx'
 import { AddStopButton, DayDate, RouteLink } from './DayParts.jsx'
@@ -53,7 +54,10 @@ export default function DayViewMobile({ date }) {
               <Pencil size={13} className="shrink-0 text-faint group-hover:text-fg" />
             </button>
           </div>
-          <span className="font-mono text-xs text-muted tabular mt-0.5">J{view.dayNumber}/{dayKeys.length}</span>
+          <div className="shrink-0 mt-0.5 flex flex-col items-end gap-1">
+            <span className="font-mono text-xs text-muted tabular">J{view.dayNumber}/{dayKeys.length}</span>
+            <DayWeather date={date} />
+          </div>
         </header>
 
         <MiniMap items={view.items} home={view.tonight} />

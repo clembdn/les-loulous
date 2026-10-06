@@ -145,6 +145,18 @@ export function directionsUrl(place, { origin = null, mode = null } = {}) {
 }
 
 /**
+ * « Y aller » quand on peut : l'itinéraire si l'on sait où est le lieu
+ * (coordonnées ou adresse), sinon son lien d'origine — un lien court pas
+ * encore déroulé s'ouvre dans l'app Google Maps, qui propose l'itinéraire.
+ * Un nom seul ne suffit pas : « Café » mènerait n'importe où. `null` alors.
+ */
+export function goUrl(place) {
+  if (!place) return null
+  if ((Number.isFinite(place.lat) && Number.isFinite(place.lng)) || place.address) return directionsUrl(place)
+  return place.mapsUrl || null
+}
+
+/**
  * Tout le parcours d'une journée dans Google Maps : départ, étapes, arrivée.
  * Google n'accepte que 9 étapes intermédiaires sur mobile : au-delà, on garde
  * les premières, l'arrivée reste la vraie.

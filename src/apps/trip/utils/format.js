@@ -56,6 +56,28 @@ export function formatDuration(minutes) {
   return m ? `${h} h ${String(m).padStart(2, '0')}` : `${h} h`
 }
 
+/** « maintenant », « dans 12 min », « dans 1 h 20 » — avant le prochain élément de la journée. */
+export function formatUntil(minutes) {
+  if (!Number.isFinite(minutes) || minutes <= 0) return 'maintenant'
+  return `dans ${formatDuration(minutes)}`
+}
+
+const hhmm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+
+/**
+ * L'heure de la dernière synchro, au plus court : « 14:32 » aujourd'hui,
+ * « hier 14:32 », puis « 12 mai ». Jours comparés en heure LOCALE.
+ */
+export function formatSyncTime(at, now = new Date()) {
+  const d = new Date(at)
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const days = Math.round((today - day) / 86400000)
+  if (days <= 0) return hhmm(d)
+  if (days === 1) return `hier ${hhmm(d)}`
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}`
+}
+
 /**
  * Un prix dans SA devise — jamais converti, comme dans FinAuzi. Les centimes
  * n'apparaissent que s'il y en a : « 284 € », « 162,50 € ».

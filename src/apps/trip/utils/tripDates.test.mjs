@@ -6,7 +6,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   currentTrip, daysBetween, defaultDay, groupTrips, MAX_TRIP_DAYS, tripDays, tripLength,
-  tripProgress, tripStatus, validateTripDates,
+  tripProgress, tripsToPrewarm, tripStatus, validateTripDates,
 } from './tripDates.js'
 
 const trip = (id, startDate, endDate) => ({ id, startDate, endDate })
@@ -78,4 +78,18 @@ test('validation des dates du formulaire', () => {
   assert.match(validateTripDates('', '2027-05-17'), /Choisissez/)
   assert.match(validateTripDates('2027-05-17', '2027-05-12'), /précède/)
   assert.match(validateTripDates('2027-01-01', '2027-12-31'), /maximum/)
+})
+
+test('hors-ligne : on emporte les voyages en cours et ceux qui partent sous 14 jours', () => {
+  const trips = [
+    trip('passe', '2027-04-01', '2027-04-10'),
+    trip('loin', '2027-06-01', '2027-06-10'),
+    trip('dans14', '2027-05-29', '2027-06-02'),
+    trip('dans15', '2027-05-30', '2027-06-02'),
+    trip('encours', '2027-05-10', '2027-05-20'),
+  ]
+  assert.deepEqual(tripsToPrewarm(trips, '2027-05-15').map((t) => t.id), ['encours', 'dans14'])
+  // Le jour du retour, le voyage est encore en cours ; le lendemain, plus besoin.
+  assert.deepEqual(tripsToPrewarm([trips[4]], '2027-05-20').map((t) => t.id), ['encours'])
+  assert.deepEqual(tripsToPrewarm([trips[4]], '2027-05-21'), [])
 })

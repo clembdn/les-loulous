@@ -42,7 +42,6 @@ export const APPS = [
     icon: Plane,
     accent: 'lagoon',
     theme: 'light',
-    // Passe à 'live' quand la V1 est complète (vues jour et « Aujourd'hui »).
-    status: 'soon',
+    status: 'live',
   },
 ]

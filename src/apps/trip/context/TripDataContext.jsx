@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { subscribeToStays, subscribeToTransports } from '../services/reservationsService.js'
 import { subscribeToDays } from '../services/daysService.js'
 import { subscribeToAttachments } from '../services/attachmentsService.js'
+import { markSynced } from '../services/offlineService.js'
 import { tripDays } from '../utils/tripDates.js'
 import { buildDayTimeline } from '../utils/timeline.js'
 import { nightsOf, stayOrder, staySegments } from '../utils/nights.js'
@@ -14,6 +15,8 @@ import { nightsOf, stayOrder, staySegments } from '../utils/nights.js'
  * Quatre écoutes, ouvertes tant que le voyage est affiché. C'est aussi ce qui
  * l'emporte hors-ligne : une fois lus, ces documents restent dans le cache
  * IndexedDB de Firestore, captures comprises, et se relisent sans réseau.
+ * Quand les quatre sont confirmées par le serveur, l'heure de synchro du
+ * voyage est notée (cf. services/offlineService.js).
  *
  * Le voyage lui-même (titre, dates) vient de `useTrips()` — il est déjà
  * écouté par la liste — et arrive ici en prop.
@@ -42,11 +45,21 @@ export function TripDataProvider({ trip, children }) {
     setReady(NOT_READY)
 
     const done = (part) => setReady((r) => (r[part] ? r : { ...r, [part]: true }))
+
+    // « Disponible hors-ligne » : les quatre parties confirmées par le
+    // serveur en même temps. Tenu hors de l'état React — l'heure de synchro
+    // vit dans offlineService, seul l'indicateur se redessine.
+    const fresh = {}
+    const sync = (part) => (fromServer) => {
+      fresh[part] = fromServer
+      if (fromServer && PARTS.every((p) => fresh[p])) markSynced(tripId)
+    }
+
     const unsubs = [
-      subscribeToStays(tripId, (x) => { setStays(x); done('stays') }, () => done('stays')),
-      subscribeToTransports(tripId, (x) => { setTransports(x); done('transports') }, () => done('transports')),
-      subscribeToDays(tripId, (x) => { setDays(x); done('days') }, () => done('days')),
-      subscribeToAttachments(tripId, (x) => { setAttachments(x); done('attachments') }, () => done('attachments')),
+      subscribeToStays(tripId, (x) => { setStays(x); done('stays') }, () => done('stays'), sync('stays')),
+      subscribeToTransports(tripId, (x) => { setTransports(x); done('transports') }, () => done('transports'), sync('transports')),
+      subscribeToDays(tripId, (x) => { setDays(x); done('days') }, () => done('days'), sync('days')),
+      subscribeToAttachments(tripId, (x) => { setAttachments(x); done('attachments') }, () => done('attachments'), sync('attachments')),
     ]
     return () => unsubs.forEach((unsub) => unsub())
   }, [tripId])

@@ -5,7 +5,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  dayRouteUrl, directionsUrl, isMapsUrl, isShortMapsUrl, looksLikeUrl, parseMapsUrl, placeUrl,
+  dayRouteUrl, directionsUrl, goUrl, isMapsUrl, isShortMapsUrl, looksLikeUrl, parseMapsUrl, placeUrl,
 } from './mapsUrl.js'
 
 test('reconnaître un lien Maps, court ou long, et refuser le reste', () => {
@@ -91,4 +91,12 @@ test('fabriquer les liens : y aller, le parcours du jour, montrer le lieu', () =
   assert.equal(placeUrl({ mapsUrl: 'https://maps.app.goo.gl/x', lat: 1, lng: 2 }), 'https://maps.app.goo.gl/x')
   assert.equal(placeUrl({ lat: 1, lng: 2 }), 'https://www.google.com/maps/search/?api=1&query=1%2C2')
   assert.equal(placeUrl({}), null)
+})
+
+test('« Y aller » : l’itinéraire si on sait où c’est, sinon le lien d’origine, jamais un nom seul', () => {
+  assert.equal(goUrl({ lat: 1, lng: 2 }), 'https://www.google.com/maps/dir/?api=1&destination=1%2C2')
+  assert.equal(goUrl({ name: 'Hôtel', address: 'Porto' }), 'https://www.google.com/maps/dir/?api=1&destination=H%C3%B4tel%2C+Porto')
+  assert.equal(goUrl({ name: 'Café', mapsUrl: 'https://maps.app.goo.gl/x' }), 'https://maps.app.goo.gl/x')
+  assert.equal(goUrl({ name: 'Café' }), null)
+  assert.equal(goUrl(null), null)
 })

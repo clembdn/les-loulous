@@ -7,6 +7,7 @@ import { useTripData } from '../context/TripDataContext.jsx'
 import { useTripUI } from '../context/TripUIContext.jsx'
 import ResaList from '../components/resas/ResaList.jsx'
 import ResaDetail from '../components/resas/ResaDetail.jsx'
+import OfflineBadge from '../components/OfflineBadge.jsx'
 import { reservationEntries } from '../utils/reservations.js'
 import { formatPrice, totalsByCurrency } from '../utils/format.js'
 
@@ -72,6 +73,8 @@ export default function ResasView({ selectedKey }) {
               Total {totals.map((t) => formatPrice(t.total, t.currency)).join(' · ')}
             </p>
           )}
+          {/* Les captures sont ce qu'on montre à l'accueil sans réseau. */}
+          <OfflineBadge tripId={trip.id} className="mt-1" />
         </div>
         <div className="mt-3 lg:mt-0">{actions}</div>
       </header>

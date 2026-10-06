@@ -60,6 +60,7 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, child
     // Fermer une fiche, c'est revenir en arrière : « retour » ne doit pas la rouvrir.
     closeResa: () => goBack(`/trip/${tripId}/resas`),
     openDay: (date, options) => goTab('jours', date, options),
+    openTab: (tab) => goTab(tab),
     near,
   }), [goTab, goBack, tripId, near])
 

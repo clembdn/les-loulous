@@ -1,13 +1,13 @@
 import { BedDouble, GripVertical, Paperclip } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
-import { formatDateFr } from '@/shared/lib/dates.js'
 import { getCategory } from '../../config/categories.js'
 import { getStayKind, getTransportMode } from '../../config/reservations.js'
 import { stayColor } from '../../config/palette.js'
 import { directionsUrl } from '../../utils/mapsUrl.js'
 import { formatDistance, hasCoords } from '../../utils/geo.js'
 import { formatDuration } from '../../utils/format.js'
-import { isPast } from '../../utils/timeline.js'
+import { pastKeys } from '../../utils/timeline.js'
+import { transportText } from './itemText.js'
 
 // En dessous, on marche ; au-dessus, Google choisit le mode habituel.
 const WALKING_MAX_M = 1500
@@ -17,7 +17,7 @@ const WALKING_MAX_M = 1500
  * trajets réservés, arrivées et départs d'hébergement, et la distance entre
  * deux lieux avec son lien « Itinéraire ».
  *
- * `now` (« HH:MM ») grise ce qui est passé — l'écran Aujourd'hui.
+ * `now` (« HH:MM ») grise ce qui est passé — l'écran Aujourd'hui (cf. `pastKeys`).
  * `dnd` active le glisser-déposer des étapes (éditeur desktop) :
  *   { draggingId, dropBeforeId, dropActive, onDragStart, onDragOver, onDrop, onDragEnd }
  * Une étape lâchée se range AVANT `dropBeforeId` (en fin de liste s'il est nul).
@@ -28,11 +28,12 @@ export default function DayTimeline({ items, legs = {}, attachmentsByParent = {}
   // La première étape qui suit l'élément `i` : c'est devant elle qu'on range
   // une étape lâchée sur un trajet ou un hébergement (qui, eux, ne bougent pas).
   const nextStopId = (i) => items.slice(i + 1).find((it) => it.type === 'stop')?.stop.id ?? null
+  const done = now ? pastKeys(items, now) : null
 
   return (
     <ol className="relative">
       {items.map((item, i) => {
-        const past = now && isPast(item, now)
+        const past = done?.has(item.key)
         const leg = legs[item.key]
         const indicator = dnd?.dropActive && item.type === 'stop' && dnd.dropBeforeId === item.stop.id
         return (
@@ -124,24 +125,6 @@ function StopRow({ item, onClick, draggable }) {
       </span>
     </button>
   )
-}
-
-function transportText(item) {
-  const t = item.transport
-  const mode = getTransportMode(t.mode)
-  const ref = t.ref || mode.label
-  const from = t.from.name || 'départ'
-  const to = t.to.name || 'arrivée'
-  if (t.mode === 'car') {
-    if (item.phase === 'arrival') return { title: `Retour · ${ref}`, sub: to }
-    if (item.phase === 'departure') return { title: `Prise · ${ref}`, sub: `${from} · retour le ${formatDateFr(t.to.date)}` }
-    return { title: ref, sub: `${from} → ${to}` }
-  }
-  if (item.phase === 'departure') {
-    return { title: ref, sub: `${from} → ${to} · arrivée le ${formatDateFr(t.to.date)}${t.to.time ? ` à ${t.to.time}` : ''}` }
-  }
-  if (item.phase === 'arrival') return { title: `Arrivée · ${ref}`, sub: `${from} → ${to}` }
-  return { title: ref, sub: `${from} → ${to}${item.endTime ? ` · arrivée ${item.endTime}` : ''}` }
 }
 
 function TransportRow({ item, attachments, onClick }) {

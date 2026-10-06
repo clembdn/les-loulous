@@ -1,10 +1,11 @@
-import { doc, onSnapshot, writeBatch } from 'firebase/firestore'
+import { doc, writeBatch } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
 import { STAY_KIND_IDS, TRANSPORT_MODE_IDS } from '../config/reservations.js'
 import {
   currencyCode, enumValue, money, optText, place, readMeta, stamp, timePoint,
 } from '../utils/fields.js'
 import { queueAttachmentChanges } from './attachmentsService.js'
+import { listen } from './listen.js'
 import { partCol, partDoc } from './refs.js'
 
 // Les deux sortes de réservations : hébergements (des nuits) et trajets
@@ -53,25 +54,26 @@ function transportFields(raw) {
 
 const FIELDS = { stay: stayFields, transport: transportFields }
 
-function subscribe(kind, tripId, callback, onError) {
+// `onSync(fromServer)` : cf. listen.js (indicateur hors-ligne).
+function subscribe(kind, tripId, callback, onError, onSync) {
   const toFields = FIELDS[kind]
-  return onSnapshot(partCol(tripId, PART[kind]), (snap) => {
-    callback(snap.docs.map((d) => {
+  return listen(partCol(tripId, PART[kind]), {
+    label: PART[kind],
+    onData: (snap) => callback(snap.docs.map((d) => {
       const raw = d.data()
       return { id: d.id, ...toFields(raw), ...readMeta(raw) }
-    }))
-  }, (err) => {
-    console.error(`[Trip] ${PART[kind]} error:`, err)
-    onError?.(err)
+    })),
+    onSync,
+    onError,
   })
 }
 
-export function subscribeToStays(tripId, callback, onError) {
-  return subscribe('stay', tripId, callback, onError)
+export function subscribeToStays(tripId, callback, onError, onSync) {
+  return subscribe('stay', tripId, callback, onError, onSync)
 }
 
-export function subscribeToTransports(tripId, callback, onError) {
-  return subscribe('transport', tripId, callback, onError)
+export function subscribeToTransports(tripId, callback, onError, onSync) {
+  return subscribe('transport', tripId, callback, onError, onSync)
 }
 
 /**

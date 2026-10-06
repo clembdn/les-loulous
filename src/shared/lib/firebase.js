@@ -26,7 +26,15 @@ export const auth = getAuth(app)
 // Cache persistant (IndexedDB) : démarrage instantané depuis le cache local,
 // app utilisable hors-ligne (magasin sans réseau), sync auto au retour du réseau.
 // Multi-onglets pour que PWA installée + onglet navigateur cohabitent.
+//
+// 100 Mo au lieu des 40 par défaut : au-delà du plafond, Firestore évince les
+// documents qu'aucun écran n'écoute — précisément ceux d'un voyage préchargé
+// pour partir sans réseau. Ses captures pèsent jusqu'à ~0,9 Mo chacune ; deux
+// voyages bien documentés dépasseraient les 40 Mo à eux seuls.
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+    cacheSizeBytes: 100 * 1024 * 1024,
+  }),
 })
 export default app

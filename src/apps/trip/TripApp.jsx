@@ -8,12 +8,13 @@ import { Button } from '@/shared/ui/Button.jsx'
 import { ThemedToaster } from '@/shared/ui/sonner.jsx'
 import { TripsProvider, useTrips } from './context/TripsContext.jsx'
 import { TripDataProvider } from './context/TripDataContext.jsx'
+import { TripWeatherProvider } from './context/TripWeatherContext.jsx'
 import { TripUIProvider } from './context/TripUIContext.jsx'
 import Shell from './components/layout/Shell.jsx'
 import Loader from './components/Loader.jsx'
 import TripFormSheet from './components/trips/TripFormSheet.jsx'
 import TripsView from './views/TripsView.jsx'
-import PendingView from './views/PendingView.jsx'
+import TodayView from './views/TodayView.jsx'
 import DaysView from './views/DaysView.jsx'
 import ResasView from './views/ResasView.jsx'
 import { DEFAULT_TAB, LIST_ID, LIST_PATH, TAB_IDS, tripPath } from './config/navigation.js'
@@ -96,18 +97,20 @@ function TripScreens() {
     // La clé remonte tout l'arbre en changeant de voyage : aucune donnée de
     // l'ancien ne peut s'afficher sous le titre du nouveau.
     <TripDataProvider key={tripId} trip={trip}>
-      <TripUIProvider
-        goTab={goTab}
-        goBack={goBack}
-        currentSub={sub}
-        onTripDeleted={() => navigate(LIST_PATH, { replace: true })}
-      >
-        <Shell trip={trip} active={tab} onChange={onChange}>
-          {tab === 'aujourdhui' && <PendingView trip={trip} tab={tab} />}
-          {tab === 'jours' && <DaysView selectedDate={sub} />}
-          {tab === 'resas' && <ResasView selectedKey={sub} />}
-        </Shell>
-      </TripUIProvider>
+      <TripWeatherProvider>
+        <TripUIProvider
+          goTab={goTab}
+          goBack={goBack}
+          currentSub={sub}
+          onTripDeleted={() => navigate(LIST_PATH, { replace: true })}
+        >
+          <Shell trip={trip} active={tab} onChange={onChange}>
+            {tab === 'aujourdhui' && <TodayView />}
+            {tab === 'jours' && <DaysView selectedDate={sub} />}
+            {tab === 'resas' && <ResasView selectedKey={sub} />}
+          </Shell>
+        </TripUIProvider>
+      </TripWeatherProvider>
     </TripDataProvider>
   )
 }

@@ -5,7 +5,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  buildDayTimeline, dayStatus, insertionPointByTime, isPast, moveStop, shiftStop, toMinutes,
+  buildDayTimeline, dayStatus, insertionPointByTime, isPast, lastStartedIndex, moveStop, pastKeys, shiftStop,
+  toMinutes,
 } from './timeline.js'
 
 const D = '2027-05-14'
@@ -146,4 +147,16 @@ test('lâchée sur un autre jour, une étape se range à son heure', () => {
   assert.equal(insertionPointByTime(stops, '08:00'), 'a')
   assert.equal(insertionPointByTime(stops, '20:00'), null)
   assert.equal(insertionPointByTime(stops, null), null, 'sans heure : en fin de journée')
+})
+
+test('griser la journée : les horaires finis, et les étapes sans heure qu’on a dépassées', () => {
+  const items = buildDayTimeline(D, [stop('musee', '09:00', 60), stop('flaner'), stop('train', '14:00', 120), stop('glace')])
+  assert.equal(lastStartedIndex(items, '08:00'), -1)
+  assert.equal(lastStartedIndex(items, '14:30'), 2)
+  // 10:30 : le musée est fini, on flâne peut-être encore.
+  assert.deepEqual([...pastKeys(items, '10:30')], ['stop-musee'])
+  // 14:30 : dans le train, la flânerie est derrière nous ; le train ne l'est pas.
+  assert.deepEqual([...pastKeys(items, '14:30')], ['stop-musee', 'stop-flaner'])
+  // Ce qui vient après le dernier horaire reste à faire, même tard.
+  assert.deepEqual([...pastKeys(items, '23:00')], ['stop-musee', 'stop-flaner', 'stop-train'])
 })

@@ -14,6 +14,7 @@ import { plural } from '../../utils/format.js'
 import TripHeader from '../trips/TripHeader.jsx'
 import MiniMap from '../map/MiniMap.jsx'
 import TonightCard from '../resas/TonightCard.jsx'
+import { DayWeather } from '../weather/WeatherBadge.jsx'
 import DayList from './DayList.jsx'
 import DayTimeline from './DayTimeline.jsx'
 import { AddStopButton, DayDate, RouteLink } from './DayParts.jsx'
@@ -148,10 +149,13 @@ export default function DayEditorDesktop({ date }) {
         <div className="space-y-4 min-w-0">
           <section className="rounded-2xl border border-border bg-surface overflow-hidden">
             <header className="px-5 pt-4 pb-3 border-b border-border">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                 <DayDate date={date} today={today} />
-                <span className="text-xs text-muted tabular">
-                  Jour {view.dayNumber}/{dayKeys.length} · {plural(view.stopCount, 'étape')}
+                <span className="flex items-center gap-3">
+                  <DayWeather date={date} />
+                  <span className="text-xs text-muted tabular">
+                    Jour {view.dayNumber}/{dayKeys.length} · {plural(view.stopCount, 'étape')}
+                  </span>
                 </span>
               </div>
               <InlineText

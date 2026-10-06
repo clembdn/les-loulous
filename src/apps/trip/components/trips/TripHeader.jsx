@@ -2,9 +2,11 @@ import { Pencil } from 'lucide-react'
 import { useToday } from '@/shared/lib/useToday.js'
 import { tripProgress } from '../../utils/tripDates.js'
 import { formatProgress, formatTripRange, plural } from '../../utils/format.js'
+import OfflineBadge from '../OfflineBadge.jsx'
 
 // L'en-tête d'un voyage : où on en est, son titre, ses dates — et de quoi le
-// modifier. `actions` reçoit les boutons propres à l'écran (desktop).
+// modifier, et s'il est disponible hors-ligne. `actions` reçoit les boutons
+// propres à l'écran (desktop).
 export default function TripHeader({ trip, onEdit, actions }) {
   const today = useToday()
   const progress = tripProgress(trip, today)
@@ -16,6 +18,7 @@ export default function TripHeader({ trip, onEdit, actions }) {
         <p className="text-sm text-muted mt-0.5 tabular">
           {formatTripRange(trip.startDate, trip.endDate)} · {plural(progress.length, 'jour')}
         </p>
+        <OfflineBadge tripId={trip.id} className="mt-1" />
       </div>
       <div className="shrink-0 flex items-center gap-2 mt-1">
         {actions}
