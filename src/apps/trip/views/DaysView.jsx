@@ -1,7 +1,9 @@
 import { useMediaQuery } from '@/shared/lib/useMediaQuery.js'
 import { useToday } from '@/shared/lib/useToday.js'
 import { useTripData } from '../context/TripDataContext.jsx'
+import { useEffect } from 'react'
 import { defaultDay } from '../utils/tripDates.js'
+import { rememberDay } from '../services/lastDay.js'
 import DayViewMobile from '../components/days/DayViewMobile.jsx'
 import DayEditorDesktop from '../components/days/DayEditorDesktop.jsx'
 
@@ -19,6 +21,9 @@ export default function DaysView({ selectedDate }) {
   const today = useToday()
   const { trip, dayKeys } = useTripData()
   const date = dayKeys.includes(selectedDate) ? selectedDate : defaultDay(trip, today)
+  useEffect(() => {
+    if (date) rememberDay(trip.id, date)
+  }, [trip.id, date])
 
   if (!date) return null
   return isDesktop ? <DayEditorDesktop date={date} /> : <DayViewMobile date={date} />

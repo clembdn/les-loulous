@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { AUTHORIZED_UIDS, getPerson, getEmailForUid } from '@/shared/config/people.js'
@@ -22,6 +22,7 @@ function mapAuthError(code) {
 export default function LoginView() {
   useAppTheme('dark', 'indigo')
   const { loginWithEmail, resetPassword, isAuthenticated, isAuthorized } = useAuth()
+  const location = useLocation()
   const [selectedUid, setSelectedUid] = useState(null)
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -29,7 +30,10 @@ export default function LoginView() {
   const [info, setInfo] = useState(null)
   const [busy, setBusy] = useState(false)
 
-  if (isAuthenticated && isAuthorized) return <Navigate to="/" replace />
+  if (isAuthenticated && isAuthorized) {
+    const from = location.state?.from
+    return <Navigate to={from ? `${from.pathname}${from.search || ''}` : '/'} replace />
+  }
 
   const person = selectedUid ? getPerson(selectedUid) : null
   const email = selectedUid ? getEmailForUid(selectedUid) : null

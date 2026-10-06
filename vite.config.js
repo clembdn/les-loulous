@@ -43,6 +43,14 @@ export default defineConfig({
         orientation: 'portrait',
         start_url: '/',
         scope: '/',
+        // Android : Loulous apparaît dans « Partager » de Google Maps (PWA
+        // installée). Le lieu arrive sur /trip/partage, à ranger dans un jour.
+        share_target: {
+          action: '/trip/partage',
+          method: 'GET',
+          enctype: 'application/x-www-form-urlencoded',
+          params: { title: 'title', text: 'text', url: 'url' },
+        },
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
@@ -51,7 +59,9 @@ export default defineConfig({
       },
       workbox: {
         // Fonts auto-hébergées → précachées comme le reste, plus besoin de runtime caching.
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+        // `json` : le style des cartes de Trip Planner (public/trip-map/style.json),
+        // pour qu'une carte se dessine sans réseau.
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2,json}'],
         // Tesseract pèse ~6 Mo : hors de question de l'imposer à l'installation
         // à quelqu'un qui ne scannera jamais d'étiquette. Il est mis en cache
         // au premier usage (voir runtimeCaching), pas avant.
@@ -62,6 +72,30 @@ export default defineConfig({
         // Ni répondre l'app à la place d'une fonction serveur ouverte à la main.
         navigateFallbackDenylist: [/^\/tesseract\//, /^\/api\//],
         runtimeCaching: [
+          {
+            // Trip Planner · le TileJSON d'OpenFreeMap donne l'adresse (versionnée)
+            // des tuiles. Réseau d'abord pour suivre les mises à jour ; hors-ligne,
+            // la copie en cache pointe vers les tuiles déjà téléchargées.
+            urlPattern: ({ url }) => url.origin === 'https://tiles.openfreemap.org' && url.pathname === '/planet',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'trip-map-meta',
+              networkTimeoutSeconds: 4,
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Tuiles, polices et pictogrammes des cartes : une tuile ne change
+            // pas sous une même adresse. Préchargées avant le départ
+            // (src/apps/trip/services/mapTiles.js), dans ce même cache.
+            urlPattern: ({ url }) => url.origin === 'https://tiles.openfreemap.org',
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'trip-map-tiles',
+              expiration: { maxEntries: 8000, maxAgeSeconds: 60 * 60 * 24 * 120 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             // Une fois téléchargé, le moteur reste disponible hors-ligne — c'est
             // le cas qui compte : scanner une étiquette dans un magasin sans réseau.
@@ -86,7 +120,9 @@ export default defineConfig({
   },
 
   build: {
-    chunkSizeWarningLimit: 1000,
+    // MapLibre (~1 050 Ko, 285 Ko gzip) est un chunk à part, chargé seulement
+    // à l'affichage d'une carte de Trip Planner : pas d'alerte pour lui.
+    chunkSizeWarningLimit: 1100,
     rollupOptions: {
       output: {
         manualChunks(id) {
