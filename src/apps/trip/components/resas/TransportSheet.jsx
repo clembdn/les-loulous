@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { cn } from '@/shared/lib/utils.js'
+import { ArrowLeftRight, Trash2 } from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { ThemedConfirm, ThemedSheet } from '@/shared/ui/ThemedSheet.jsx'
 import { Button } from '@/shared/ui/Button.jsx'
@@ -9,14 +10,26 @@ import { toast } from '@/shared/ui/sonner.jsx'
 import Field from '../Field.jsx'
 import PlaceInput from '../places/PlaceInput.jsx'
 import AttachmentField from '../attachments/AttachmentField.jsx'
-import { ChoiceChips, DateTimeField, FormSection, lastCurrency, PriceField, rememberCurrency } from './formParts.jsx'
+import { ChoiceChips, DateTimeField, Disclosure, FILLED, FormSection, lastCurrency, PriceField, rememberCurrency } from './formParts.jsx'
+import OcrPrefill from './OcrPrefill.jsx'
+import { transportFields } from '../../utils/resaParse.js'
 import { getTransportMode, TRANSPORT_MODES } from '../../config/reservations.js'
 import { deleteReservation, saveReservation } from '../../services/reservationsService.js'
 import { resaTitle } from './resaDisplay.jsx'
-import { plural } from '../../utils/format.js'
+import { formatPrice, plural } from '../../utils/format.js'
 
 const NO_CHANGES = { add: [], remove: [] }
 const NO_PLACE = { name: '', address: null, lat: null, lng: null, mapsUrl: null }
+
+// « Nouveau vol », « Modifier le train »… : le formulaire dit ce qu'on saisit.
+const NOUNS = {
+  flight: ['Nouveau vol', 'Modifier le vol'],
+  train: ['Nouveau train', 'Modifier le train'],
+  bus: ['Nouveau bus', 'Modifier le bus'],
+  ferry: ['Nouveau ferry', 'Modifier le ferry'],
+  car: ['Nouvelle location', 'Modifier la location'],
+  other: ['Nouveau trajet réservé', 'Modifier le trajet'],
+}
 
 function placeOf(endpoint) {
   if (!endpoint) return NO_PLACE
@@ -25,9 +38,27 @@ function placeOf(endpoint) {
 }
 
 function initialForm(transport, defaults) {
+  // « Créer le retour » : l'aller à l'envers — on repart d'où l'on arrivait.
+  const reverse = !transport && defaults?.reverseOf
+  if (reverse) {
+    return {
+      mode: reverse.mode,
+      ref: '',
+      fromPlace: placeOf(reverse.to),
+      from: { date: '', time: '' },
+      toPlace: placeOf(reverse.from),
+      to: { date: '', time: '' },
+      seat: '',
+      confirmation: '',
+      price: '',
+      currency: reverse.currency || lastCurrency(),
+      mailUrl: '',
+      notes: '',
+    }
+  }
   const date = transport?.from.date || defaults?.date || ''
   return {
-    mode: transport?.mode || 'train',
+    mode: transport?.mode || defaults?.mode || 'train',
     ref: transport?.ref || '',
     fromPlace: placeOf(transport?.from),
     from: { date, time: transport?.from.time || '' },
@@ -44,20 +75,64 @@ function initialForm(transport, defaults) {
 
 /**
  * Un trajet RÉSERVÉ : le billet existe, on le recopie (numéro, horaires,
- * place) et on joint sa capture. Rien n'est calculé — il n'y a pas d'itinéraire
- * à chercher pour un train qu'on a déjà payé.
+ * place) et on joint sa capture — en tête, c'est elle qu'on montre au
+ * contrôle. Rien n'est calculé : il n'y a pas d'itinéraire à chercher pour
+ * un train qu'on a déjà payé.
+ *
+ * Le type vient de la tuile choisie (« Vol ») : on ne le redemande pas.
+ * « Créer le retour » ouvre un nouveau trajet, départ et arrivée inversés.
  */
-export default function TransportSheet({ open, transport, defaults, tripId, attachments = [], near, onClose, onDeleted }) {
+export default function TransportSheet({ open, transport, defaults, tripId, tripStart = null, attachments = [], near, onClose, onDeleted, onReverse }) {
   const { currentUid } = useAuth()
   // Monté à chaque ouverture (cf. TripUIContext) : le formulaire naît avec l'élément.
   const [form, setForm] = useState(() => initialForm(transport, defaults))
   const [files, setFiles] = useState(NO_CHANGES)
   const [error, setError] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [changeMode, setChangeMode] = useState(false)
+  // Les champs remplis par la lecture de la capture, surlignés pour relecture.
+  const [filled, setFilled] = useState(() => new Set())
+  // La date pré-remplie (le jour affiché) n'est qu'une supposition : celle
+  // lue sur le billet la remplace.
+  const guessedDate = useRef(transport ? null : form.from.date)
   const isEdit = !!transport
   const mode = getTransportMode(form.mode)
+  const nouns = NOUNS[form.mode] || NOUNS.other
 
   const set = (patch) => { setForm((f) => ({ ...f, ...patch })); setError(null) }
+  const hl = (key) => filled.has(key) && FILLED
+
+  // Une capture jointe (déjà enregistrée, ou ajoutée à l'instant) à lire.
+  const capture = files.add[0] || attachments.find((a) => !files.remove.includes(a.id)) || null
+
+  function applyCapture(parsed) {
+    const f = transportFields(parsed)
+    const patch = {}
+    const keys = new Set()
+    const take = (key, value, empty) => { if (value && empty) { keys.add(key); return true } return false }
+    if (take('ref', f.ref, !form.ref)) {
+      patch.ref = f.ref
+      if (f.mode && f.mode !== form.mode && !isEdit) patch.mode = f.mode
+    }
+    const dateFree = !form.from.date || form.from.date === guessedDate.current
+    if (take('from', f.from.date, dateFree)) patch.from = { date: f.from.date, time: f.from.time || form.from.time }
+    else if (take('from', f.from.time, !form.from.time)) patch.from = { ...form.from, time: f.from.time }
+    if (take('to', f.to.date || f.to.time, dateFree || !form.to.time)) {
+      patch.to = { date: f.to.date || patch.from?.date || form.to.date, time: f.to.time || form.to.time }
+    }
+    if (take('fromPlace', f.fromName, !form.fromPlace.name)) patch.fromPlace = { ...form.fromPlace, name: f.fromName }
+    if (take('toPlace', f.toName, !form.toPlace.name)) patch.toPlace = { ...form.toPlace, name: f.toName }
+    if (take('seat', f.seat, !form.seat && form.mode !== 'car')) patch.seat = f.seat
+    if (take('confirmation', f.confirmation, !form.confirmation)) patch.confirmation = f.confirmation
+    if (take('price', f.price, !form.price)) {
+      patch.price = String(f.price.amount).replace('.', ',')
+      patch.currency = f.price.currency
+    }
+    set(patch)
+    setFilled(keys)
+    if (keys.size) toast.success(`${plural(keys.size, 'champ rempli', 'champs remplis')} depuis la capture : vérifiez-les`)
+    else toast('Rien de reconnaissable sur cette capture : complétez à la main.')
+  }
 
   function changeFrom(next) {
     // L'arrivée suit le départ tant qu'elle n'est pas fixée après lui.
@@ -100,12 +175,20 @@ export default function TransportSheet({ open, transport, defaults, tripId, atta
     onDeleted?.()
   }
 
+  const priceValue = Number(String(form.price).replace(',', '.'))
+  const summary = [
+    form.price && Number.isFinite(priceValue) && formatPrice(priceValue, form.currency),
+    form.mailUrl && 'lien du mail',
+    form.notes && 'notes',
+  ].filter(Boolean).join(' · ') || 'prix, lien du mail, notes'
+
   return (
     <>
       <ThemedSheet
         open={open}
         onOpenChange={(o) => { if (!o) onClose() }}
-        title={isEdit ? 'Modifier le trajet' : 'Nouveau trajet réservé'}
+        title={isEdit ? nouns[1] : nouns[0]}
+        description={defaults?.reverseOf ? 'Le retour : départ et arrivée inversés' : null}
         size="lg"
         footer={(
           <div className="flex gap-2">
@@ -120,11 +203,29 @@ export default function TransportSheet({ open, transport, defaults, tripId, atta
         )}
       >
         <form id="transport-form" onSubmit={submit} className="space-y-6" noValidate>
+          <FormSection title={form.mode === 'flight' ? 'Carte d’embarquement' : 'Billet ou confirmation'}>
+            <AttachmentField existing={attachments} value={files} onChange={setFiles} compact />
+            {capture && <OcrPrefill capture={capture} near={form.from.date || tripStart} onRead={applyCapture} />}
+          </FormSection>
+
           <FormSection>
-            <ChoiceChips options={TRANSPORT_MODES} value={form.mode} onChange={(m) => set({ mode: m })} />
+            {changeMode ? (
+              <ChoiceChips options={TRANSPORT_MODES} value={form.mode} onChange={(m) => { set({ mode: m }); setChangeMode(false) }} />
+            ) : null}
             <Field label={form.mode === 'car' ? 'Loueur et véhicule' : 'Numéro'} optional>
-              <Input value={form.ref} onChange={(e) => set({ ref: e.target.value })} placeholder={mode.refPlaceholder} autoFocus={!isEdit} />
+              <Input
+                value={form.ref}
+                onChange={(e) => set({ ref: e.target.value })}
+                placeholder={mode.refPlaceholder}
+                autoFocus={!isEdit}
+                className={cn('font-mono text-[15px]', hl('ref'))}
+              />
             </Field>
+            {!changeMode && (
+              <button type="button" onClick={() => setChangeMode(true)} className="-mt-1 text-[13px] font-medium text-accent">
+                {mode.short || mode.label} · changer de type
+              </button>
+            )}
           </FormSection>
 
           <FormSection title={mode.fromLabel}>
@@ -135,7 +236,7 @@ export default function TransportSheet({ open, transport, defaults, tripId, atta
               placeholder={form.mode === 'flight' ? 'Aéroport de Lisbonne, ou lien Google Maps' : 'Gare, agence… ou lien Google Maps'}
               near={near}
             />
-            <DateTimeField label="Le" date={form.from.date} time={form.from.time} onChange={changeFrom} />
+            <DateTimeField label="Le" date={form.from.date} time={form.from.time} onChange={changeFrom} highlight={filled.has('from')} />
           </FormSection>
 
           <FormSection title={mode.toLabel}>
@@ -146,33 +247,37 @@ export default function TransportSheet({ open, transport, defaults, tripId, atta
               placeholder="Lieu d’arrivée, ou lien Google Maps"
               near={near}
             />
-            <DateTimeField label="Le" date={form.to.date} time={form.to.time} min={form.from.date} onChange={(to) => set({ to })} />
+            <DateTimeField label="Le" date={form.to.date} time={form.to.time} min={form.from.date} onChange={(to) => set({ to })} highlight={filled.has('to')} />
           </FormSection>
 
-          <FormSection title="Réservation">
-            <div className="grid sm:grid-cols-2 gap-3">
+          <FormSection title="Au contrôle">
+            <div className={form.mode === 'car' ? 'grid gap-3' : 'grid grid-cols-2 gap-3'}>
               {form.mode !== 'car' && (
                 <Field label="Place" optional>
-                  <Input value={form.seat} onChange={(e) => set({ seat: e.target.value })} placeholder="Voiture 12, place 64" />
+                  <Input value={form.seat} onChange={(e) => set({ seat: e.target.value })} placeholder="Voiture 12, place 64" className={cn('text-[15px]', hl('seat'))} />
                 </Field>
               )}
               <Field label="Référence" optional>
-                <Input value={form.confirmation} onChange={(e) => set({ confirmation: e.target.value })} placeholder="K7PQ2L" className="font-mono" />
+                <Input value={form.confirmation} onChange={(e) => set({ confirmation: e.target.value })} placeholder="K7PQ2L" className={cn('font-mono text-[15px]', hl('confirmation'))} />
               </Field>
-              <PriceField price={form.price} currency={form.currency} onChange={(p) => set(p)} />
             </div>
+          </FormSection>
+
+          <Disclosure key={filled.has('price') ? 'open' : 'closed'} summary={summary} defaultOpen={filled.has('price') || (isEdit && !!(transport.mailUrl || transport.notes))}>
+            <PriceField price={form.price} currency={form.currency} onChange={(p) => set(p)} highlight={filled.has('price')} />
             <Field label="Lien vers le mail" optional>
               <Input type="url" value={form.mailUrl} onChange={(e) => set({ mailUrl: e.target.value })} placeholder="https://mail.google.com/…" />
             </Field>
-          </FormSection>
+            <Field label="Notes" optional>
+              <Textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Terminal, bagages, franchise…" maxLength={2000} />
+            </Field>
+          </Disclosure>
 
-          <FormSection title="Billet et justificatifs">
-            <AttachmentField existing={attachments} value={files} onChange={setFiles} />
-          </FormSection>
-
-          <Field label="Notes" optional>
-            <Textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Terminal, bagages, franchise…" maxLength={2000} />
-          </Field>
+          {isEdit && form.mode !== 'car' && onReverse && (
+            <Button type="button" variant="secondary" className="w-full" onClick={() => { onClose(); onReverse(transport) }}>
+              <ArrowLeftRight size={16} /> Créer le retour
+            </Button>
+          )}
 
           {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         </form>

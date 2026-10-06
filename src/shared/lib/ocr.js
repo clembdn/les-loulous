@@ -1,4 +1,5 @@
-// OCR d'étiquette via Tesseract.
+// OCR via Tesseract, partagé : étiquettes nutritionnelles (Cook'It),
+// captures de réservation (Trip Planner).
 //
 // Tesseract pèse lourd (~6 Mo : moteur wasm + modèle de langue). Deux règles
 // pour que ça reste supportable sur un téléphone :
@@ -10,7 +11,8 @@
 //      compte quand on est dans un magasin sans réseau.
 //
 // Modèle anglais seulement : ils font leurs courses en Australie, les étiquettes
-// sont en anglais. Le parseur, lui, reconnaît aussi les mots-clés français.
+// sont en anglais. Les parseurs, eux, reconnaissent aussi les mots-clés
+// français (et les dates sans leurs accents, que le modèle anglais abîme).
 
 const BASE = '/tesseract'
 let workerPromise = null
@@ -58,7 +60,7 @@ export async function readImageText(image, onProgress) {
   return data?.text || ''
 }
 
-// Libère la mémoire du worker. À appeler quand on quitte l'écran : le moteur
+// Libère la mémoire du worker. À appeler quand on quitte l'écran ou le formulaire : le moteur
 // wasm garde plusieurs dizaines de Mo vivants.
 export async function disposeOcr() {
   if (!workerPromise) return

@@ -3,7 +3,7 @@ import { X, Camera, ScanText, AlertTriangle } from 'lucide-react'
 import { Button } from '@/shared/ui/Button.jsx'
 import { Input } from '@/shared/ui/Input.jsx'
 import { cn } from '@/shared/lib/utils.js'
-import { readImageText, disposeOcr } from '../services/ocrService.js'
+import { readImageText, disposeOcr } from '@/shared/lib/ocr.js'
 import { parseNutritionLabel } from '../utils/nutritionLabel.js'
 
 // Photographier le tableau nutritionnel plutôt que de le retaper.

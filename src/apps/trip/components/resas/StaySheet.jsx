@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { cn } from '@/shared/lib/utils.js'
 import { Trash2 } from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { shiftDateKey } from '@/shared/lib/dates.js'
@@ -10,11 +11,13 @@ import { toast } from '@/shared/ui/sonner.jsx'
 import Field from '../Field.jsx'
 import PlaceInput from '../places/PlaceInput.jsx'
 import AttachmentField from '../attachments/AttachmentField.jsx'
-import { ChoiceChips, DateTimeField, FormSection, lastCurrency, PriceField, rememberCurrency } from './formParts.jsx'
+import { ChoiceChips, DateTimeField, Disclosure, FILLED, FormSection, lastCurrency, PriceField, rememberCurrency } from './formParts.jsx'
+import OcrPrefill from './OcrPrefill.jsx'
+import { stayFields } from '../../utils/resaParse.js'
 import { STAY_KINDS } from '../../config/reservations.js'
 import { deleteReservation, saveReservation } from '../../services/reservationsService.js'
 import { daysBetween } from '../../utils/tripDates.js'
-import { plural } from '../../utils/format.js'
+import { formatPrice, plural } from '../../utils/format.js'
 
 const NO_CHANGES = { add: [], remove: [] }
 
@@ -38,19 +41,56 @@ function initialForm(stay, defaults) {
 }
 
 /**
- * Un hébergement : où, quand, et tout ce qu'on montre à l'accueil
- * (référence, code de la boîte à clés, capture du mail de réservation).
+ * Un hébergement : la capture du mail d'abord (c'est elle qu'on montre à
+ * l'accueil), puis où et quand, puis ce qu'il faut à la porte — le code et
+ * la référence. Téléphone, prix, lien du mail et notes sont repliés.
  */
-export default function StaySheet({ open, stay, defaults, tripId, attachments = [], near, onClose, onDeleted }) {
+export default function StaySheet({ open, stay, defaults, tripId, tripStart = null, attachments = [], near, onClose, onDeleted }) {
   const { currentUid } = useAuth()
   // Monté à chaque ouverture (cf. TripUIContext) : le formulaire naît avec l'élément.
   const [form, setForm] = useState(() => initialForm(stay, defaults))
   const [files, setFiles] = useState(NO_CHANGES)
   const [error, setError] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [editAddress, setEditAddress] = useState(false)
+  // Les champs remplis par la lecture de la capture, surlignés pour relecture.
+  const [filled, setFilled] = useState(() => new Set())
+  // Les dates pré-remplies (le jour affiché) ne sont qu'une supposition.
+  const guessedDate = useRef(stay ? null : form.checkIn.date)
   const isEdit = !!stay
 
   const set = (patch) => { setForm((f) => ({ ...f, ...patch })); setError(null) }
+  const hl = (key) => filled.has(key) && FILLED
+  const capture = files.add[0] || attachments.find((a) => !files.remove.includes(a.id)) || null
+
+  function applyCapture(parsed) {
+    const f = stayFields(parsed)
+    const patch = {}
+    const keys = new Set()
+    const datesFree = !form.checkIn.date || form.checkIn.date === guessedDate.current
+    if (f.checkIn.date && datesFree) {
+      patch.checkIn = { date: f.checkIn.date, time: f.checkIn.time || form.checkIn.time }
+      keys.add('checkIn')
+      if (f.checkOut.date && f.checkOut.date > f.checkIn.date) {
+        patch.checkOut = { date: f.checkOut.date, time: f.checkOut.time || form.checkOut.time }
+        keys.add('checkOut')
+      }
+    } else {
+      if (f.checkIn.time && !form.checkIn.time) { patch.checkIn = { ...form.checkIn, time: f.checkIn.time }; keys.add('checkIn') }
+      if (f.checkOut.time && !form.checkOut.time) { patch.checkOut = { ...form.checkOut, time: f.checkOut.time }; keys.add('checkOut') }
+    }
+    if (f.accessCode && !form.accessCode) { patch.accessCode = f.accessCode; keys.add('accessCode') }
+    if (f.confirmation && !form.confirmation) { patch.confirmation = f.confirmation; keys.add('confirmation') }
+    if (f.price && !form.price) {
+      patch.price = String(f.price.amount).replace('.', ',')
+      patch.currency = f.price.currency
+      keys.add('price')
+    }
+    set(patch)
+    setFilled(keys)
+    if (keys.size) toast.success(`${plural(keys.size, 'champ rempli', 'champs remplis')} depuis la capture : vérifiez-les`)
+    else toast('Rien de reconnaissable sur cette capture : complétez à la main.')
+  }
 
   function changeCheckIn(next) {
     // Le départ suit l'arrivée : une nuit par défaut, jamais avant.
@@ -97,6 +137,13 @@ export default function StaySheet({ open, stay, defaults, tripId, attachments = 
   const nights = form.checkIn.date && form.checkOut.date && form.checkOut.date > form.checkIn.date
     ? daysBetween(form.checkIn.date, form.checkOut.date)
     : 0
+  const priceValue = Number(String(form.price).replace(',', '.'))
+  const summary = [
+    form.phone && 'téléphone',
+    form.price && Number.isFinite(priceValue) && formatPrice(priceValue, form.currency),
+    form.mailUrl && 'lien du mail',
+    form.notes && 'notes',
+  ].filter(Boolean).join(' · ') || 'téléphone, prix, lien du mail, notes'
 
   return (
     <>
@@ -118,6 +165,11 @@ export default function StaySheet({ open, stay, defaults, tripId, attachments = 
         )}
       >
         <form id="stay-form" onSubmit={submit} className="space-y-6" noValidate>
+          <FormSection title="Capture de la confirmation">
+            <AttachmentField existing={attachments} value={files} onChange={setFiles} compact />
+            {capture && <OcrPrefill capture={capture} near={form.checkIn.date || tripStart} onRead={applyCapture} />}
+          </FormSection>
+
           <FormSection>
             <ChoiceChips options={STAY_KINDS} value={form.kind} onChange={(kind) => set({ kind })} />
             <Field label="Nom et lieu">
@@ -130,54 +182,62 @@ export default function StaySheet({ open, stay, defaults, tripId, attachments = 
                 autoFocus={!isEdit}
               />
             </Field>
-            <Field label="Adresse" optional>
-              <Input
-                value={form.place.address || ''}
-                onChange={(e) => set({ place: { ...form.place, address: e.target.value } })}
-                placeholder="Remplie par le lien Google Maps"
-              />
-            </Field>
+            {editAddress ? (
+              <Field label="Adresse" optional>
+                <Input
+                  value={form.place.address || ''}
+                  onChange={(e) => set({ place: { ...form.place, address: e.target.value } })}
+                  placeholder="Rue, ville"
+                  autoFocus
+                />
+              </Field>
+            ) : (
+              <button type="button" onClick={() => setEditAddress(true)} className="-mt-1 text-[13px] font-medium text-accent">
+                {form.place.address ? 'Modifier l’adresse' : 'Saisir l’adresse à la main'}
+              </button>
+            )}
           </FormSection>
 
           <FormSection title="Dates">
             <div className="grid sm:grid-cols-2 gap-3">
-              <DateTimeField label="Arrivée" date={form.checkIn.date} time={form.checkIn.time} onChange={changeCheckIn} />
+              <DateTimeField label="Arrivée" date={form.checkIn.date} time={form.checkIn.time} onChange={changeCheckIn} highlight={filled.has('checkIn')} />
               <DateTimeField
                 label="Départ"
                 date={form.checkOut.date}
                 time={form.checkOut.time}
                 min={form.checkIn.date}
                 onChange={(checkOut) => set({ checkOut })}
+                highlight={filled.has('checkOut')}
               />
             </div>
-            {nights > 0 && <p className="text-xs text-faint tabular">{plural(nights, 'nuit')}</p>}
+            {nights > 0 && <p className="text-[13px] text-muted tabular">{plural(nights, 'nuit')}</p>}
           </FormSection>
 
-          <FormSection title="Réservation">
-            <div className="grid sm:grid-cols-2 gap-3">
-              <Field label="Référence" optional>
-                <Input value={form.confirmation} onChange={(e) => set({ confirmation: e.target.value })} placeholder="HMX2K9" className="font-mono" />
-              </Field>
+          <FormSection title="À la porte">
+            <div className="grid grid-cols-2 gap-3">
               <Field label="Code d’accès" optional>
-                <Input value={form.accessCode} onChange={(e) => set({ accessCode: e.target.value })} placeholder="Boîte à clés 4417" />
+                <Input value={form.accessCode} onChange={(e) => set({ accessCode: e.target.value })} placeholder="4417" className={cn('font-mono text-[15px]', hl('accessCode'))} />
               </Field>
+              <Field label="Référence" optional>
+                <Input value={form.confirmation} onChange={(e) => set({ confirmation: e.target.value })} placeholder="HMX2K9" className={cn('font-mono text-[15px]', hl('confirmation'))} />
+              </Field>
+            </div>
+          </FormSection>
+
+          <Disclosure key={filled.has('price') ? 'open' : 'closed'} summary={summary} defaultOpen={filled.has('price') || (isEdit && !!(stay.phone || stay.mailUrl || stay.notes))}>
+            <div className="grid sm:grid-cols-2 gap-3">
               <Field label="Téléphone" optional>
                 <Input type="tel" value={form.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="+351 …" />
               </Field>
-              <PriceField price={form.price} currency={form.currency} onChange={(p) => set(p)} />
+              <PriceField price={form.price} currency={form.currency} onChange={(p) => set(p)} highlight={filled.has('price')} />
             </div>
             <Field label="Lien vers le mail" optional hint="Sur téléphone, un lien Gmail ouvre parfois la boîte de réception : la capture, elle, s’affiche toujours.">
               <Input type="url" value={form.mailUrl} onChange={(e) => set({ mailUrl: e.target.value })} placeholder="https://mail.google.com/…" />
             </Field>
-          </FormSection>
-
-          <FormSection title="Captures">
-            <AttachmentField existing={attachments} value={files} onChange={setFiles} />
-          </FormSection>
-
-          <Field label="Notes" optional>
-            <Textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Parking, étage, petit-déjeuner…" maxLength={2000} />
-          </Field>
+            <Field label="Notes" optional>
+              <Textarea value={form.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="Parking, étage, petit-déjeuner…" maxLength={2000} />
+            </Field>
+          </Disclosure>
 
           {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         </form>
