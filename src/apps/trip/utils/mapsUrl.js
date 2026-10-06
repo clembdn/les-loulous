@@ -81,7 +81,8 @@ function splitNameAddress(text) {
  *
  * Ordre de confiance des coordonnées :
  *  1. `!3d<lat>!4d<lng>` — la position du LIEU lui-même ;
- *  2. `q=`, `query=`, `ll=`, `destination=` quand ils contiennent des nombres ;
+ *  2. `q=`, `query=`, `ll=`, `destination=`, ou /maps/search/<lat>,<lng>,
+ *     quand ils contiennent des nombres ;
  *  3. `@<lat>,<lng>` — le centre de la carte affichée, proche mais pas exact.
  * Un lien d'itinéraire (`/maps/dir/`) n'a pas de lieu : son `@` est ignoré.
  */
@@ -93,12 +94,20 @@ export function parseMapsUrl(text) {
   const result = { name: '', address: null, lat: null, lng: null }
 
   // Nom : /maps/place/<nom>/… ou /maps/search/<texte>/…
+  // (/maps/place/data=… n'a pas de nom : seulement l'identifiant du lieu).
   const named = url.pathname.match(/\/maps\/(?:place|search)\/([^/@]+)/)
-  if (named) result.name = decodeSegment(named[1])
+  if (named && !named[1].startsWith('data=')) result.name = decodeSegment(named[1])
 
   let coords = null
   const pins = [...href.matchAll(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/g)]
   if (pins.length) coords = validCoords(pins.at(-1)[1], pins.at(-1)[2])
+
+  // Un point sans nom : /maps/search/16.064556,+108.231402
+  const pointName = result.name.match(COORDS_RE)
+  if (pointName) {
+    coords ||= validCoords(pointName[1], pointName[2])
+    result.name = ''
+  }
 
   for (const key of ['q', 'query', 'll', 'destination', 'daddr']) {
     const value = url.searchParams.get(key)

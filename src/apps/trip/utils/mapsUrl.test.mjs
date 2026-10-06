@@ -100,3 +100,14 @@ test('« Y aller » : l’itinéraire si on sait où c’est, sinon le lien d’
   assert.equal(goUrl({ name: 'Café' }), null)
   assert.equal(goUrl(null), null)
 })
+
+test('/maps/place/data=… n’a pas de nom ; /maps/search/<lat>,<lng> est un point', () => {
+  assert.deepEqual(
+    parseMapsUrl('https://www.google.com/maps/place/data=!4m2!3m1!1s0xd1ecb452efd715b:0xffeff6c6b46d9665?entry=gps'),
+    { name: '', address: null, lat: null, lng: null },
+  )
+  assert.deepEqual(
+    parseMapsUrl('https://www.google.com/maps/search/16.064556,+108.231402?entry=tts'),
+    { name: '', address: null, lat: 16.064556, lng: 108.231402 },
+  )
+})

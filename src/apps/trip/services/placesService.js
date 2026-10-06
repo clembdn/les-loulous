@@ -6,12 +6,18 @@
 // Sans réseau, le lieu est gardé tel quel — un nom, un lien — et localisé
 // plus tard : on ne bloque jamais la saisie d'une étape pour une coordonnée.
 
+import { ftidArea, mapsFtid } from '../utils/ftid.js'
 import { isShortMapsUrl, parseMapsUrl } from '../utils/mapsUrl.js'
 import { photonPlaces, photonUrl } from '../utils/photon.js'
 
 // Le serveur public de Photon met parfois plusieurs secondes à répondre :
 // on patiente (la roue tourne) plutôt que d'abandonner trop tôt.
 const TIMEOUT_MS = 12000
+// Le CDN de Vercel garde chaque réponse de `/api/resolve-maps` un jour (une
+// semaine en version périmée), clé = l'URL : changer la version quand le
+// résolveur change de réponse, sinon les anciennes resservent.
+// v2 : plus de coordonnées lues dans la page (c'était le centre déduit de l'IP).
+const RESOLVER_VERSION = '2'
 
 // `signal` : la recherche n'a plus lieu d'être (on a continué de taper).
 async function fetchWithTimeout(url, signal = null) {
@@ -45,12 +51,22 @@ export async function resolveMapsLink(text) {
 
   const place = { name: parsed.name, address: parsed.address, lat: parsed.lat, lng: parsed.lng, mapsUrl }
   if (parsed.lat !== null) return { place, located: true, message: null }
+
+  // Un lien long porte souvent l'identifiant du lieu, qui en donne la zone
+  // sans réseau (cf. utils/ftid.js) : de quoi le placer, en le disant approximatif.
+  const area = ftidArea(mapsFtid(mapsUrl))
+  const approximate = (p) => (area
+    ? { place: { ...p, ...area }, located: true, message: 'Position approximative : à vérifier sur la carte.' }
+    : null)
+
   if (isOffline()) {
-    return { place, located: false, message: 'Hors-ligne : le lien est gardé, le lieu sera localisé plus tard.' }
+    return approximate(place)
+      || { place, located: false, message: 'Hors-ligne : le lien est gardé, le lieu sera localisé plus tard.' }
   }
 
   try {
-    const res = await fetchWithTimeout(`/api/resolve-maps?url=${encodeURIComponent(mapsUrl)}`)
+    const params = new URLSearchParams({ v: RESOLVER_VERSION, url: mapsUrl })
+    const res = await fetchWithTimeout(`/api/resolve-maps?${params}`)
     const body = await res.json().catch(() => ({}))
     const name = body.name || place.name
     const address = body.address || place.address
@@ -58,10 +74,10 @@ export async function resolveMapsLink(text) {
       return {
         place: { name, address, lat: body.lat, lng: body.lng, mapsUrl },
         located: true,
-        message: body.approximate ? 'Position retrouvée par le nom : à vérifier sur la carte.' : null,
+        message: body.approximate ? 'Position approximative : à vérifier sur la carte.' : null,
       }
     }
-    return {
+    return approximate({ ...place, name, address }) || {
       place: { ...place, name, address },
       located: false,
       message: isShortMapsUrl(mapsUrl) && !name
@@ -69,7 +85,8 @@ export async function resolveMapsLink(text) {
         : 'Pas de coordonnées dans ce lien : cherchez le lieu par son nom.',
     }
   } catch {
-    return { place, located: false, message: 'Le lien n’a pas pu être lu : réessayez avec du réseau.' }
+    return approximate(place)
+      || { place, located: false, message: 'Le lien n’a pas pu être lu : réessayez avec du réseau.' }
   }
 }
 

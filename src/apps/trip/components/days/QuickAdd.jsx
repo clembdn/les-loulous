@@ -79,7 +79,8 @@ const QuickAdd = forwardRef(function QuickAdd({ date, near = null, disabled = fa
       return
     }
     if (addStop(date, { ...read.place, category: guessCategory({ name: read.place.name }) })) reset()
-    if (!read.located && read.message) toast(read.message)
+    // Pas localisé, ou seulement à peu près : le dire.
+    if (read.message) toast(read.message)
   }
 
   function change(value) {

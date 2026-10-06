@@ -1,25 +1,42 @@
 // Dérouler un lien Google Maps jusqu'à un lieu : nom, adresse, coordonnées.
 //
 // Le navigateur ne peut pas suivre `maps.app.goo.gl/…` (CORS) : ce module
-// tourne dans la fonction Vercel `api/resolve-maps`. Trois étages, du plus
-// fiable au plus approximatif :
+// tourne dans la fonction Vercel `api/resolve-maps`. Du plus fiable au plus
+// approximatif :
 //   1. suivre les redirections et lire l'URL finale (cf. parseMapsUrl) ;
-//   2. à défaut, lire les coordonnées dans la page elle-même ;
-//   3. à défaut, chercher le nom dans OpenStreetMap (Photon).
+//   2. un lien de partage récent ne donne que l'identifiant du lieu (ftid) :
+//      la recherche de Google Maps, interrogée avec le nom, rend ce lieu-là
+//      avec ses coordonnées exactes ; on ne garde que le résultat qui porte
+//      CE ftid, et seulement s'il tombe dans la zone que le ftid encode ;
+//   3. à défaut, la zone du ftid elle-même (quelques centaines de mètres) ;
+//   4. sans ftid, le nom (et l'adresse) dans OpenStreetMap (Photon).
+//
+// Jamais de coordonnées lues dans le HTML de la page : Google y met le centre
+// de la carte par défaut, déduit de l'adresse IP… du serveur. Tous les liens
+// atterrissaient ainsi près de Washington (région Vercel iad1).
 //
 // Liste blanche stricte : on ne suit QUE des liens Google Maps, à chaque saut.
 // Sans elle, cette fonction publique servirait de relais pour aller chercher
 // n'importe quelle URL au nom de notre serveur.
 //
-// Les dépendances réseau sont injectées (`fetchImpl`) : testé sous `node --test`.
+// Les dépendances réseau sont injectées (`fetchImpl`) : testé sous `node --test`,
+// et contre le vrai Google avec `node api/_lib/mapsResolver.live.mjs`.
 
 import { isMapsUrl, isShortMapsUrl, parseMapsUrl, toUrl } from '../../src/apps/trip/utils/mapsUrl.js'
+import { ftidArea, mapsFtid } from '../../src/apps/trip/utils/ftid.js'
+import { haversineM } from '../../src/apps/trip/utils/geo.js'
 import { photonPlaces, photonUrl } from '../../src/apps/trip/utils/photon.js'
 
 const MAX_HOPS = 5
 const TIMEOUT_MS = 5000
-const MAX_HTML = 3_000_000
+const MAX_BODY = 3_000_000
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'
+// Le robot d'aperçu de liens : Google lui sert le nom et l'adresse du lieu
+// (og:title), qu'il ne met pas dans la page servie à un navigateur.
+const PREVIEW_AGENT = 'facebookexternalhit/1.1'
+// Écart toléré entre la zone du ftid et la position trouvée (2,5 km mesurés
+// pour la tour Eiffel ; au-delà, ce n'est pas le même lieu).
+const MAX_AREA_GAP_M = 10_000
 
 async function timedFetch(fetchImpl, url, options = {}) {
   const controller = new AbortController()
@@ -39,32 +56,31 @@ function unwrapConsent(href) {
   return href
 }
 
-function validCoords(lat, lng) {
-  const la = Number(lat)
-  const ln = Number(lng)
-  if (!Number.isFinite(la) || !Number.isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180) return null
-  if (la === 0 && ln === 0) return null
-  return { lat: la, lng: ln }
-}
-
 /**
- * Coordonnées d'un lieu dans le HTML d'une page Google Maps. Fragile par
- * nature — Google ne s'y engage à rien — d'où plusieurs motifs, et le repli
- * sur Photon si aucun ne répond.
+ * Les coordonnées du lieu `ftid` dans une réponse de la recherche Google
+ * Maps (`/search?tbm=map`, du JSON précédé de `)]}'`). Chaque résultat y est
+ * un tableau qui contient, entre autres, son ftid et `[null, null, lat, lng]` :
+ * on cherche le tableau qui porte les deux, sans dépendre des positions
+ * exactes, que Google change sans prévenir. `null` si le lieu n'y est pas.
  */
-export function extractCoordsFromHtml(html) {
-  const patterns = [
-    // Image d'aperçu : …/staticmap?center=38.69%2C-9.21&…
-    /staticmap\?center=(-?\d+\.\d+)%2C(-?\d+\.\d+)/,
-    /center=(-?\d+\.\d+),(-?\d+\.\d+)/,
-    // État initial de l'app : [null,null,38.69,-9.21]
-    /\[null,null,(-?\d+\.\d+),(-?\d+\.\d+)\]/,
-    /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,
-  ]
-  for (const re of patterns) {
-    const m = html.match(re)
-    const coords = m && validCoords(m[1], m[2])
-    if (coords) return coords
+export function findPlaceInSearch(text, ftid) {
+  let data
+  try {
+    data = JSON.parse(text.replace(/^\)\]\}'\s*/, '').replace(/\/\*""\*\/\s*$/, ''))
+  } catch {
+    return null
+  }
+  const isLatLng = (x) => Array.isArray(x) && x.length >= 4 && x[0] === null && x[1] === null
+    && Number.isFinite(x[2]) && Number.isFinite(x[3]) && Math.abs(x[2]) <= 90 && Math.abs(x[3]) <= 180
+  const stack = [data]
+  while (stack.length) {
+    const node = stack.pop()
+    if (!Array.isArray(node)) continue
+    if (node.includes(ftid)) {
+      const coords = node.find(isLatLng)
+      if (coords) return { lat: coords[2], lng: coords[3] }
+    }
+    for (const child of node) if (Array.isArray(child)) stack.push(child)
   }
   return null
 }
@@ -119,38 +135,69 @@ export async function resolveMapsLink(raw, { fetchImpl = fetch } = {}) {
   const parsed = parseMapsUrl(url) || { name: '', address: null, lat: null, lng: null }
   if (parsed.lat !== null) return ok(parsed, url)
 
-  // 2. Les coordonnées dans la page.
+  const ftid = mapsFtid(url)
+  const area = ftidArea(ftid)
+  const near = (p) => !area || haversineM(area, p) <= MAX_AREA_GAP_M
+
+  // Le nom et l'adresse, s'il faut les demander à Google (lien sans `q=`).
   let place = parsed
-  if (!isShortMapsUrl(url)) {
-    try {
-      const res = await timedFetch(fetchImpl, url, {
-        headers: { 'user-agent': USER_AGENT, 'accept-language': 'fr-FR,fr;q=0.9' },
-      })
-      if (res.ok) {
-        const html = (await res.text()).slice(0, MAX_HTML)
-        const title = extractTitle(html)
-        place = { ...parsed, name: parsed.name || title?.name || '', address: parsed.address || title?.address || null }
-        const coords = extractCoordsFromHtml(html)
-        if (coords) return ok({ ...place, ...coords }, url)
-      }
-    } catch {
-      // Page inaccessible : on tente OpenStreetMap avec ce qu'on sait déjà.
-    }
+  if (!place.name && !isShortMapsUrl(url)) {
+    const title = await fetchTitle(fetchImpl, url)
+    if (title) place = { ...place, name: title.name, address: place.address || title.address }
+  }
+  const query = [place.name, place.address].filter(Boolean).join(', ')
+
+  // 2. Le lieu exact, par la recherche Google Maps, apparié par son ftid.
+  if (ftid && query) {
+    const found = await searchGoogle(fetchImpl, query, ftid)
+    if (found && near(found)) return ok({ ...place, ...found }, url)
   }
 
-  // 3. Le nom (et l'adresse) dans OpenStreetMap.
-  const query = [place.name, place.address].filter(Boolean).join(', ')
+  // 3-4. OpenStreetMap, orienté vers la zone du ftid quand on l'a ;
+  // sinon la zone elle-même. Dans les deux cas : « à vérifier ».
   if (query) {
-    try {
-      const res = await timedFetch(fetchImpl, photonUrl(query, { limit: 1 }))
-      const [hit] = res.ok ? photonPlaces(await res.json()) : []
-      if (hit) {
-        return ok({ name: place.name || hit.name, address: place.address || hit.address, lat: hit.lat, lng: hit.lng }, url, { approximate: true })
-      }
-    } catch {
-      // Photon injoignable : on rend ce qu'on a.
+    const hit = await searchPhoton(fetchImpl, query, area)
+    if (hit && near(hit)) {
+      return ok({ name: place.name || hit.name, address: place.address || hit.address, lat: hit.lat, lng: hit.lng }, url, { approximate: true })
     }
   }
+  if (area) return ok({ ...place, ...area }, url, { approximate: true })
 
   return { status: 422, body: { error: 'coords-not-found', name: place.name || null, address: place.address || null, url } }
+}
+
+// Chaque appel ci-dessous peut échouer (réseau, format changé, Google qui
+// refuse le serveur) : il rend alors `null`, et on passe à l'étage suivant.
+
+async function fetchTitle(fetchImpl, url) {
+  try {
+    const res = await timedFetch(fetchImpl, url, {
+      headers: { 'user-agent': PREVIEW_AGENT, 'accept-language': 'fr-FR,fr;q=0.9' },
+    })
+    return res.ok ? extractTitle((await res.text()).slice(0, MAX_BODY)) : null
+  } catch {
+    return null
+  }
+}
+
+async function searchGoogle(fetchImpl, query, ftid) {
+  const params = new URLSearchParams({ tbm: 'map', hl: 'fr', q: query })
+  try {
+    const res = await timedFetch(fetchImpl, `https://www.google.com/search?${params}`, {
+      headers: { 'user-agent': USER_AGENT, 'accept-language': 'fr-FR,fr;q=0.9' },
+    })
+    return res.ok ? findPlaceInSearch((await res.text()).slice(0, MAX_BODY), ftid) : null
+  } catch {
+    return null
+  }
+}
+
+async function searchPhoton(fetchImpl, query, near) {
+  try {
+    const res = await timedFetch(fetchImpl, photonUrl(query, { near, limit: 1 }))
+    const [hit] = res.ok ? photonPlaces(await res.json()) : []
+    return hit || null
+  } catch {
+    return null
+  }
 }
