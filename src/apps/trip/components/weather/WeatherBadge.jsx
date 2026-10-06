@@ -50,11 +50,11 @@ export default function WeatherBadge({ weather, detailed = false, className }) {
   return (
     <span
       title={label}
-      className={cn('inline-flex items-center gap-1 tabular whitespace-nowrap', normal ? 'text-faint' : 'text-muted', className)}
+      className={cn('inline-flex items-center gap-1 tabular whitespace-nowrap', 'text-muted', className)}
     >
       <Icon size={detailed ? 16 : 14} className={cn('shrink-0', !normal && TONES[weather.kind])} aria-hidden="true" />
       <span aria-hidden="true" className={cn(!normal && 'text-fg font-medium')}>{normal ? '~' : ''}{formatTemp(weather.tmax)}</span>
-      {detailed && <span aria-hidden="true" className="text-faint">{formatTemp(weather.tmin)}</span>}
+      {detailed && <span aria-hidden="true" className="text-muted">{formatTemp(weather.tmin)}</span>}
       <span className="sr-only">{label}</span>
     </span>
   )
@@ -72,7 +72,7 @@ export function DayWeather({ date, className }) {
     <span className={cn('inline-flex items-center gap-1.5 text-xs', className)}>
       {list.map((weather, i) => (
         <span key={i} className="inline-flex items-center gap-1.5">
-          {i > 0 && <span className="text-faint" aria-hidden="true">→</span>}
+          {i > 0 && <span className="text-muted" aria-hidden="true">→</span>}
           <WeatherBadge weather={weather} />
         </span>
       ))}

@@ -162,7 +162,7 @@ export default function TripFormSheet({ open, trip = null, onClose, onDeleted })
             </Field>
           </div>
           {length > 0 && (
-            <p className="-mt-2 text-xs text-faint tabular">
+            <p className="-mt-2 text-[13px] text-muted tabular">
               {plural(length, 'jour')}{length > 1 && ` · ${plural(length - 1, 'nuit')}`}
             </p>
           )}
@@ -184,7 +184,7 @@ export default function TripFormSheet({ open, trip = null, onClose, onDeleted })
                 <Trash2 size={15} /> Supprimer le voyage
               </Button>
               {!online && (
-                <p className="text-xs text-faint mt-1">
+                <p className="text-[13px] text-muted mt-1">
                   Connexion requise : tout ce que contient le voyage doit être supprimé avec lui.
                 </p>
               )}

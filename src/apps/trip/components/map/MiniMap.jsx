@@ -4,6 +4,8 @@ import { cn } from '@/shared/lib/utils.js'
 import { curvePath, groupCoincident, projectPoints } from '../../utils/geo.js'
 import { dayRoute } from '../../utils/route.js'
 import { getTransportMode } from '../../config/reservations.js'
+import { getCategory } from '../../config/categories.js'
+import { ROUTE_COLOR, stayColor, TRANSPORT_COLOR } from '../../config/palette.js'
 
 const PAD = 26
 // Deux pastilles de 20 px plus proches que ça se chevauchent : un seul repère « 1·2 ».
@@ -12,12 +14,13 @@ const MERGE_PX = 18
 /**
  * La journée dessinée : le tracé et des points numérotés, sans fond de carte.
  *
- * Le plan du métro, pas la vue satellite — zéro requête, zéro tuile, donc
- * lisible hors-ligne et entièrement dans le style de l'app. Niveaux de gris
- * partout, l'accent réservé au tracé. Les trajets réservés (train, vol) sont
- * en pointillés : on ne prétend pas savoir par où passe le TGV.
+ * Le plan du métro, pas la vue satellite — zéro requête, zéro tuile : c'est
+ * ce que montre la carte (TripMap) le temps de se charger, ou à sa place sans
+ * WebGL. Mêmes couleurs que la frise : catégorie pour une étape, couleur de
+ * séjour pour un hébergement, bleu nuit pour un trajet. Les trajets réservés
+ * (train, vol) sont en pointillés : on ne prétend pas savoir par où passe le TGV.
  */
-export default function MiniMap({ items, home = null, width = 340, height = 170, className }) {
+export default function MiniMap({ items, home = null, colorIndexByStay = {}, width = 340, height = 170, className }) {
   const patternId = `grid-${useId().replace(/:/g, '')}`
   const route = useMemo(() => dayRoute(items, { home }), [items, home])
 
@@ -44,7 +47,8 @@ export default function MiniMap({ items, home = null, width = 340, height = 170,
     const markers = groupCoincident(xy, MERGE_PX).map((indexes) => {
       const pts = indexes.map((i) => route.points[i])
       const numbers = pts.filter((p) => p.kind === 'stop').map((p) => p.number)
-      return { key: pts[0].key, at: xy[indexes[0]], numbers, first: pts[0] }
+      const firstStop = pts.find((p) => p.kind === 'stop')
+      return { key: pts[0].key, at: xy[indexes[0]], numbers, first: pts[0], color: firstStop ? getCategory(firstStop.category).color : null }
     })
 
     return {
@@ -59,7 +63,7 @@ export default function MiniMap({ items, home = null, width = 340, height = 170,
   const empty = route.points.length === 0 && !route.home
 
   return (
-    <div className={cn('relative bg-surface-2', className)}>
+    <div className={cn('relative bg-[#F3F2EE]', className)}>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="block w-full h-auto"
@@ -77,31 +81,27 @@ export default function MiniMap({ items, home = null, width = 340, height = 170,
           <line
             key={`booked-${i}`}
             x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]}
-            className="stroke-muted"
+            stroke={TRANSPORT_COLOR.hex}
             strokeWidth="1.6"
             strokeDasharray="3 4"
             strokeLinecap="round"
           />
         ))}
         {drawn.paths.map((d, i) => (
-          <path key={`run-${i}`} d={d} fill="none" className="stroke-accent" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          <path key={`run-${i}`} d={d} fill="none" stroke={ROUTE_COLOR} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
         ))}
 
-        {drawn.home && <IconMarker at={drawn.home} icon={BedDouble} tone="accent" />}
+        {drawn.home && <IconMarker at={drawn.home} icon={BedDouble} color={stayColor(colorIndexByStay[route.home.stayId]).hex} square />}
         {drawn.markers.map((m) => (
           m.numbers.length
-            ? <NumberMarker key={m.key} at={m.at} label={m.numbers.join('·')} />
-            : (
-              <IconMarker
-                key={m.key}
-                at={m.at}
-                icon={m.first.kind === 'transport' ? getTransportMode(m.first.mode).icon : BedDouble}
-              />
-            )
+            ? <NumberMarker key={m.key} at={m.at} label={m.numbers.join('·')} color={m.color} />
+            : m.first.kind === 'transport'
+              ? <IconMarker key={m.key} at={m.at} icon={getTransportMode(m.first.mode).icon} color={TRANSPORT_COLOR.hex} />
+              : <IconMarker key={m.key} at={m.at} icon={BedDouble} color={stayColor(colorIndexByStay[m.first.stayId]).hex} square />
         ))}
       </svg>
       {empty && (
-        <p className="absolute inset-0 flex items-center justify-center px-8 text-center text-xs text-faint">
+        <p className="absolute inset-0 flex items-center justify-center px-8 text-center text-[13px] text-muted">
           Collez le lien Google Maps d’une étape pour voir le parcours du jour.
         </p>
       )}
@@ -109,19 +109,20 @@ export default function MiniMap({ items, home = null, width = 340, height = 170,
   )
 }
 
-function NumberMarker({ at, label }) {
-  const w = label.length > 1 ? 10 + label.length * 6.4 : 20
+function NumberMarker({ at, label, color }) {
+  const w = label.length > 1 ? 12 + label.length * 6.4 : 22
   return (
     <g>
       <rect
-        x={at[0] - w / 2} y={at[1] - 10} width={w} height="20" rx="10"
-        className="fill-fg stroke-surface-2" strokeWidth="2.5"
+        x={at[0] - w / 2} y={at[1] - 11} width={w} height="22" rx="11"
+        fill={color || '#0E7490'} stroke="#fff" strokeWidth="2"
       />
       <text
         x={at[0]} y={at[1] + 3.8}
         textAnchor="middle"
-        className="fill-bg font-mono"
-        fontSize="10.5"
+        fill="#fff"
+        className="font-mono"
+        fontSize="11"
         fontWeight="600"
       >
         {label}
@@ -130,18 +131,14 @@ function NumberMarker({ at, label }) {
   )
 }
 
-function IconMarker({ at, icon: Icon, tone = 'fg' }) {
+function IconMarker({ at, icon: Icon, color, square = false }) {
   return (
     <g>
-      <circle
-        cx={at[0]} cy={at[1]} r="10.5"
-        className={cn('fill-surface', tone === 'accent' ? 'stroke-accent' : 'stroke-fg')}
-        strokeWidth="1.6"
+      <rect
+        x={at[0] - 11} y={at[1] - 11} width="22" height="22" rx={square ? 6 : 11}
+        fill={color} stroke="#fff" strokeWidth="2"
       />
-      <Icon
-        x={at[0] - 6} y={at[1] - 6} size={12} strokeWidth={2.2}
-        className={tone === 'accent' ? 'text-accent' : 'text-fg'}
-      />
+      <Icon x={at[0] - 6} y={at[1] - 6} size={12} strokeWidth={2.4} color="#fff" />
     </g>
   )
 }

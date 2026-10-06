@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ChevronLeft } from 'lucide-react'
 import AppSidebar from './AppSidebar.jsx'
 import AppBottomNav, { isTabActive } from './AppBottomNav.jsx'
 import { cn } from '@/shared/lib/utils.js'
 
 // Coquille commune à toutes les apps : sidebar (lg+), top-bar mobile,
 // barre d'onglets tablette optionnelle, bottom-nav, et le contenu au milieu.
-// Les vues ne rendent que leur propre contenu.
+// Les vues ne rendent que leur propre contenu. `back` ({ to, label }) remplace
+// la flèche vers le portail de la top-bar mobile par un retour au parent ;
+// `action` ({ icon, label, onClick }) y ajoute un bouton à droite.
 export default function AppShell({
   title,
   icon,
@@ -20,6 +22,8 @@ export default function AppShell({
   sidebarExtra,
   userColors,
   onUserClick,
+  back = null,
+  action = null,
   children,
 }) {
   return (
@@ -43,10 +47,32 @@ export default function AppShell({
             tabletNav ? 'sm:hidden' : 'lg:hidden',
           )}
         >
-          <div className="max-w-xl mx-auto px-4 py-3 flex items-center gap-3">
-            <BackLink size={18} />
-            <p className="text-sm font-semibold tracking-tight text-fg">{heading || title}</p>
-          </div>
+          {back ? (
+            // Un niveau à remonter dans l'app (un voyage → la liste) : le
+            // libellé du parent, comme la barre de navigation d'un téléphone.
+            <div className="max-w-xl mx-auto px-1 h-12 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+              <Link to={back.to} className="justify-self-start h-11 pl-1 pr-2 inline-flex items-center gap-0.5 text-[15px] text-accent min-w-0">
+                <ChevronLeft size={22} strokeWidth={2.2} className="shrink-0" />
+                <span className="truncate">{back.label}</span>
+              </Link>
+              <p className="max-w-[56vw] text-[15px] font-semibold tracking-tight text-fg truncate">{heading || title}</p>
+              {action ? (
+                <button
+                  type="button"
+                  onClick={action.onClick}
+                  aria-label={action.label}
+                  className="justify-self-end h-11 w-11 inline-flex items-center justify-center text-accent"
+                >
+                  <action.icon size={24} strokeWidth={2.2} />
+                </button>
+              ) : <span />}
+            </div>
+          ) : (
+            <div className="max-w-xl mx-auto px-4 py-3 flex items-center gap-3">
+              <BackLink size={18} />
+              <p className="text-sm font-semibold tracking-tight text-fg">{heading || title}</p>
+            </div>
+          )}
         </div>
 
         {tabletNav && (

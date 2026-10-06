@@ -26,7 +26,13 @@
 [data-accent="amber"]   { --accent: 245 158 11;  --accent-fg: 23 23 23;  }
 [data-accent="emerald"] { --accent: 16 185 129;  --accent-fg: 255 255 255; }
 [data-accent="red"]     { --accent: 220 38 38;   --accent-fg: 255 255 255; }
-[data-accent="lagoon"]  { --accent: 8 145 178;   --accent-fg: 255 255 255; }
+/* Lagon foncé (cyan 700) : le cyan 600 ne tenait que 3,7:1 sur blanc, trop
+   peu pour un lien ou le texte d'un bouton. Le cyan 600 reste celui du tracé
+   sur les cartes (components/map/mapStyle.js). */
+[data-accent="lagoon"]  { --accent: 14 116 144;  --accent-fg: 255 255 255; }
+/* Trip Planner : fond gris perle, cartes blanches sans bordure — les groupes
+   se détachent comme dans les réglages d'un téléphone. */
+[data-theme="light"][data-accent="lagoon"] { --bg: 242 243 245; }
 
 html, body, #root { height: 100%; }
 

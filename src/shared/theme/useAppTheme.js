@@ -11,6 +11,8 @@ export function useAppTheme(theme = 'dark', accent = 'indigo') {
     root.dataset.accent = accent
     root.style.colorScheme = theme
     const meta = document.querySelector('meta[name="theme-color"]')
-    if (meta) meta.setAttribute('content', `rgb(${BG_RGB[theme] || BG_RGB.dark})`)
+    // Le fond réel, une app pouvant l'ajuster (Trip Planner) ; sinon celui du thème.
+    const bg = getComputedStyle(root).getPropertyValue('--bg').trim() || BG_RGB[theme] || BG_RGB.dark
+    if (meta) meta.setAttribute('content', `rgb(${bg})`)
   }, [theme, accent])
 }

@@ -46,7 +46,7 @@ export default function DayStrip({ dayKeys, nights, segments, colorIndexByStay, 
               onClick={() => onStayClick(stay)}
               style={{ gridColumn: `${colStart} / ${colEnd}`, gridRow: lane + 1 }}
               className={cn(
-                'h-6 mx-px px-1.5 rounded-md border text-left text-[10.5px] font-semibold leading-[22px] truncate',
+                'h-6 mx-px px-1.5 rounded-md border text-left text-[11px] font-semibold leading-[22px] truncate',
                 stayColor(colorIndex ?? colorIndexByStay[stay.id]).bar,
               )}
               title={stay.name}
@@ -59,7 +59,7 @@ export default function DayStrip({ dayKeys, nights, segments, colorIndexByStay, 
           <div
             key={`gap-${n.date}`}
             style={{ gridColumn: `${i * 2 + 2} / ${i * 2 + 4}`, gridRow: 1 }}
-            className="h-6 mx-px rounded-md border border-dashed border-amber-400/70 bg-amber-50 text-[10px] font-medium text-amber-700 flex items-center justify-center"
+            className="h-6 mx-px rounded-md border border-dashed border-amber-500 bg-amber-50 text-[11px] font-semibold text-amber-800 flex items-center justify-center"
             title="Nuit sans hébergement"
           >
             ?
@@ -81,7 +81,7 @@ export default function DayStrip({ dayKeys, nights, segments, colorIndexByStay, 
                 active ? 'bg-fg border-fg text-bg' : 'bg-surface border-border text-fg hover:border-border-strong',
               )}
             >
-              <span className={cn('text-[10px] uppercase tracking-wide', active ? 'text-bg/70' : 'text-faint')}>{chip.dow}</span>
+              <span className={cn('text-[11px]', active ? 'text-bg/75' : 'text-muted')}>{chip.dow}</span>
               <span className="text-base font-semibold leading-tight tabular">{chip.day}</span>
               {date === today && (
                 <span aria-label="Aujourd’hui" className={cn('absolute bottom-1 h-1 w-1 rounded-full', active ? 'bg-bg' : 'bg-accent')} />

@@ -7,10 +7,10 @@ export default function Field({ label, optional = false, hint, className, childr
     <label className={cn('block', className)}>
       <span className="flex items-baseline justify-between gap-2 mb-1.5">
         <span className="text-xs font-medium text-muted">{label}</span>
-        {optional && <span className="text-[11px] text-faint">facultatif</span>}
+        {optional && <span className="text-[12px] text-muted">facultatif</span>}
       </span>
       {children}
-      {hint && <span className="block text-xs text-faint mt-1.5">{hint}</span>}
+      {hint && <span className="block text-[13px] text-muted mt-1.5">{hint}</span>}
     </label>
   )
 }

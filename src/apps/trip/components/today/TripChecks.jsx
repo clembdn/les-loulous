@@ -21,8 +21,8 @@ export default function TripChecks({ className }) {
   const empty = !checks.gaps.length && !checks.overlaps.length && !checks.unlocated.length
 
   return (
-    <section className={cn('rounded-2xl border border-border bg-surface', className)}>
-      <p className="px-4 pt-3.5 text-[11px] uppercase tracking-[0.16em] text-faint">Avant de partir</p>
+    <section className={cn('rounded-2xl bg-surface shadow-sm', className)}>
+      <p className="px-4 pt-4 text-[15px] font-semibold text-fg">Avant de partir</p>
       {isLoading ? null : empty ? (
         <p className="px-4 pt-2 pb-4 flex items-start gap-2 text-sm text-muted">
           <CircleCheck size={16} className="mt-0.5 shrink-0 text-emerald-600" />
@@ -38,7 +38,7 @@ export default function TripChecks({ className }) {
                   <span className="block text-sm text-fg first-letter:uppercase">Nuit du {formatDayFr(date)}</span>
                   <span className="block text-xs text-amber-800">Sans hébergement</span>
                 </span>
-                <Plus size={16} className="mt-0.5 shrink-0 text-faint" />
+                <Plus size={16} className="mt-0.5 shrink-0 text-muted" />
               </button>
             </li>
           ))}
@@ -52,7 +52,7 @@ export default function TripChecks({ className }) {
                     Réservée deux fois : {stays.map((s) => s.name).join(', ')}
                   </span>
                 </span>
-                <ChevronRight size={16} className="mt-0.5 shrink-0 text-faint" />
+                <ChevronRight size={16} className="mt-0.5 shrink-0 text-muted" />
               </button>
             </li>
           ))}
@@ -66,7 +66,7 @@ export default function TripChecks({ className }) {
                     Absentes des cartes et de la météo — à localiser tant qu’il y a du réseau.
                   </span>
                 </span>
-                <ChevronRight size={16} className="mt-0.5 shrink-0 text-faint" />
+                <ChevronRight size={16} className="mt-0.5 shrink-0 text-muted" />
               </button>
             </li>
           )}

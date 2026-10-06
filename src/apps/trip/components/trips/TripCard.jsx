@@ -20,31 +20,28 @@ export default function TripCard({ trip, today, onEdit }) {
   return (
     <div
       className={cn(
-        'group relative overflow-hidden rounded-2xl border bg-surface transition hover:border-border-strong hover:shadow-lift',
-        ongoing ? 'border-accent/40' : 'border-border',
+        'group relative overflow-hidden rounded-2xl bg-surface shadow-sm transition hover:shadow-md',
+        ongoing && 'ring-2 ring-accent',
       )}
     >
-      {ongoing && (
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-accent/[0.10] via-accent/[0.03] to-transparent" />
-      )}
       <Link
         to={tripPath(trip.id, ongoing ? 'aujourdhui' : 'jours')}
         className="relative block p-4 pr-14 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <p className={cn('text-base font-semibold truncate', past ? 'text-muted' : 'text-fg')}>{trip.title}</p>
-        <p className="text-sm text-muted mt-0.5 tabular">
+        <p className={cn('text-[17px] font-semibold truncate', past ? 'text-muted' : 'text-fg')}>{trip.title}</p>
+        <p className="text-[14px] text-muted mt-0.5 tabular">
           {formatTripRange(trip.startDate, trip.endDate)} · {plural(progress.length, 'jour')}
         </p>
         <p
           className={cn(
-            'mt-3 inline-flex items-center gap-1.5 text-xs font-medium',
-            ongoing ? 'text-accent' : past ? 'text-faint' : 'text-muted',
+            'mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold',
+            ongoing ? 'text-accent' : 'text-muted',
           )}
         >
           {ongoing && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />}
           {formatProgress(progress, trip.endDate)}
           {offline && (
-            <span className="inline-flex items-center gap-1 font-normal text-faint" title="Lisible sans réseau sur cet appareil">
+            <span className="inline-flex items-center gap-1 font-normal text-muted" title="Lisible sans réseau sur cet appareil">
               · <CircleCheck size={12} className="text-emerald-600" aria-hidden="true" /> hors-ligne
             </span>
           )}
@@ -53,7 +50,7 @@ export default function TripCard({ trip, today, onEdit }) {
       <button
         type="button"
         onClick={() => onEdit(trip)}
-        className="absolute top-3 right-3 h-9 w-9 inline-flex items-center justify-center rounded-lg text-faint hover:text-fg hover:bg-surface-2 transition"
+        className="absolute top-2.5 right-2.5 h-10 w-10 inline-flex items-center justify-center rounded-xl text-muted hover:text-fg hover:bg-surface-2 transition"
         aria-label={`Modifier « ${trip.title} »`}
         title="Modifier"
       >
