@@ -5,7 +5,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  buildDayTimeline, dayStatus, insertionPointByTime, isPast, lastStartedIndex, moveStop, pastKeys, shiftStop,
+  buildDayTimeline, dayStatus, insertionPointByTime, insertStopByTime, isPast, lastStartedIndex, moveStop, pastKeys,
   toMinutes,
 } from './timeline.js'
 
@@ -133,14 +133,6 @@ test('déplacer une étape avant une voisine, dans sa journée ou vers une autre
   assert.equal(moveStop(byDate, { fromDate: '2027-05-14', stopId: 'zz', toDate: '2027-05-15' }), null)
 })
 
-test('monter et descendre d’un cran, sans sortir de la liste', () => {
-  const stops = [stop('a'), stop('b'), stop('c')]
-  assert.deepEqual(shiftStop(stops, 'b', -1).map((s) => s.id), ['b', 'a', 'c'])
-  assert.deepEqual(shiftStop(stops, 'b', 1).map((s) => s.id), ['a', 'c', 'b'])
-  assert.equal(shiftStop(stops, 'a', -1), stops)
-  assert.equal(shiftStop(stops, 'c', 1), stops)
-})
-
 test('lâchée sur un autre jour, une étape se range à son heure', () => {
   const stops = [stop('a', '09:00'), stop('libre'), stop('b', '14:00')]
   assert.equal(insertionPointByTime(stops, '11:00'), 'b')
@@ -159,4 +151,11 @@ test('griser la journée : les horaires finis, et les étapes sans heure qu’on
   assert.deepEqual([...pastKeys(items, '14:30')], ['stop-musee', 'stop-flaner'])
   // Ce qui vient après le dernier horaire reste à faire, même tard.
   assert.deepEqual([...pastKeys(items, '23:00')], ['stop-musee', 'stop-flaner', 'stop-train'])
+})
+
+test('une nouvelle étape se range à son heure, sinon en fin de journée', () => {
+  const stops = [{ id: 'a', time: '09:00' }, { id: 'b', time: null }, { id: 'c', time: '14:00' }]
+  assert.deepEqual(insertStopByTime(stops, { id: 'n', time: '11:00' }).map((s) => s.id), ['a', 'b', 'n', 'c'])
+  assert.deepEqual(insertStopByTime(stops, { id: 'n', time: null }).map((s) => s.id), ['a', 'b', 'c', 'n'])
+  assert.deepEqual(insertStopByTime(stops, { id: 'n', time: '20:00' }).map((s) => s.id), ['a', 'b', 'c', 'n'])
 })

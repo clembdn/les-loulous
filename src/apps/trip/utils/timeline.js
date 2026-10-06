@@ -189,16 +189,6 @@ export function moveStop(stopsByDate, { fromDate, stopId, toDate, beforeId = nul
     : { [fromDate]: without, [toDate]: inserted }
 }
 
-/** Monter (−1) ou descendre (+1) une étape d'un cran. Rend la liste telle quelle aux bords. */
-export function shiftStop(stops, stopId, delta) {
-  const i = stops.findIndex((s) => s.id === stopId)
-  const j = i + delta
-  if (i === -1 || j < 0 || j >= stops.length) return stops
-  const next = [...stops]
-  ;[next[i], next[j]] = [next[j], next[i]]
-  return next
-}
-
 /**
  * Où ranger une étape lâchée sur un autre jour : avant la première étape
  * datée plus tard qu'elle. Une étape sans heure va en fin de journée.
@@ -208,4 +198,14 @@ export function insertionPointByTime(stops, time) {
   if (!time) return null
   const after = stops.find((s) => s.time && s.time > time)
   return after ? after.id : null
+}
+
+/**
+ * Une nouvelle étape dans la liste du jour : à son heure si elle en a une
+ * (avant la première étape datée plus tard), sinon en fin de journée.
+ */
+export function insertStopByTime(stops, stop) {
+  const beforeId = insertionPointByTime(stops, stop.time)
+  const at = beforeId ? stops.findIndex((s) => s.id === beforeId) : -1
+  return at === -1 ? [...stops, stop] : [...stops.slice(0, at), stop, ...stops.slice(at)]
 }

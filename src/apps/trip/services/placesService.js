@@ -13,13 +13,17 @@ import { photonPlaces, photonUrl } from '../utils/photon.js'
 // on patiente (la roue tourne) plutôt que d'abandonner trop tôt.
 const TIMEOUT_MS = 12000
 
-async function fetchWithTimeout(url) {
+// `signal` : la recherche n'a plus lieu d'être (on a continué de taper).
+async function fetchWithTimeout(url, signal = null) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  const cancel = () => controller.abort()
+  signal?.addEventListener('abort', cancel)
   try {
     return await fetch(url, { signal: controller.signal })
   } finally {
     clearTimeout(timer)
+    signal?.removeEventListener('abort', cancel)
   }
 }
 
@@ -69,10 +73,13 @@ export async function resolveMapsLink(text) {
   }
 }
 
-/** Recherche par nom, biaisée vers `near` (un lieu du voyage). Rend `[]` hors-ligne. */
-export async function searchPlaces(query, { near = null } = {}) {
+/**
+ * Recherche par nom, biaisée vers `near` (un lieu du voyage). Rend `[]`
+ * hors-ligne. `signal` annule une recherche dépassée par la frappe.
+ */
+export async function searchPlaces(query, { near = null, signal = null } = {}) {
   if (!query.trim() || isOffline()) return []
-  const res = await fetchWithTimeout(photonUrl(query, { near }))
+  const res = await fetchWithTimeout(photonUrl(query, { near }), signal)
   if (!res.ok) throw new Error(`Photon ${res.status}`)
   return photonPlaces(await res.json())
 }

@@ -1,4 +1,4 @@
-import { ExternalLink, Plus } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import { formatDayFr, shiftDateKey } from '@/shared/lib/dates.js'
 import { cn } from '@/shared/lib/utils.js'
 
@@ -8,12 +8,12 @@ import { cn } from '@/shared/lib/utils.js'
 export function DayPill({ date, today }) {
   const label = date === today ? 'Aujourd’hui' : date === shiftDateKey(today, 1) ? 'Demain' : null
   if (!label) return null
-  return <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent normal-case tracking-normal">{label}</span>
+  return <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[12px] font-semibold text-accent">{label}</span>
 }
 
 export function DayDate({ date, today, className }) {
   return (
-    <p className={cn('flex items-center gap-2 text-xs text-muted', className)}>
+    <p className={cn('flex items-center gap-2 text-[13px] text-muted', className)}>
       <span className="first-letter:uppercase">{formatDayFr(date)}</span>
       <DayPill date={date} today={today} />
     </p>
@@ -28,26 +28,9 @@ export function RouteLink({ url, className }) {
       href={url}
       target="_blank"
       rel="noreferrer"
-      className={cn('inline-flex items-center gap-1 text-xs text-muted hover:text-accent transition', className)}
+      className={cn('inline-flex items-center gap-1 text-[13px] text-muted hover:text-accent transition', className)}
     >
       Parcours dans Google Maps <ExternalLink size={11} />
     </a>
-  )
-}
-
-export function AddStopButton({ onClick, disabled, className, ...rest }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        'w-full h-11 inline-flex items-center justify-center gap-2 rounded-xl border border-dashed border-border-strong text-sm text-muted transition hover:text-fg hover:border-accent disabled:opacity-40',
-        className,
-      )}
-      {...rest}
-    >
-      <Plus size={16} /> Ajouter une étape
-    </button>
   )
 }

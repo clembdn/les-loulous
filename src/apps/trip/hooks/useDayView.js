@@ -22,6 +22,10 @@ export function useDayView(date) {
     const stopsWithCoords = items
       .filter((it) => it.type === 'stop' && hasCoords(it.stop))
       .map((it) => it.stop)
+    // Où l'on est ce jour-là, pour orienter la recherche de lieux : la
+    // dernière étape localisée, sinon l'hébergement du soir.
+    const lastStop = stopsWithCoords[stopsWithCoords.length - 1]
+    const nearPlace = lastStop || (hasCoords(tonight) ? tonight : null)
     return {
       day,
       items,
@@ -33,6 +37,7 @@ export function useDayView(date) {
       isLastDay: date === dayKeys[dayKeys.length - 1],
       dayNumber: dayKeys.indexOf(date) + 1,
       routeUrl: dayRouteUrl(stopsWithCoords),
+      near: nearPlace ? { lat: nearPlace.lat, lng: nearPlace.lng } : null,
     }
   }, [date, day, items, stays, colorIndexByStay, attachmentsByParent, dayKeys])
 }

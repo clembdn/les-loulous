@@ -46,3 +46,11 @@ test('un même lieu décrit plusieurs fois n’apparaît qu’une fois', () => {
   const twice = (coordinates) => ({ geometry: { coordinates }, properties: { name: 'Mosteiro', city: 'Lisboa' } })
   assert.equal(photonPlaces({ features: [twice([-9.2, 38.69]), twice([-9.21, 38.7])] }).length, 1)
 })
+
+test('la catégorie, devinée d’après les tags OpenStreetMap', () => {
+  const place = photonPlace({
+    geometry: { coordinates: [-9.2068, 38.6979] },
+    properties: { name: 'Mosteiro dos Jerónimos', osm_key: 'historic', osm_value: 'monastery', city: 'Lisboa' },
+  })
+  assert.equal(place.category, 'visit')
+})

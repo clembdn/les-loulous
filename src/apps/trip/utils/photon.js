@@ -5,6 +5,8 @@
 //
 // Module pur : l'app ET la fonction serveur s'en servent. Testé sous `node --test`.
 
+import { guessCategory } from './categoryGuess.js'
+
 const ENDPOINT = 'https://photon.komoot.io/api/'
 
 /** URL de recherche, biaisée vers `near` ({ lat, lng }) s'il est fourni. */
@@ -18,7 +20,8 @@ export function photonUrl(query, { near = null, limit = 6 } = {}) {
 }
 
 /**
- * Une réponse Photon (GeoJSON) → `{ name, address, lat, lng }`.
+ * Une réponse Photon (GeoJSON) → `{ name, address, lat, lng }`, plus
+ * `category` quand les tags OpenStreetMap ou le nom permettent de la deviner.
  * L'adresse est reconstruite à partir de ce qu'OpenStreetMap connaît : rue,
  * ville, pays — sans répéter le nom.
  */
@@ -31,11 +34,13 @@ export function photonPlace(feature) {
   const name = p.name || street || city || p.country || ''
   if (!name) return null
   const parts = [street, city, p.country].filter((part) => part && part !== name)
+  const category = guessCategory({ osmKey: p.osm_key, osmValue: p.osm_value, name })
   return {
     name,
     address: [...new Set(parts)].join(', ') || null,
     lat,
     lng,
+    ...(category ? { category } : {}),
   }
 }
 
