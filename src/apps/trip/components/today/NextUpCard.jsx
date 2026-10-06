@@ -1,31 +1,39 @@
-import { ChevronRight, House, Navigation, Plus } from 'lucide-react'
+import { ChevronRight, House, Navigation, Play, Plus } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
+import { useMediaQuery } from '@/shared/lib/useMediaQuery.js'
 import { useTripData } from '../../context/TripDataContext.jsx'
 import { useTripUI } from '../../context/TripUIContext.jsx'
 import { useTripWeather } from '../../context/TripWeatherContext.jsx'
+import { stayColor } from '../../config/palette.js'
 import { goUrl } from '../../utils/mapsUrl.js'
 import { destinationOf } from '../../utils/today.js'
 import { formatUntil } from '../../utils/format.js'
 import { itemText } from '../days/itemText.js'
 import AttachmentThumb from '../attachments/AttachmentThumb.jsx'
 import CopyValue from '../CopyValue.jsx'
+import { itemColor } from '../ItemBadge.jsx'
+import TripMap from '../map/TripMap.jsx'
 import WeatherBadge from '../weather/WeatherBadge.jsx'
-import { Eyebrow, Glow, HERO_CARD } from './parts.jsx'
+import { Eyebrow, HERO_CARD } from './parts.jsx'
 
 const EYEBROW = { current: 'En cours', next: 'Prochaine étape', then: 'À suivre' }
 
-const GO = 'flex-1 h-12 inline-flex items-center justify-center gap-2 rounded-xl bg-accent text-accent-fg text-sm font-semibold transition hover:opacity-90 active:scale-[0.98]'
-const SECONDARY = 'h-12 px-4 inline-flex items-center justify-center gap-1 rounded-xl border border-border bg-surface-2 text-sm text-fg transition hover:border-border-strong'
+const GO = 'flex-1 h-12 inline-flex items-center justify-center gap-2 rounded-xl bg-accent text-accent-fg text-[15px] font-semibold transition hover:opacity-90 active:scale-[0.98]'
+const SECONDARY = 'h-12 px-4 inline-flex items-center justify-center gap-1.5 rounded-xl bg-surface-2 text-[15px] font-medium text-fg transition hover:bg-border'
+const BAND_PADDING = { top: 28, bottom: 28, left: 48, right: 48 }
 
 /**
  * L'écran Aujourd'hui commence ici : ce qui vient, en grand, et « Y aller ».
  *
- * `focus` vient de `focusOf` (utils/today.js). Sans rien devant soi, la carte
- * ramène à l'hébergement du soir — c'est ce qu'on cherche en fin de journée,
- * dans une ville qu'on ne connaît pas.
+ * Sur téléphone, un bandeau de carte montre où c'est, à partir de l'étape
+ * d'avant ; un tap ouvre le déroulé à cette étape. Sans rien devant soi, la
+ * carte ramène à l'hébergement du soir — c'est ce qu'on cherche en fin de
+ * journée, dans une ville qu'on ne connaît pas.
+ *
+ * `focus` vient de `focusOf` (utils/today.js), `items` et `past` de la journée.
  */
-export default function NextUpCard({ date, focus, tonight, isLastDay, className }) {
-  if (focus.item) return <ItemFocus date={date} focus={focus} className={className} />
+export default function NextUpCard({ date, focus, items, past, tonight, isLastDay, className }) {
+  if (focus.item) return <ItemFocus date={date} focus={focus} items={items} past={past} tonight={tonight} className={className} />
   return <RestFocus date={date} free={focus.kind === 'free'} tonight={tonight} isLastDay={isLastDay} className={className} />
 }
 
@@ -39,12 +47,14 @@ function GoLink({ place }) {
   )
 }
 
-function ItemFocus({ date, focus, className }) {
+function ItemFocus({ date, focus, items, past, tonight, className }) {
   const ui = useTripUI()
-  const { attachmentsByParent } = useTripData()
+  const phone = !useMediaQuery('(min-width: 1024px)')
+  const { attachmentsByParent, colorIndexByStay } = useTripData()
   const { weatherOf } = useTripWeather()
   const { item } = focus
   const { title, sub, icon: Icon } = itemText(item)
+  const color = itemColor(item, colorIndexByStay)
   const place = destinationOf(item, { underway: focus.kind === 'current' })
   // La météo de là où l'on sera : dans le train, c'est la ville d'arrivée.
   const weatherPlace = place || (item.type === 'transport' ? item.transport.to : item.stay || null)
@@ -58,10 +68,26 @@ function ItemFocus({ date, focus, className }) {
     else if (item.type === 'transport') ui.openResa('transport', item.transport.id)
     else ui.openResa('stay', item.stay.id)
   }
+  const runner = () => ui.openRunner(date, item.key)
 
   return (
     <section className={cn(HERO_CARD, className)}>
-      <Glow />
+      {phone && (
+        <TripMap
+          items={items}
+          home={tonight}
+          colorIndexByStay={colorIndexByStay}
+          pastKeys={past}
+          activeKey={item.key}
+          focusKey={item.key}
+          focusZoom={14.2}
+          dimOthers
+          onPress={runner}
+          pressLabel="Voir l’étape sur la carte, en déroulé"
+          padding={BAND_PADDING}
+          className="h-40"
+        />
+      )}
       <div className="relative p-5">
         <div className="flex items-start justify-between gap-3">
           <Eyebrow live={focus.kind === 'current'}>{EYEBROW[focus.kind]}</Eyebrow>
@@ -69,35 +95,38 @@ function ItemFocus({ date, focus, className }) {
         </div>
 
         {focus.kind === 'next' && (
-          <p className="mt-2 text-3xl font-semibold tracking-[-0.02em] text-fg tabular">
-            {formatUntil(focus.minutes)}
-            <span className="ml-2 text-base font-medium text-muted">à {item.time}</span>
+          <p className="mt-1.5 flex items-baseline gap-2 tabular">
+            <span className="text-[34px] leading-10 font-bold tracking-[-0.02em] text-fg first-letter:uppercase">{formatUntil(focus.minutes)}</span>
+            <span className="font-mono text-[17px] font-medium text-muted">{item.time}</span>
           </p>
         )}
         {focus.kind === 'current' && (
-          <p className="mt-2 text-3xl font-semibold tracking-[-0.02em] text-fg tabular">jusqu’à {focus.until}</p>
+          <p className="mt-1.5 text-[34px] leading-10 font-bold tracking-[-0.02em] text-fg tabular">jusqu’à {focus.until}</p>
         )}
 
-        <div className="mt-4 flex items-start gap-3">
-          <span className="h-11 w-11 shrink-0 rounded-2xl bg-accent/10 text-accent flex items-center justify-center">
+        <button type="button" onClick={open} className="group mt-4 w-full flex items-start gap-3 text-left">
+          <span className="h-11 w-11 shrink-0 rounded-2xl text-white flex items-center justify-center" style={{ backgroundColor: color }}>
             <Icon size={20} />
           </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-lg font-semibold leading-snug text-fg">{title}</p>
-            {sub && <p className="mt-0.5 text-sm text-muted">{sub}</p>}
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1 text-[19px] font-semibold leading-snug text-fg">
+              <span className="min-w-0">{title}</span>
+              <ChevronRight size={18} className="shrink-0 text-muted group-hover:text-fg transition" />
+            </span>
+            {sub && <span className="mt-0.5 block text-[14px] text-muted">{sub}</span>}
             {item.type === 'stop' && item.stop.notes && (
-              <p className="mt-1.5 text-sm text-faint whitespace-pre-line line-clamp-3">{item.stop.notes}</p>
+              <span className="mt-1.5 block text-[14px] text-muted whitespace-pre-line line-clamp-3">{item.stop.notes}</span>
             )}
-          </div>
-        </div>
+          </span>
+        </button>
 
         <Essentials item={item} files={files} onViewAttachment={ui.viewAttachments} />
       </div>
 
       <div className="relative flex gap-2 px-5 pb-5">
         <GoLink place={place} />
-        <button type="button" onClick={open} className={cn(SECONDARY, !place && 'flex-1')}>
-          {item.type === 'stop' ? 'Détails' : 'Réservation'} <ChevronRight size={15} />
+        <button type="button" onClick={runner} className={cn(SECONDARY, !place && 'flex-1')}>
+          <Play size={14} fill="currentColor" /> Déroulé
         </button>
       </div>
     </section>
@@ -127,9 +156,9 @@ function Essentials({ item, files, onViewAttachment }) {
   const [first] = files
   if (!values.length && !first) return null
   return (
-    <div className="mt-4 flex items-start gap-3 rounded-2xl bg-surface-2/70 p-3">
+    <div className="mt-4 flex items-start gap-3 rounded-2xl bg-surface-2 p-3">
       <div className="min-w-0 flex-1 flex flex-wrap gap-x-6 gap-y-2">
-        {values.length ? values : <p className="text-xs text-muted self-center">La réservation, à montrer sur place :</p>}
+        {values.length ? values : <p className="text-[13px] text-muted self-center">La réservation, à montrer sur place :</p>}
       </div>
       {first && (
         <AttachmentThumb
@@ -144,24 +173,27 @@ function Essentials({ item, files, onViewAttachment }) {
 
 function RestFocus({ date, free, tonight, isLastDay, className }) {
   const ui = useTripUI()
+  const { colorIndexByStay } = useTripData()
   const { weatherOf } = useTripWeather()
 
   if (tonight) {
     return (
       <section className={cn(HERO_CARD, className)}>
-        <Glow />
         <div className="relative p-5">
           <div className="flex items-start justify-between gap-3">
             <Eyebrow>{free ? 'Journée libre' : 'Plus rien de prévu'}</Eyebrow>
             <WeatherBadge weather={weatherOf(date, tonight)} detailed className="text-sm" />
           </div>
           <div className="mt-3 flex items-start gap-3">
-            <span className="h-11 w-11 shrink-0 rounded-2xl bg-accent/10 text-accent flex items-center justify-center">
+            <span
+              className="h-11 w-11 shrink-0 rounded-2xl text-white flex items-center justify-center"
+              style={{ backgroundColor: stayColor(colorIndexByStay[tonight.id]).hex }}
+            >
               <House size={20} />
             </span>
             <div className="min-w-0">
               <p className="text-2xl font-semibold tracking-[-0.02em] text-fg">Rentrer</p>
-              <p className="mt-0.5 text-sm text-muted">{[tonight.name, tonight.address].filter(Boolean).join(' · ')}</p>
+              <p className="mt-0.5 text-[14px] text-muted">{[tonight.name, tonight.address].filter(Boolean).join(' · ')}</p>
             </div>
           </div>
         </div>
@@ -178,11 +210,10 @@ function RestFocus({ date, free, tonight, isLastDay, className }) {
   const title = isLastDay ? 'Bon retour !' : free ? 'Rien de prévu aujourd’hui' : 'C’est tout pour aujourd’hui'
   return (
     <section className={cn(HERO_CARD, className)}>
-      <Glow />
       <div className="relative p-5">
         <Eyebrow>{isLastDay ? 'Dernier jour' : free ? 'Journée libre' : 'Plus rien de prévu'}</Eyebrow>
         <p className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-fg">{title}</p>
-        {!isLastDay && <p className="mt-1 text-sm text-amber-800">Pas d’hébergement ce soir : à prévoir.</p>}
+        {!isLastDay && <p className="mt-1 text-[14px] text-amber-800">Pas d’hébergement ce soir : à prévoir.</p>}
       </div>
       <div className="relative flex gap-2 px-5 pb-5">
         <button type="button" onClick={() => ui.editStop(date)} className={cn(SECONDARY, 'flex-1')}>
