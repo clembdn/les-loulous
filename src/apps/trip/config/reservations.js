@@ -20,7 +20,7 @@ export const STAY_KINDS = [
  * les libellés des deux extrémités changent.
  */
 export const TRANSPORT_MODES = [
-  { id: 'flight', label: 'Avion', icon: Plane, refPlaceholder: 'TP 1024', fromLabel: 'Départ', toLabel: 'Arrivée' },
+  { id: 'flight', label: 'Vol', icon: Plane, refPlaceholder: 'TP 1024', fromLabel: 'Départ', toLabel: 'Arrivée' },
   { id: 'train',  label: 'Train', icon: TrainFront, refPlaceholder: 'TGV 6173', fromLabel: 'Départ', toLabel: 'Arrivée' },
   { id: 'bus',    label: 'Bus',   icon: Bus, refPlaceholder: 'FlixBus 042', fromLabel: 'Départ', toLabel: 'Arrivée' },
   { id: 'ferry',  label: 'Ferry', icon: Ship, refPlaceholder: 'Traversée 7:30', fromLabel: 'Départ', toLabel: 'Arrivée' },

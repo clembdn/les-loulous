@@ -20,8 +20,11 @@ export const MAX_ATTACHMENTS = 6
  * Trois façons d'ajouter : choisir un fichier, glisser une image, ou coller
  * (Ctrl+V) une capture prise à l'instant — le geste le plus rapide sur
  * ordinateur.
+ *
+ * `compact` : une rangée de vignettes, et tant qu'il n'y en a aucune, un
+ * seul grand bouton — la capture est en tête du formulaire.
  */
-export default function AttachmentField({ existing = [], value, onChange }) {
+export default function AttachmentField({ existing = [], value, onChange, compact = false }) {
   const inputRef = useRef(null)
   const [pending, setPending] = useState(0)
   const [dragOver, setDragOver] = useState(false)
@@ -82,35 +85,57 @@ export default function AttachmentField({ existing = [], value, onChange }) {
         onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files) }}
-        className={cn('grid grid-cols-3 sm:grid-cols-4 gap-2 rounded-2xl transition', dragOver && 'ring-2 ring-accent ring-offset-2 ring-offset-surface')}
+        className={cn(
+          'rounded-2xl transition',
+          compact ? 'flex gap-2 overflow-x-auto no-scrollbar' : 'grid grid-cols-3 sm:grid-cols-4 gap-2',
+          dragOver && 'ring-2 ring-accent ring-offset-2 ring-offset-surface',
+        )}
       >
         {kept.map((a, i) => (
-          <AttachmentThumb key={a.id} attachment={a} onClick={() => setViewing(i)} className="aspect-[3/4]">
+          <AttachmentThumb key={a.id} attachment={a} onClick={() => setViewing(i)} className={cn('aspect-[3/4]', compact && 'w-[84px] shrink-0')}>
             <RemoveButton onClick={() => removeExisting(a.id)} />
           </AttachmentThumb>
         ))}
         {value.add.map((a, i) => (
-          <AttachmentThumb key={a.key} attachment={a} onClick={() => setViewing(kept.length + i)} className="aspect-[3/4]">
+          <AttachmentThumb key={a.key} attachment={a} onClick={() => setViewing(kept.length + i)} className={cn('aspect-[3/4]', compact && 'w-[84px] shrink-0')}>
             <RemoveButton onClick={() => removeAdded(a.key)} />
           </AttachmentThumb>
         ))}
         {Array.from({ length: pending }, (_, i) => (
-          <div key={`pending-${i}`} className="aspect-[3/4] rounded-xl border border-border bg-surface-2 flex items-center justify-center">
-            <Loader2 size={18} className="text-faint animate-spin" />
+          <div key={`pending-${i}`} className={cn('aspect-[3/4] rounded-xl border border-border bg-surface-2 flex items-center justify-center', compact && 'w-[84px] shrink-0')}>
+            <Loader2 size={18} className="text-muted animate-spin" />
           </div>
         ))}
-        {room > 0 && (
+        {room > 0 && compact && shown.length + pending === 0 && (
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            className="aspect-[3/4] rounded-xl border border-dashed border-border-strong text-muted hover:text-fg hover:border-accent transition flex flex-col items-center justify-center gap-1.5 px-2 text-center"
+            className="w-full min-h-[72px] rounded-2xl border border-dashed border-border-strong px-4 py-3 flex items-center gap-3 text-left transition hover:border-accent hover:bg-accent/5"
+          >
+            <span className="h-11 w-11 shrink-0 rounded-xl bg-accent text-accent-fg flex items-center justify-center">
+              <ImagePlus size={20} />
+            </span>
+            <span>
+              <span className="block text-[15px] font-semibold text-fg">Ajouter la capture</span>
+              <span className="block text-[13px] text-muted">Le mail ou le billet : on le montre sur place, même sans réseau</span>
+            </span>
+          </button>
+        )}
+        {room > 0 && !(compact && shown.length + pending === 0) && (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className={cn(
+              'aspect-[3/4] rounded-xl border border-dashed border-border-strong text-muted hover:text-fg hover:border-accent transition flex flex-col items-center justify-center gap-1.5 px-2 text-center',
+              compact && 'w-[84px] shrink-0',
+            )}
           >
             <ImagePlus size={20} />
-            <span className="text-[11px] leading-tight">Ajouter une capture</span>
+            <span className="text-[12px] leading-tight">Ajouter</span>
           </button>
         )}
       </div>
-      <p className="hidden sm:block mt-1.5 text-xs text-faint">Astuce : collez directement une capture d’écran avec Ctrl+V.</p>
+      <p className="hidden sm:block mt-1.5 text-[13px] text-muted">Astuce : collez directement une capture d’écran avec Ctrl+V.</p>
       <input
         ref={inputRef}
         type="file"

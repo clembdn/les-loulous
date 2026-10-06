@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTripData } from './TripDataContext.jsx'
 import StaySheet from '../components/resas/StaySheet.jsx'
 import TransportSheet from '../components/resas/TransportSheet.jsx'
@@ -6,8 +7,10 @@ import StopSheet from '../components/days/StopSheet.jsx'
 import DaySheet from '../components/days/DaySheet.jsx'
 import TripFormSheet from '../components/trips/TripFormSheet.jsx'
 import AttachmentViewer from '../components/attachments/AttachmentViewer.jsx'
+import NewItemSheet from '../components/resas/NewItemSheet.jsx'
 import { hasCoords } from '../utils/geo.js'
 import { resaKey } from '../utils/reservations.js'
+import { RUNNER_ID, tripPath } from '../config/navigation.js'
 
 /**
  * Les feuilles d'un voyage, montées UNE fois.
@@ -30,11 +33,13 @@ const CLOSED = { open: false, item: null, defaults: null, nonce: 0 }
 
 export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, children }) {
   const { trip, tripId, stays, days, attachmentsByParent } = useTripData()
+  const navigate = useNavigate()
   const [stayForm, setStayForm] = useState(CLOSED)
   const [transportForm, setTransportForm] = useState(CLOSED)
   const [stopForm, setStopForm] = useState({ open: false, date: null, stop: null, nonce: 0 })
   const [dayForm, setDayForm] = useState({ open: false, date: null, nonce: 0 })
   const [tripForm, setTripForm] = useState(false)
+  const [newItem, setNewItem] = useState({ open: false, date: null })
   const [viewer, setViewer] = useState({ list: [], index: null })
 
   // Un point du voyage pour orienter la recherche de lieux : « Gare » doit
@@ -55,14 +60,23 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, child
     editStop: (date, stop = null) => setStopForm((f) => ({ open: true, date, stop, nonce: f.nonce + 1 })),
     editDay: (date) => setDayForm((f) => ({ open: true, date, nonce: f.nonce + 1 })),
     editTrip: () => setTripForm(true),
+    // « + » : étape, hébergement ou trajet, au jour donné.
+    newItem: (date) => setNewItem({ open: true, date }),
     viewAttachments: (list, index = 0) => setViewer({ list, index }),
     openResa: (kind, id, options) => goTab('resas', resaKey(kind, id), options),
     // Fermer une fiche, c'est revenir en arrière : « retour » ne doit pas la rouvrir.
     closeResa: () => goBack(`/trip/${tripId}/resas`),
     openDay: (date, options) => goTab('jours', date, options),
     openTab: (tab) => goTab(tab),
+    // La journée en plein écran sur la carte, éventuellement à partir d'un
+    // élément de la frise (la prochaine étape, depuis l'écran Aujourd'hui).
+    openRunner: (date, startKey = null) => {
+      const path = tripPath(tripId, RUNNER_ID, date)
+      navigate(startKey ? `${path}?depart=${encodeURIComponent(startKey)}` : path)
+    },
+    closeRunner: (date) => goBack(tripPath(tripId, 'jours', date)),
     near,
-  }), [goTab, goBack, tripId, near])
+  }), [goTab, goBack, tripId, near, navigate])
 
   // Supprimer la réservation dont on regarde la fiche : retour à la liste,
   // sans laisser « retour » rouvrir une fiche qui n'existe plus.
@@ -83,6 +97,7 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, child
         stay={stay}
         defaults={stayForm.defaults}
         tripId={tripId}
+        tripStart={trip.startDate}
         attachments={stay ? attachmentsByParent[stay.id] || [] : []}
         near={near}
         onClose={() => setStayForm((f) => ({ ...f, open: false }))}
@@ -94,10 +109,12 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, child
         transport={transport}
         defaults={transportForm.defaults}
         tripId={tripId}
+        tripStart={trip.startDate}
         attachments={transport ? attachmentsByParent[transport.id] || [] : []}
         near={near}
         onClose={() => setTransportForm((f) => ({ ...f, open: false }))}
         onDeleted={() => leaveDeletedResa('transport', transport.id)}
+        onReverse={(t) => api.editTransport(null, { reverseOf: t })}
       />
       <StopSheet
         key={`stop-${stopForm.nonce}`}
@@ -114,6 +131,14 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, child
         onClose={() => setDayForm((f) => ({ ...f, open: false }))}
       />
       <TripFormSheet open={tripForm} trip={trip} onClose={() => setTripForm(false)} onDeleted={onTripDeleted} />
+      <NewItemSheet
+        open={newItem.open}
+        date={newItem.date}
+        onClose={() => setNewItem((n) => ({ ...n, open: false }))}
+        onStop={() => api.editStop(newItem.date)}
+        onStay={() => api.editStay(null, { date: newItem.date })}
+        onTransport={(mode) => api.editTransport(null, { date: newItem.date, mode })}
+      />
       <AttachmentViewer
         attachments={viewer.list}
         index={viewer.index}

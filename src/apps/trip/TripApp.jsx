@@ -9,16 +9,18 @@ import { ThemedToaster } from '@/shared/ui/sonner.jsx'
 import { TripsProvider, useTrips } from './context/TripsContext.jsx'
 import { TripDataProvider } from './context/TripDataContext.jsx'
 import { TripWeatherProvider } from './context/TripWeatherContext.jsx'
-import { TripUIProvider } from './context/TripUIContext.jsx'
+import { TripUIProvider, useTripUI } from './context/TripUIContext.jsx'
 import Shell from './components/layout/Shell.jsx'
 import Loader from './components/Loader.jsx'
 import TripFormSheet from './components/trips/TripFormSheet.jsx'
 import TripsView from './views/TripsView.jsx'
+import ShareInView from './views/ShareInView.jsx'
 import TodayView from './views/TodayView.jsx'
 import DaysView from './views/DaysView.jsx'
 import ResasView from './views/ResasView.jsx'
-import { DEFAULT_TAB, LIST_ID, LIST_PATH, TAB_IDS, tripPath } from './config/navigation.js'
-import { currentTrip } from './utils/tripDates.js'
+import DayRunner from './components/days/DayRunner.jsx'
+import { DEFAULT_TAB, LIST_ID, LIST_PATH, RUNNER_ID, TAB_IDS, tripPath } from './config/navigation.js'
+import { currentTrip, defaultDay } from './utils/tripDates.js'
 
 export default function TripApp() {
   useAppTheme('light', 'lagoon')
@@ -27,6 +29,8 @@ export default function TripApp() {
       <Routes>
         <Route index element={<TripEntry />} />
         <Route path={LIST_ID} element={<TripsScreen />} />
+        {/* Un lieu partagé depuis Google Maps (Android, cf. vite.config.js). */}
+        <Route path="partage" element={<ShareInView />} />
         <Route path=":tripId/*" element={<TripScreens />} />
       </Routes>
       {/* Monté une fois, hors des écrans : passer de la liste à un voyage
@@ -104,14 +108,37 @@ function TripScreens() {
           currentSub={sub}
           onTripDeleted={() => navigate(LIST_PATH, { replace: true })}
         >
-          <Shell trip={trip} active={tab} onChange={onChange}>
-            {tab === 'aujourdhui' && <TodayView />}
-            {tab === 'jours' && <DaysView selectedDate={sub} />}
-            {tab === 'resas' && <ResasView selectedKey={sub} />}
-          </Shell>
+          {tab === RUNNER_ID ? (
+            // Le déroulé occupe tout l'écran, sans barres : la carte d'abord.
+            // La clé repart de zéro en passant au jour suivant.
+            <DayRunner key={sub} date={sub} />
+          ) : (
+            <TripShell trip={trip} tab={tab} sub={sub} onChange={onChange}>
+              {tab === 'aujourdhui' && <TodayView />}
+              {tab === 'jours' && <DaysView selectedDate={sub} />}
+              {tab === 'resas' && <ResasView selectedKey={sub} />}
+            </TripShell>
+          )}
         </TripUIProvider>
       </TripWeatherProvider>
     </TripDataProvider>
+  )
+}
+
+/**
+ * La coquille d'un voyage, avec « + » (en haut sur téléphone, dans la
+ * sidebar sur ordinateur) : étape, hébergement ou trajet, au jour affiché —
+ * celui ouvert dans Jours, aujourd'hui pendant le voyage, sinon le premier.
+ */
+function TripShell({ trip, tab, sub, onChange, children }) {
+  const ui = useTripUI()
+  const today = useToday()
+  const date = (tab === 'jours' && sub) || defaultDay(trip, today)
+  const add = { label: 'Ajouter', icon: Plus, onClick: () => ui.newItem(date) }
+  return (
+    <Shell trip={trip} active={tab} onChange={onChange} action={add} sidebarAction={add}>
+      {children}
+    </Shell>
   )
 }
 

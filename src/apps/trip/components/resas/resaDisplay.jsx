@@ -1,7 +1,7 @@
 import { cn } from '@/shared/lib/utils.js'
 import { formatDateFr } from '@/shared/lib/dates.js'
 import { getStayKind, getTransportMode } from '../../config/reservations.js'
-import { stayColor } from '../../config/palette.js'
+import { stayColor, TRANSPORT_COLOR } from '../../config/palette.js'
 import { daysBetween } from '../../utils/tripDates.js'
 import { formatShortRange, plural } from '../../utils/format.js'
 
@@ -33,10 +33,10 @@ export function ResaIcon({ kind, item, colorIndex, size = 'md' }) {
   return (
     <span
       className={cn(
-        'shrink-0 rounded-xl flex items-center justify-center',
+        'shrink-0 rounded-xl flex items-center justify-center text-white',
         size === 'lg' ? 'h-12 w-12' : 'h-10 w-10',
-        kind === 'stay' ? stayColor(colorIndex).bar : 'bg-accent/10 text-accent',
       )}
+      style={{ backgroundColor: kind === 'stay' ? stayColor(colorIndex).hex : TRANSPORT_COLOR.hex }}
     >
       <Icon size={size === 'lg' ? 22 : 18} />
     </span>
