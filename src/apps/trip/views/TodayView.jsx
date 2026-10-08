@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ChevronRight, Flag } from 'lucide-react'
+import { ChevronRight, Flag, Share2 } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { formatDayFr, shiftDateKey } from '@/shared/lib/dates.js'
 import { useMediaQuery } from '@/shared/lib/useMediaQuery.js'
@@ -61,12 +61,23 @@ function Heading({ title, subtitle }) {
   const { trip } = useTripData()
   return (
     <>
-      <div className="lg:hidden px-1">
-        <h1 className="text-[30px] leading-9 font-bold tracking-[-0.02em] text-fg">{title}</h1>
-        <p className="mt-0.5 text-[15px] text-muted first-letter:uppercase">{subtitle}</p>
-        <OfflineBadge tripId={trip.id} className="mt-1.5" />
+      <div className="lg:hidden px-1 flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-[30px] leading-9 font-bold tracking-[-0.02em] text-fg">{title}</h1>
+          <p className="mt-0.5 text-[15px] text-muted first-letter:uppercase">{subtitle}</p>
+          <OfflineBadge tripId={trip.id} className="mt-1.5" />
+        </div>
+        {ui.shareTrip && (
+          <button
+            type="button"
+            onClick={ui.shareTrip}
+            className="mt-1 h-10 px-3.5 shrink-0 rounded-full bg-surface text-accent text-[14px] font-semibold inline-flex items-center gap-1.5 shadow-sm"
+          >
+            <Share2 size={15} /> Partager
+          </button>
+        )}
       </div>
-      <TripHeader trip={trip} onEdit={ui.editTrip} className="hidden lg:flex" />
+      <TripHeader trip={trip} onEdit={ui.editTrip} onShare={ui.shareTrip} className="hidden lg:flex" />
     </>
   )
 }
@@ -112,7 +123,7 @@ function DuringTrip({ today, now, progress }) {
                     legs={view.legs}
                     attachmentsByParent={attachmentsByParent}
                     colorIndexByStay={colorIndexByStay}
-                    onStop={(stop) => ui.editStop(today, stop)}
+                    onStop={(stop) => ui.openStop(today, stop)}
                     onResa={ui.openResa}
                     now={now}
                   />
@@ -160,7 +171,7 @@ function DuringTrip({ today, now, progress }) {
               attachments={view.tonightAttachments}
               isLastDay={view.isLastDay}
               onOpen={() => view.tonight && ui.openResa('stay', view.tonight.id)}
-              onAdd={() => ui.editStay(null, { date: today })}
+              onAdd={ui.editStay && (() => ui.editStay(null, { date: today }))}
               onViewAttachment={ui.viewAttachments}
               hideLabel
             />
@@ -184,6 +195,7 @@ function useStopCount() {
 }
 
 function BeforeTrip({ progress }) {
+  const ui = useTripUI()
   const { trip, stays, transports, isLoading } = useTripData()
   const stops = useStopCount()
   const tomorrow = progress.daysUntil === 1
@@ -217,9 +229,12 @@ function BeforeTrip({ progress }) {
             <DayPreviewCard date={trip.startDate} />
           </section>
         </div>
-        <aside className={cn(STACK, 'lg:sticky lg:top-6')}>
-          <TripChecks />
-        </aside>
+        {/* Ce qu'il reste à régler regarde ceux qui préparent, pas leurs invités. */}
+        {!ui.readOnly && (
+          <aside className={cn(STACK, 'lg:sticky lg:top-6')}>
+            <TripChecks />
+          </aside>
+        )}
       </div>
     </Page>
   )

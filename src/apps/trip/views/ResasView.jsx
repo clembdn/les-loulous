@@ -36,9 +36,9 @@ export default function ResasView({ selectedKey }) {
       item={shown.item}
       attachments={attachmentsByParent[shown.item.id] || []}
       colorIndex={colorIndexByStay[shown.item.id]}
-      onEdit={() => (shown.kind === 'stay' ? ui.editStay(shown.item) : ui.editTransport(shown.item))}
+      onEdit={ui.readOnly ? null : () => (shown.kind === 'stay' ? ui.editStay(shown.item) : ui.editTransport(shown.item))}
       onViewAttachment={ui.viewAttachments}
-      onReverse={() => ui.editTransport(null, { reverseOf: shown.item })}
+      onReverse={ui.readOnly ? null : () => ui.editTransport(null, { reverseOf: shown.item })}
     />
   )
 
@@ -57,7 +57,7 @@ export default function ResasView({ selectedKey }) {
   // La journée à laquelle rattacher une nouvelle réservation : aujourd'hui
   // pendant le voyage, sinon le premier jour.
   const addDate = defaultDay(trip, today)
-  const add = (
+  const add = ui.newItem && (
     <Button size="sm" onClick={() => ui.newItem(addDate)} className="hidden lg:inline-flex">
       <Plus size={15} /> Ajouter
     </Button>
@@ -88,12 +88,16 @@ export default function ResasView({ selectedKey }) {
             <Ticket size={22} />
           </span>
           <p className="mt-4 text-base font-semibold text-fg">Aucune réservation</p>
-          <p className="mt-1 text-[15px] text-muted max-w-sm mx-auto">
-            Hôtels, Airbnb, trains, vols, location de voiture : avec la capture du mail, tout reste lisible sans réseau.
-          </p>
-          <Button className="mt-5" onClick={() => ui.newItem(addDate)}>
-            <Plus size={16} /> Ajouter une réservation
-          </Button>
+          {ui.newItem && (
+            <>
+              <p className="mt-1 text-[15px] text-muted max-w-sm mx-auto">
+                Hôtels, Airbnb, trains, vols, location de voiture : avec la capture du mail, tout reste lisible sans réseau.
+              </p>
+              <Button className="mt-5" onClick={() => ui.newItem(addDate)}>
+                <Plus size={16} /> Ajouter une réservation
+              </Button>
+            </>
+          )}
         </div>
       )}
 

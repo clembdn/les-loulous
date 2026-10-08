@@ -750,6 +750,71 @@ service cloud.firestore {
       allow delete: if isAuthorizedUser();
     }
 
+    // Liens invités : le registre d'un voyage (un document par lien, son
+    // jeton pour identifiant). Ce qui a été publié y est noté, pour ne
+    // republier la vitrine que si le voyage a changé.
+    function hasValidTripShareShape(data, token) {
+      return token.matches('^[A-Za-z0-9_-]{32}$')
+        && data.label is string
+        && data.label.size() > 0
+        && data.label.size() <= 60
+        && optStr(data, 'publishedHash', 32)
+        && optStr(data, 'publishedAt', 40)
+        && (!('publishedAttachmentIds' in data)
+            || (data.publishedAttachmentIds is list && data.publishedAttachmentIds.size() <= 500));
+    }
+
+    match /couples/main/trips/{tripId}/shares/{token} {
+      allow read: if isAuthorizedUser();
+
+      allow create: if isAuthorizedUser()
+        && hasValidTripShareShape(request.resource.data, token)
+        && hasValidMetadata(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isAuthorizedUser()
+        && hasValidTripShareShape(request.resource.data, token)
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isAuthorizedUser();
+    }
+
+    // La vitrine d'un lien invité, HORS de couples/main : qui connaît le
+    // jeton (192 bits) peut la lire sans compte ; personne ne peut lister la
+    // collection pour trouver les autres ; seuls nos deux comptes l'écrivent.
+    function hasValidPublicTripShape(data, token) {
+      return token.matches('^[A-Za-z0-9_-]{32}$')
+        && data.tripId is string
+        && data.publishedAt is string
+        && data.trip is map
+        && data.trip.title is string
+        && data.trip.startDate is string && isDateId(data.trip.startDate)
+        && data.stays is list
+        && data.transports is list
+        && data.days is map;
+    }
+
+    match /publicTrips/{token} {
+      allow get: if true;
+      allow list: if false;
+
+      allow create, update: if isAuthorizedUser()
+        && hasValidPublicTripShape(request.resource.data, token);
+
+      allow delete: if isAuthorizedUser();
+    }
+
+    // Les captures de la vitrine. Les lister suppose de connaître le jeton.
+    // Réécrire une copie est permis : une publication interrompue la reprend.
+    match /publicTrips/{token}/attachments/{attachmentId} {
+      allow read: if true;
+
+      allow create, update: if isAuthorizedUser()
+        && hasValidAttachmentShape(request.resource.data);
+
+      allow delete: if isAuthorizedUser();
+    }
+
     // Deny everything else.
     match /{document=**} {
       allow read, write: if false;

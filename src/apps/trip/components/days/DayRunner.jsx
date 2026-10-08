@@ -169,7 +169,9 @@ export default function DayRunner({ date }) {
         {count === 0 ? (
           <div className="mx-auto mb-6 max-w-xs rounded-2xl bg-surface px-5 py-4 text-center shadow-lg">
             <p className="text-[15px] font-medium">Rien de prévu ce jour-là.</p>
-            <button type="button" onClick={() => ui.closeRunner(day)} className="mt-2 text-[15px] font-semibold text-accent">Ajouter une étape</button>
+            {!ui.readOnly && (
+              <button type="button" onClick={() => ui.closeRunner(day)} className="mt-2 text-[15px] font-semibold text-accent">Ajouter une étape</button>
+            )}
           </div>
         ) : (
           <>
@@ -269,7 +271,7 @@ function StepCard({ card, active, past, focus, day, colorIndexByStay, weatherOf,
         ? { text: formatUntil(focus.minutes).replace(/^d/, 'D'), tone: 'bg-accent/10 text-accent' }
         : null
   const onDetails = item.type === 'stop'
-    ? () => ui.editStop(day, item.stop)
+    ? () => ui.openStop(day, item.stop)
     : () => ui.openResa(item.type === 'transport' ? 'transport' : 'stay', item.type === 'transport' ? item.transport.id : item.stay.id)
   const walking = leg && leg.distanceM <= 1500
 

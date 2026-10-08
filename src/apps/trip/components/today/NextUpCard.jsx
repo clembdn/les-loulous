@@ -64,7 +64,7 @@ function ItemFocus({ date, focus, items, past, tonight, className }) {
   const shown = item.type === 'transport' ? item.transport : item.type === 'checkin' ? item.stay : null
   const files = shown ? attachmentsByParent[shown.id] || [] : []
   const open = () => {
-    if (item.type === 'stop') ui.editStop(date, item.stop)
+    if (item.type === 'stop') ui.openStop(date, item.stop)
     else if (item.type === 'transport') ui.openResa('transport', item.transport.id)
     else ui.openResa('stay', item.stay.id)
   }
@@ -215,11 +215,13 @@ function RestFocus({ date, free, tonight, isLastDay, className }) {
         <p className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-fg">{title}</p>
         {!isLastDay && <p className="mt-1 text-[14px] text-amber-800">Pas d’hébergement ce soir : à prévoir.</p>}
       </div>
-      <div className="relative flex gap-2 px-5 pb-5">
-        <button type="button" onClick={() => ui.editStop(date)} className={cn(SECONDARY, 'flex-1')}>
-          <Plus size={15} /> Ajouter une étape
-        </button>
-      </div>
+      {ui.editStop && (
+        <div className="relative flex gap-2 px-5 pb-5">
+          <button type="button" onClick={() => ui.editStop(date)} className={cn(SECONDARY, 'flex-1')}>
+            <Plus size={15} /> Ajouter une étape
+          </button>
+        </div>
+      )}
     </section>
   )
 }

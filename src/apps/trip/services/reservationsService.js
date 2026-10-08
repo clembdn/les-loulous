@@ -54,15 +54,16 @@ function transportFields(raw) {
 
 const FIELDS = { stay: stayFields, transport: transportFields }
 
+/** Une réservation telle qu'on la lit (`kind` : 'stay' | 'transport'). La vitrine invité la relit aussi. */
+export function readReservation(kind, id, raw) {
+  return { id, ...FIELDS[kind](raw), ...readMeta(raw) }
+}
+
 // `onSync(fromServer)` : cf. listen.js (indicateur hors-ligne).
 function subscribe(kind, tripId, callback, onError, onSync) {
-  const toFields = FIELDS[kind]
   return listen(partCol(tripId, PART[kind]), {
     label: PART[kind],
-    onData: (snap) => callback(snap.docs.map((d) => {
-      const raw = d.data()
-      return { id: d.id, ...toFields(raw), ...readMeta(raw) }
-    })),
+    onData: (snap) => callback(snap.docs.map((d) => readReservation(kind, d.id, d.data()))),
     onSync,
     onError,
   })

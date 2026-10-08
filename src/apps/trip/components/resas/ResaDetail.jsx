@@ -42,9 +42,11 @@ export default function ResaDetail({ kind, item, attachments = [], colorIndex, o
           </p>
           <h2 className="mt-0.5 text-[26px] leading-8 font-bold tracking-[-0.02em] text-fg">{resaTitle(kind, item)}</h2>
         </div>
-        <Button variant="secondary" size="sm" onClick={onEdit} aria-label="Modifier" className="shrink-0">
-          <Pencil size={14} /> <span className="hidden sm:inline">Modifier</span>
-        </Button>
+        {onEdit && (
+          <Button variant="secondary" size="sm" onClick={onEdit} aria-label="Modifier" className="shrink-0">
+            <Pencil size={14} /> <span className="hidden sm:inline">Modifier</span>
+          </Button>
+        )}
       </header>
 
       <div className="px-5 pt-4 grid grid-cols-2 gap-2.5">

@@ -48,18 +48,20 @@ function groupLabel(title) {
   return title.length > 26 ? `${title.slice(0, 25).trimEnd()}…` : title
 }
 
-/** Sidebar desktop : la liste, puis les écrans du voyage ouvert, en groupe à son nom. */
+/** Les écrans d'un voyage dans la sidebar, en groupe à son nom. */
+export function tripSidebarGroup(trip, status) {
+  return {
+    type: 'group',
+    label: groupLabel(trip.title),
+    icon: Plane,
+    accentClass: 'text-accent',
+    items: tripTabs(status).map((t) => ({ id: t.id, label: t.sidebarLabel || t.label, icon: t.icon })),
+  }
+}
+
+/** Sidebar desktop : la liste, puis les écrans du voyage ouvert. */
 export function sidebarSections(trip, status) {
   const list = { type: 'items', items: [LIST_ITEM] }
   if (!trip) return [list]
-  return [
-    list,
-    {
-      type: 'group',
-      label: groupLabel(trip.title),
-      icon: Plane,
-      accentClass: 'text-accent',
-      items: tripTabs(status).map((t) => ({ id: t.id, label: t.sidebarLabel || t.label, icon: t.icon })),
-    },
-  ]
+  return [list, tripSidebarGroup(trip, status)]
 }

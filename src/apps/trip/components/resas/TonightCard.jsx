@@ -18,7 +18,8 @@ import CopyValue from '../CopyValue.jsx'
  */
 export default function TonightCard({ date, stay, colorIndex, attachments = [], isLastDay, onOpen, onAdd, onViewAttachment, hideLabel = false, className }) {
   if (!stay) {
-    if (isLastDay) return null
+    // Dernière nuit, ou invité qui ne peut rien y faire : rien à signaler.
+    if (isLastDay || !onAdd) return null
     // Enveloppé : les marges de `className` s'appliquent autour, un bouton
     // `w-full` avec des marges déborderait de l'écran.
     return (

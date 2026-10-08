@@ -22,6 +22,9 @@ import { nightsOf, stayOrder, staySegments } from '../utils/nights.js'
  * écouté par la liste — et arrive ici en prop.
  */
 const TripDataContext = createContext(null)
+// À part : il bascule à chaque écriture (en attente → confirmée), et seul
+// l'éditeur des vitrines invité s'en sert — les écrans n'ont pas à se redessiner.
+const TripConfirmedContext = createContext(false)
 
 const PARTS = ['stays', 'transports', 'days', 'attachments']
 const NOT_READY = Object.fromEntries(PARTS.map((p) => [p, false]))
@@ -34,6 +37,9 @@ export function TripDataProvider({ trip, children }) {
   const [days, setDays] = useState({})
   const [attachments, setAttachments] = useState([])
   const [ready, setReady] = useState(NOT_READY)
+  // Les quatre parties confirmées par le serveur, sans écriture en attente :
+  // ce qu'on affiche est ce qui est en base (cf. TripSharesContext).
+  const [isConfirmed, setConfirmed] = useState(false)
 
   useEffect(() => {
     // Changer de voyage : rien de l'ancien ne doit s'afficher, même une
@@ -43,6 +49,7 @@ export function TripDataProvider({ trip, children }) {
     setDays({})
     setAttachments([])
     setReady(NOT_READY)
+    setConfirmed(false)
 
     const done = (part) => setReady((r) => (r[part] ? r : { ...r, [part]: true }))
 
@@ -52,7 +59,9 @@ export function TripDataProvider({ trip, children }) {
     const fresh = {}
     const sync = (part) => (fromServer) => {
       fresh[part] = fromServer
-      if (fromServer && PARTS.every((p) => fresh[p])) markSynced(tripId)
+      const all = PARTS.every((p) => fresh[p])
+      setConfirmed(all)
+      if (fromServer && all) markSynced(tripId)
     }
 
     const unsubs = [
@@ -63,6 +72,29 @@ export function TripDataProvider({ trip, children }) {
     ]
     return () => unsubs.forEach((unsub) => unsub())
   }, [tripId])
+
+  return (
+    <TripConfirmedContext.Provider value={isConfirmed}>
+      <TripDataValue
+        trip={trip}
+        stays={stays}
+        transports={transports}
+        days={days}
+        attachments={attachments}
+        isLoading={!PARTS.every((p) => ready[p])}
+      >
+        {children}
+      </TripDataValue>
+    </TripConfirmedContext.Provider>
+  )
+}
+
+/**
+ * Ce qui se déduit du contenu d'un voyage, d'où qu'il vienne : les écoutes
+ * du couple (ci-dessus) ou la vitrine d'un lien invité (guest/GuestApp.jsx).
+ */
+export function TripDataValue({ trip, stays, transports, days, attachments, isLoading, children }) {
+  const tripId = trip.id
 
   // Le voyage est renormalisé à chaque écho de la liste : on ne dépend que
   // de ses dates, sinon toutes les frises se recalculeraient pour rien.
@@ -106,10 +138,10 @@ export function TripDataProvider({ trip, children }) {
     nights,
     segments,
     colorIndexByStay,
-    isLoading: !PARTS.every((p) => ready[p]),
+    isLoading,
   }), [
     trip, tripId, stays, transports, days, stopsByDate, attachments, attachmentsByParent,
-    dayKeys, timelines, nights, segments, colorIndexByStay, ready,
+    dayKeys, timelines, nights, segments, colorIndexByStay, isLoading,
   ])
 
   return <TripDataContext.Provider value={value}>{children}</TripDataContext.Provider>
@@ -119,4 +151,9 @@ export function useTripData() {
   const ctx = useContext(TripDataContext)
   if (!ctx) throw new Error('useTripData doit être utilisé sous <TripDataProvider>')
   return ctx
+}
+
+/** Les quatre parties du voyage ouvert confirmées par le serveur, sans écriture en attente. */
+export function useTripConfirmed() {
+  return useContext(TripConfirmedContext)
 }

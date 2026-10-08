@@ -103,12 +103,16 @@ export default function DayViewMobile({ date }) {
         <header className="px-4 flex items-start gap-3">
           <div className="flex-1 min-w-0">
             <DayDate date={date} today={today} />
-            <button type="button" onClick={() => ui.editDay(date)} className="group mt-1 flex items-center gap-1.5 max-w-full text-left">
-              <span className={view.day?.title ? 'text-[22px] leading-7 font-semibold tracking-[-0.01em] text-fg truncate' : 'text-[22px] leading-7 text-muted'}>
-                {view.day?.title || 'Donner un titre'}
-              </span>
-              <Pencil size={14} className="shrink-0 text-muted group-hover:text-fg" />
-            </button>
+            {ui.editDay ? (
+              <button type="button" onClick={() => ui.editDay(date)} className="group mt-1 flex items-center gap-1.5 max-w-full text-left">
+                <span className={view.day?.title ? 'text-[22px] leading-7 font-semibold tracking-[-0.01em] text-fg truncate' : 'text-[22px] leading-7 text-muted'}>
+                  {view.day?.title || 'Donner un titre'}
+                </span>
+                <Pencil size={14} className="shrink-0 text-muted group-hover:text-fg" />
+              </button>
+            ) : view.day?.title && (
+              <h2 className="mt-1 text-[22px] leading-7 font-semibold tracking-[-0.01em] text-fg truncate">{view.day.title}</h2>
+            )}
             <p className="mt-1 text-[13px] text-muted tabular">
               Jour {view.dayNumber}/{dayKeys.length}
               {view.stopCount > 0 && ` · ${plural(view.stopCount, 'étape')}`}
@@ -116,7 +120,7 @@ export default function DayViewMobile({ date }) {
           </div>
           <div className="shrink-0 flex flex-col items-end gap-1">
             <DayWeather date={date} className="mt-1 text-sm" />
-            {stops.length > 1 && (
+            {stops.length > 1 && !ui.readOnly && (
               <button
                 type="button"
                 onClick={toggleReorder}
@@ -148,14 +152,14 @@ export default function DayViewMobile({ date }) {
               legs={view.legs}
               attachmentsByParent={attachmentsByParent}
               colorIndexByStay={colorIndexByStay}
-              onStop={(stop) => ui.editStop(date, stop)}
+              onStop={(stop) => ui.openStop(date, stop)}
               onResa={ui.openResa}
             />
           ))}
           {!isLoading && !reordering && view.items.length === 0 && (
             <p className="px-2 py-3 text-[15px] text-muted">Rien de prévu pour l’instant.</p>
           )}
-          {!reordering && (
+          {!reordering && !ui.readOnly && (
             <QuickAdd
               date={date}
               near={view.near || ui.near}
@@ -179,7 +183,7 @@ export default function DayViewMobile({ date }) {
         attachments={view.tonightAttachments}
         isLastDay={view.isLastDay}
         onOpen={() => view.tonight && ui.openResa('stay', view.tonight.id)}
-        onAdd={() => ui.editStay(null, { date })}
+        onAdd={ui.editStay && (() => ui.editStay(null, { date }))}
         onViewAttachment={ui.viewAttachments}
       />
 

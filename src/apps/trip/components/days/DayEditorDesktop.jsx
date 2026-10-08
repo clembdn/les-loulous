@@ -40,6 +40,7 @@ export default function DayEditorDesktop({ date }) {
   const { currentUid } = useAuth()
   const today = useToday()
   const ui = useTripUI()
+  const { readOnly } = ui
   const {
     trip, tripId, days, dayKeys, nights, timelines, stopsByDate, colorIndexByStay, attachmentsByParent,
   } = useTripData()
@@ -68,7 +69,7 @@ export default function DayEditorDesktop({ date }) {
       if (el?.closest?.('input, textarea, select, [contenteditable="true"]')) return
       if (document.querySelector('[role="dialog"]')) return
       const i = dayKeys.indexOf(date)
-      if (e.key === 'n' || e.key === 'N') {
+      if ((e.key === 'n' || e.key === 'N') && !readOnly) {
         e.preventDefault()
         quickAddRef.current?.focus()
       } else if (e.key === 'ArrowLeft' && i > 0) {
@@ -79,7 +80,7 @@ export default function DayEditorDesktop({ date }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [date, dayKeys, ui])
+  }, [date, dayKeys, ui, readOnly])
 
   // Un repère cliqué sur la carte : son élément de frise s'allume et vient sous les yeux.
   function selectOnMap(key) {
@@ -108,7 +109,7 @@ export default function DayEditorDesktop({ date }) {
     reset()
   }
 
-  const dnd = {
+  const dnd = readOnly ? null : {
     draggingId: drag?.stopId ?? null,
     dropActive: !!drag && drop?.date === date,
     dropBeforeId: drop?.date === date ? drop.beforeId : undefined,
@@ -151,7 +152,7 @@ export default function DayEditorDesktop({ date }) {
       attachments={view.tonightAttachments}
       isLastDay={view.isLastDay}
       onOpen={() => view.tonight && ui.openResa('stay', view.tonight.id)}
-      onAdd={() => ui.editStay(null, { date })}
+      onAdd={ui.editStay && (() => ui.editStay(null, { date }))}
       onViewAttachment={ui.viewAttachments}
     />
   )
@@ -169,7 +170,7 @@ export default function DayEditorDesktop({ date }) {
       controls
       attribution="bottom-left"
       padding={{ top: 60, bottom: 60, left: 60, right: 60 }}
-      onPlaceClick={setPicked}
+      onPlaceClick={readOnly ? undefined : setPicked}
       preview={picked}
       fitKey={date}
       className={className}
@@ -209,15 +210,18 @@ export default function DayEditorDesktop({ date }) {
       <TripHeader
         trip={trip}
         onEdit={ui.editTrip}
+        onShare={ui.shareTrip}
         className="lg:col-span-2"
         actions={(
           <>
             <Button variant="secondary" size="sm" onClick={() => ui.openRunner(date)} disabled={!view.items.length}>
               <Play size={14} /> Déroulé
             </Button>
-            <Button size="sm" onClick={() => ui.newItem(date)}>
-              <Plus size={15} /> Ajouter
-            </Button>
+            {ui.newItem && (
+              <Button size="sm" onClick={() => ui.newItem(date)}>
+                <Plus size={15} /> Ajouter
+              </Button>
+            )}
           </>
         )}
       />
@@ -259,23 +263,32 @@ export default function DayEditorDesktop({ date }) {
                 </span>
               </span>
             </div>
-            <InlineText
-              key={`title-${date}`}
-              value={view.day?.title || ''}
-              placeholder="Titre de la journée"
-              maxLength={120}
-              className="mt-1 w-full text-[22px] font-semibold tracking-[-0.01em] text-fg placeholder:text-muted"
-              onSave={(title) => saveDay(tripId, date, { title }, days[date], currentUid).catch(() => toast.error('Enregistrement impossible'))}
-            />
-            <InlineText
-              key={`notes-${date}`}
-              multiline
-              value={view.day?.notes || ''}
-              placeholder="Notes de la journée…"
-              maxLength={2000}
-              className="mt-1 w-full text-[15px] text-muted placeholder:text-muted/70 resize-none"
-              onSave={(notes) => saveDay(tripId, date, { notes }, days[date], currentUid).catch(() => toast.error('Enregistrement impossible'))}
-            />
+            {readOnly ? (
+              <>
+                {view.day?.title && <h2 className="mt-1 text-[22px] font-semibold tracking-[-0.01em] text-fg">{view.day.title}</h2>}
+                {view.day?.notes && <p className="mt-1 text-[15px] text-muted whitespace-pre-line">{view.day.notes}</p>}
+              </>
+            ) : (
+              <>
+                <InlineText
+                  key={`title-${date}`}
+                  value={view.day?.title || ''}
+                  placeholder="Titre de la journée"
+                  maxLength={120}
+                  className="mt-1 w-full text-[22px] font-semibold tracking-[-0.01em] text-fg placeholder:text-muted"
+                  onSave={(title) => saveDay(tripId, date, { title }, days[date], currentUid).catch(() => toast.error('Enregistrement impossible'))}
+                />
+                <InlineText
+                  key={`notes-${date}`}
+                  multiline
+                  value={view.day?.notes || ''}
+                  placeholder="Notes de la journée…"
+                  maxLength={2000}
+                  className="mt-1 w-full text-[15px] text-muted placeholder:text-muted/70 resize-none"
+                  onSave={(notes) => saveDay(tripId, date, { notes }, days[date], currentUid).catch(() => toast.error('Enregistrement impossible'))}
+                />
+              </>
+            )}
           </header>
 
           {!wide && map('h-72')}
@@ -286,30 +299,34 @@ export default function DayEditorDesktop({ date }) {
               legs={view.legs}
               attachmentsByParent={attachmentsByParent}
               colorIndexByStay={colorIndexByStay}
-              onStop={(stop) => ui.editStop(date, stop)}
+              onStop={(stop) => ui.openStop(date, stop)}
               onResa={ui.openResa}
               dnd={dnd}
               activeKey={hoverKey}
               onHover={setHoverKey}
             />
             {view.items.length === 0 && (
-              <p className="px-2 py-3 text-[15px] text-muted">Rien de prévu. Tapez un lieu, collez un lien Google Maps, ou cliquez un lieu de la carte.</p>
-            )}
-            <div
-              className="pt-2"
-              onDragOver={(e) => dnd.onDragOver(e, null)}
-              onDrop={dnd.onDrop}
-            >
-              <QuickAdd
-                ref={quickAddRef}
-                date={date}
-                near={view.near || ui.near}
-                disabled={view.stopCount >= MAX_STOPS_PER_DAY}
-              />
-              <p className="mt-2 px-1 text-[12px] text-muted">
-                <kbd className="font-mono">N</kbd> nouvelle étape · <kbd className="font-mono">←</kbd> <kbd className="font-mono">→</kbd> autre jour · cliquez un lieu de la carte pour l’ajouter
+              <p className="px-2 py-3 text-[15px] text-muted">
+                {readOnly ? 'Rien de prévu ce jour-là.' : 'Rien de prévu. Tapez un lieu, collez un lien Google Maps, ou cliquez un lieu de la carte.'}
               </p>
-            </div>
+            )}
+            {dnd && (
+              <div
+                className="pt-2"
+                onDragOver={(e) => dnd.onDragOver(e, null)}
+                onDrop={dnd.onDrop}
+              >
+                <QuickAdd
+                  ref={quickAddRef}
+                  date={date}
+                  near={view.near || ui.near}
+                  disabled={view.stopCount >= MAX_STOPS_PER_DAY}
+                />
+                <p className="mt-2 px-1 text-[12px] text-muted">
+                  <kbd className="font-mono">N</kbd> nouvelle étape · <kbd className="font-mono">←</kbd> <kbd className="font-mono">→</kbd> autre jour · cliquez un lieu de la carte pour l’ajouter
+                </p>
+              </div>
+            )}
             {view.routeUrl && (
               <div className="px-2 pt-3 text-right">
                 <RouteLink url={view.routeUrl} />

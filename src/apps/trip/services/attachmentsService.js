@@ -15,7 +15,7 @@ import { partCol, partDoc } from './refs.js'
 // documents. Elle s'écrit dans le MÊME lot que sa réservation — annuler le
 // formulaire ne laisse donc aucune capture orpheline en base.
 
-function normalizeAttachment(raw) {
+export function normalizeAttachment(raw) {
   return {
     id: raw.id,
     parentKind: raw.parentKind === 'transport' ? 'transport' : 'stay',

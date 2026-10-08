@@ -9,11 +9,21 @@ const FinauziApp = lazy(() => import('@/apps/finauzi/FinauziApp.jsx'))
 const CookItApp = lazy(() => import('@/apps/cookit/CookItApp.jsx'))
 const MuscauziApp = lazy(() => import('@/apps/muscauzi/MuscauziApp.jsx'))
 const TripApp = lazy(() => import('@/apps/trip/TripApp.jsx'))
+const TripGuestApp = lazy(() => import('@/apps/trip/guest/GuestApp.jsx'))
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginView />} />
+      {/* Trip Planner · un voyage partagé : lecture seule, SANS connexion. */}
+      <Route
+        path="/v/:token/*"
+        element={
+          <Suspense fallback={<Splash />}>
+            <TripGuestApp />
+          </Suspense>
+        }
+      />
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<DashboardView />} />
         <Route

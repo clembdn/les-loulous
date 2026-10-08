@@ -18,6 +18,7 @@ export default function AppSidebar({
   extra,
   userColors,
   onUserClick,
+  portal = true,
 }) {
   const { currentUid } = useAuth()
   const me = getPerson(currentUid, userColors)
@@ -26,13 +27,15 @@ export default function AppSidebar({
   return (
     <aside className="hidden lg:flex fixed top-0 left-0 h-screen w-60 flex-col border-r border-border bg-bg/80 backdrop-blur-xl z-30">
       <div className="px-3 pt-5 pb-4">
-        <Link
-          to="/"
-          className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs text-muted hover:text-fg hover:bg-surface-2 transition"
-        >
-          <ArrowLeft size={14} /> Nos apps
-        </Link>
-        <div className="flex items-center gap-2 px-2 mt-2">
+        {portal && (
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs text-muted hover:text-fg hover:bg-surface-2 transition"
+          >
+            <ArrowLeft size={14} /> Nos apps
+          </Link>
+        )}
+        <div className={cn('flex items-center gap-2 px-2', portal && 'mt-2')}>
           {TitleIcon && <TitleIcon size={18} className="text-accent" />}
           <p className="text-sm font-semibold tracking-tight text-fg">{title}</p>
         </div>

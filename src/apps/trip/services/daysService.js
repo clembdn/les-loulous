@@ -36,7 +36,8 @@ function normalizeStops(list, date) {
     .map((stop, i) => normalizeStop(stop, `legacy-${date}-${i}`))
 }
 
-function normalizeDay(raw) {
+/** Une journée telle qu'on la lit — la vitrine invité la relit aussi. */
+export function normalizeDay(raw) {
   const date = dateKey(raw.date) || raw.id
   return {
     id: raw.id,

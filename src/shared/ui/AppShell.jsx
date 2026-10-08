@@ -9,6 +9,8 @@ import { cn } from '@/shared/lib/utils.js'
 // Les vues ne rendent que leur propre contenu. `back` ({ to, label }) remplace
 // la flèche vers le portail de la top-bar mobile par un retour au parent ;
 // `action` ({ icon, label, onClick }) y ajoute un bouton à droite.
+// `portal={false}` retire tout chemin vers le portail (« Nos apps ») : une
+// page ouverte sans compte (la vue invité de Trip Planner) n'y mène nulle part.
 export default function AppShell({
   title,
   icon,
@@ -24,6 +26,7 @@ export default function AppShell({
   onUserClick,
   back = null,
   action = null,
+  portal = true,
   children,
 }) {
   return (
@@ -36,6 +39,7 @@ export default function AppShell({
         onChange={onChange}
         action={sidebarAction}
         extra={sidebarExtra}
+        portal={portal}
         userColors={userColors}
         onUserClick={onUserClick}
       />
@@ -69,7 +73,7 @@ export default function AppShell({
             </div>
           ) : (
             <div className="max-w-xl mx-auto px-4 py-3 flex items-center gap-3">
-              <BackLink size={18} />
+              {portal && <BackLink size={18} />}
               <p className="text-sm font-semibold tracking-tight text-fg">{heading || title}</p>
             </div>
           )}
@@ -78,7 +82,7 @@ export default function AppShell({
         {tabletNav && (
           <header className="hidden sm:block lg:hidden sticky top-0 z-20 bg-bg/80 backdrop-blur-xl border-b border-border">
             <div className="max-w-3xl mx-auto px-6 py-3 flex items-center gap-6">
-              <BackLink size={16} />
+              {portal && <BackLink size={16} />}
               <p className="text-sm font-semibold tracking-tight text-fg">{title}</p>
               <div className="flex items-center gap-1 ml-auto">
                 {tabs.map((tab) => {

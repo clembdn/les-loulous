@@ -3,7 +3,8 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
 import { dateKey, optText, readMeta, stamp, text } from '../utils/fields.js'
-import { partCol, tripDoc, tripsCol, TRIP_PARTS } from './refs.js'
+import { ALL_TRIP_PARTS, partCol, tripDoc, tripsCol } from './refs.js'
+import { publicRefsOf } from './sharesService.js'
 
 function normalizeTrip(raw) {
   const startDate = dateKey(raw.startDate)
@@ -54,8 +55,8 @@ export function updateTrip(trip, fields, currentUid) {
 }
 
 async function readParts(tripId) {
-  const snaps = await Promise.all(TRIP_PARTS.map((part) => getDocs(partCol(tripId, part))))
-  return Object.fromEntries(TRIP_PARTS.map((part, i) => [part, snaps[i]]))
+  const snaps = await Promise.all(ALL_TRIP_PARTS.map((part) => getDocs(partCol(tripId, part))))
+  return Object.fromEntries(ALL_TRIP_PARTS.map((part, i) => [part, snaps[i]]))
 }
 
 /**
@@ -70,6 +71,7 @@ export async function readTripContents(tripId) {
     transports: parts.transports.size,
     stops,
     attachments: parts.attachments.size,
+    shares: parts.shares.size,
   }
 }
 
@@ -83,7 +85,7 @@ export async function readDayStopCounts(tripId) {
 const BATCH_LIMIT = 450
 
 /**
- * Supprime le voyage ET tout ce qu'il contient.
+ * Supprime le voyage ET tout ce qu'il contient, liens invités compris.
  *
  * Firestore ne supprime pas les sous-collections avec leur parent : sans ce
  * balayage, jours, hébergements et captures resteraient en base, invisibles
@@ -93,6 +95,8 @@ const BATCH_LIMIT = 450
 export async function deleteTripCascade(tripId) {
   const parts = await readParts(tripId)
   const refs = Object.values(parts).flatMap((snap) => snap.docs.map((d) => d.ref))
+  // Les vitrines des liens invités, hors du voyage : sans quoi ses invités le verraient encore.
+  refs.push(...await publicRefsOf(parts.shares.docs.map((d) => d.id)))
   refs.push(tripDoc(tripId))
   const commits = []
   for (let i = 0; i < refs.length; i += BATCH_LIMIT) {

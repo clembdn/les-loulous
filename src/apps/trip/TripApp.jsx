@@ -10,6 +10,7 @@ import { TripsProvider, useTrips } from './context/TripsContext.jsx'
 import { TripDataProvider } from './context/TripDataContext.jsx'
 import { TripWeatherProvider } from './context/TripWeatherContext.jsx'
 import { TripUIProvider, useTripUI } from './context/TripUIContext.jsx'
+import { TripSharesProvider } from './context/TripSharesContext.jsx'
 import Shell from './components/layout/Shell.jsx'
 import Loader from './components/Loader.jsx'
 import TripFormSheet from './components/trips/TripFormSheet.jsx'
@@ -102,24 +103,28 @@ function TripScreens() {
     // l'ancien ne peut s'afficher sous le titre du nouveau.
     <TripDataProvider key={tripId} trip={trip}>
       <TripWeatherProvider>
-        <TripUIProvider
-          goTab={goTab}
-          goBack={goBack}
-          currentSub={sub}
-          onTripDeleted={() => navigate(LIST_PATH, { replace: true })}
-        >
-          {tab === RUNNER_ID ? (
-            // Le déroulé occupe tout l'écran, sans barres : la carte d'abord.
-            // La clé repart de zéro en passant au jour suivant.
-            <DayRunner key={sub} date={sub} />
-          ) : (
-            <TripShell trip={trip} tab={tab} sub={sub} onChange={onChange}>
-              {tab === 'aujourdhui' && <TodayView />}
-              {tab === 'jours' && <DaysView selectedDate={sub} />}
-              {tab === 'resas' && <ResasView selectedKey={sub} />}
-            </TripShell>
-          )}
-        </TripUIProvider>
+        {/* Les liens invités, et leurs vitrines tenues à jour tant que le voyage est ouvert. */}
+        <TripSharesProvider>
+          <TripUIProvider
+            goTab={goTab}
+            goBack={goBack}
+            currentSub={sub}
+            basePath={`/trip/${tripId}`}
+            onTripDeleted={() => navigate(LIST_PATH, { replace: true })}
+          >
+            {tab === RUNNER_ID ? (
+              // Le déroulé occupe tout l'écran, sans barres : la carte d'abord.
+              // La clé repart de zéro en passant au jour suivant.
+              <DayRunner key={sub} date={sub} />
+            ) : (
+              <TripShell trip={trip} tab={tab} sub={sub} onChange={onChange}>
+                {tab === 'aujourdhui' && <TodayView />}
+                {tab === 'jours' && <DaysView selectedDate={sub} />}
+                {tab === 'resas' && <ResasView selectedKey={sub} />}
+              </TripShell>
+            )}
+          </TripUIProvider>
+        </TripSharesProvider>
       </TripWeatherProvider>
     </TripDataProvider>
   )

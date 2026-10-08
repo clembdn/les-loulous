@@ -190,7 +190,6 @@ Ces fonctions sont volontairement exclues pour garder l'app légère, à côté 
 
 ## Points ouverts
 
-- [ ] Confirmer le nom « Trip Planner » et l'icône (avion ou valise).
 - [ ] Valider le bleu lagon sur un premier écran.
 - [ ] Créer une clé OpenRouteService gratuite et l'ajouter aux variables Vercel avant la V2.
 - [ ] Dire si la V1 se livre en une seule PR ou en plusieurs (éditeur desktop, puis vue téléphone).

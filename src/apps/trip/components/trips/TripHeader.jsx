@@ -1,4 +1,4 @@
-import { Pencil } from 'lucide-react'
+import { Pencil, Share2 } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { useToday } from '@/shared/lib/useToday.js'
 import { tripProgress } from '../../utils/tripDates.js'
@@ -8,8 +8,8 @@ import OfflineBadge from '../OfflineBadge.jsx'
 // L'en-tête d'un voyage sur ordinateur : où on en est, son titre, ses dates —
 // et de quoi le modifier, et s'il est disponible hors-ligne. Sur téléphone,
 // le titre est déjà dans la barre du haut. `actions` reçoit les boutons
-// propres à l'écran.
-export default function TripHeader({ trip, onEdit, actions, className }) {
+// propres à l'écran. Sans `onEdit` ni `onShare` (vue invité), pas de bouton.
+export default function TripHeader({ trip, onEdit, onShare, actions, className }) {
   const today = useToday()
   const progress = tripProgress(trip, today)
   return (
@@ -26,15 +26,28 @@ export default function TripHeader({ trip, onEdit, actions, className }) {
       </div>
       <div className="shrink-0 flex items-center gap-2 mt-1">
         {actions}
-        <button
-          type="button"
-          onClick={onEdit}
-          className="h-10 w-10 inline-flex items-center justify-center rounded-xl text-muted hover:text-fg hover:bg-surface transition"
-          aria-label="Modifier le voyage"
-          title="Modifier le voyage"
-        >
-          <Pencil size={17} />
-        </button>
+        {onShare && (
+          <button
+            type="button"
+            onClick={onShare}
+            className="h-10 w-10 inline-flex items-center justify-center rounded-xl text-muted hover:text-fg hover:bg-surface transition"
+            aria-label="Partager le voyage"
+            title="Partager le voyage"
+          >
+            <Share2 size={17} />
+          </button>
+        )}
+        {onEdit && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="h-10 w-10 inline-flex items-center justify-center rounded-xl text-muted hover:text-fg hover:bg-surface transition"
+            aria-label="Modifier le voyage"
+            title="Modifier le voyage"
+          >
+            <Pencil size={17} />
+          </button>
+        )}
       </div>
     </header>
   )
