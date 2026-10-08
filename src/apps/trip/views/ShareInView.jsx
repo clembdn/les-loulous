@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Clock, Link2, Loader2, Plane } from 'lucide-react'
+import { Bookmark, Clock, Link2, Loader2, Plane } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { useToday } from '@/shared/lib/useToday.js'
 import { formatDayFr } from '@/shared/lib/dates.js'
@@ -8,11 +8,11 @@ import { Input } from '@/shared/ui/Input.jsx'
 import { useTrips } from '../context/TripsContext.jsx'
 import { TripDataProvider, useTripData } from '../context/TripDataContext.jsx'
 import { useAddStop } from '../hooks/useAddStop.js'
+import { useIdeaActions } from '../hooks/useIdeas.js'
 import { resolveMapsLink } from '../services/placesService.js'
-import { getLastDay } from '../services/lastDay.js'
 import { getCategory } from '../config/categories.js'
 import CategoryChips from '../components/CategoryChips.jsx'
-import { LIST_PATH, tripPath } from '../config/navigation.js'
+import { IDEAS_ID, LIST_PATH, tripPath } from '../config/navigation.js'
 import { guessCategory } from '../utils/categoryGuess.js'
 import { parseSharedPlace } from '../utils/sharedText.js'
 import { groupTrips, tripDays, tripStatus } from '../utils/tripDates.js'
@@ -21,13 +21,16 @@ import { hasCoords } from '../utils/geo.js'
 import TripMap, { placeItems } from '../components/map/TripMap.jsx'
 
 const MAP_PADDING = { top: 30, bottom: 30, left: 30, right: 30 }
+// La puce « À caser », devant les jours.
+const SHELF = 'a-caser'
 
 /**
  * /trip/partage — « Partager » un lieu depuis Google Maps (Android) arrive
  * ici (Web Share Target, cf. vite.config.js). Deux taps : le jour, puis
  * « Ajouter ». Le voyage est déjà choisi (en cours, sinon le prochain), le
- * jour aussi (aujourd'hui pendant le voyage, sinon le dernier consulté), la
- * catégorie devinée ; l'heure est facultative.
+ * jour aussi (aujourd'hui pendant le voyage ; avant, « À caser » : on repère
+ * un lieu bien avant de savoir quand y aller), la catégorie devinée ;
+ * l'heure est facultative.
  *
  * Hors-ligne, le lien court ne peut pas être lu : on garde le nom et le
  * lien, l'étape se localisera plus tard (« Localiser » dans sa fiche).
@@ -112,12 +115,11 @@ export default function ShareInView() {
 function ShareForm({ trip, candidates, onTrip, today, place, onPlace, reading, note, sharedUrl }) {
   const navigate = useNavigate()
   const addStop = useAddStop()
+  const ideaActions = useIdeaActions()
   const { isLoading } = useTripData()
   const dayKeys = useMemo(() => tripDays(trip), [trip])
   const status = tripStatus(trip, today)
-  const defaultDay = status === 'ongoing' && dayKeys.includes(today)
-    ? today
-    : dayKeys.includes(getLastDay(trip.id)) ? getLastDay(trip.id) : dayKeys[0]
+  const defaultDay = status === 'ongoing' && dayKeys.includes(today) ? today : SHELF
   const [date, setDate] = useState(defaultDay)
   const [time, setTime] = useState('')
   const [category, setCategory] = useState(null)
@@ -131,8 +133,14 @@ function ShareForm({ trip, candidates, onTrip, today, place, onPlace, reading, n
     [place.name, place.lat, place.lng, chosen],
   )
 
+  const shelf = date === SHELF
+
   function submit() {
     if (!place.name.trim()) return
+    if (shelf) {
+      if (ideaActions.add({ ...place, category: chosen })) navigate(tripPath(trip.id, IDEAS_ID), { replace: true })
+      return
+    }
     const stop = addStop(date, { ...place, category: chosen }, { time: time || null })
     if (stop) navigate(tripPath(trip.id, 'jours', date), { replace: true })
   }
@@ -202,6 +210,18 @@ function ShareForm({ trip, candidates, onTrip, today, place, onPlace, reading, n
       <section className="mt-5">
         <h2 className="px-1 mb-2 text-[13px] font-semibold text-muted">Jour</h2>
         <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+          <button
+            type="button"
+            onClick={() => setDate(SHELF)}
+            aria-pressed={shelf}
+            className={cn(
+              'shrink-0 h-[58px] px-3.5 rounded-xl border flex flex-col items-center justify-center gap-0.5 transition',
+              shelf ? 'bg-fg border-fg text-bg' : 'bg-surface border-border text-fg',
+            )}
+          >
+            <Bookmark size={17} aria-hidden="true" />
+            <span className="text-[12px] font-semibold">À caser</span>
+          </button>
           {dayKeys.map((d) => {
             const chip = dayChip(d)
             const active = d === date
@@ -226,37 +246,41 @@ function ShareForm({ trip, candidates, onTrip, today, place, onPlace, reading, n
         </div>
       </section>
 
-      <section className="mt-5">
-        <h2 className="px-1 mb-2 text-[13px] font-semibold text-muted">Heure <span className="font-normal">· facultative</span></h2>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setTime('')}
-            aria-pressed={!time}
-            className={cn('h-11 px-4 rounded-xl border text-[14px] font-medium transition', !time ? 'bg-fg border-fg text-bg' : 'bg-surface border-border text-fg')}
-          >
-            Sans heure
-          </button>
-          <label className="flex-1 relative">
-            <span className="sr-only">Heure</span>
-            <Clock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" aria-hidden="true" />
-            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="pl-9 text-[15px]" />
-          </label>
-        </div>
-        <p className="mt-2 px-1 text-[13px] text-muted">
-          {time ? 'Rangée à son heure dans la journée.' : 'Sans heure, l’étape va en fin de journée ; on la glisse ensuite où l’on veut.'}
-        </p>
-      </section>
+      {shelf ? (
+        <p className="mt-2 px-1 text-[13px] text-muted">Gardé dans « À caser » : on le placera dans le jour où l’on passe tout près.</p>
+      ) : (
+        <section className="mt-5">
+          <h2 className="px-1 mb-2 text-[13px] font-semibold text-muted">Heure <span className="font-normal">· facultative</span></h2>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setTime('')}
+              aria-pressed={!time}
+              className={cn('h-11 px-4 rounded-xl border text-[14px] font-medium transition', !time ? 'bg-fg border-fg text-bg' : 'bg-surface border-border text-fg')}
+            >
+              Sans heure
+            </button>
+            <label className="flex-1 relative">
+              <span className="sr-only">Heure</span>
+              <Clock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" aria-hidden="true" />
+              <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="pl-9 text-[15px]" />
+            </label>
+          </div>
+          <p className="mt-2 px-1 text-[13px] text-muted">
+            {time ? 'Rangée à son heure dans la journée.' : 'Sans heure, l’étape va en fin de journée ; on la glisse ensuite où l’on veut.'}
+          </p>
+        </section>
+      )}
 
       <div className="fixed inset-x-0 bottom-0 z-20 bg-bg/95 backdrop-blur border-t border-border px-4 pt-3 pb-[max(env(safe-area-inset-bottom),12px)]">
         <div className="max-w-xl mx-auto">
           <button
             type="button"
             onClick={submit}
-            disabled={!place.name.trim() || isLoading}
+            disabled={!place.name.trim() || (isLoading && !shelf)}
             className="w-full h-[52px] rounded-2xl bg-accent text-accent-fg text-[16px] font-semibold disabled:opacity-50 active:scale-[0.99] transition"
           >
-            Ajouter au {formatDayFr(date)}{time ? ` à ${time}` : ''}
+            {shelf ? 'Garder à caser' : `Ajouter au ${formatDayFr(date)}${time ? ` à ${time}` : ''}`}
           </button>
           <p className="mt-1.5 text-center text-[12px] text-muted">{getCategory(chosen).label} · {trip.title}</p>
         </div>

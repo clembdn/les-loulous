@@ -14,7 +14,7 @@ import { contentHash, PUBLIC_MAX_CHARS, publicTripContent } from '../utils/publi
  * quand le contenu change — par l'appareil qui a le voyage ouvert, c'est-à-
  * dire celui qui vient de le modifier.
  *
- * Seulement sur des données CONFIRMÉES par le serveur (les quatre parties du
+ * Seulement sur des données CONFIRMÉES par le serveur (toutes les parties du
  * voyage et les liens, sans écriture en attente) : un téléphone resté
  * hors-ligne une semaine ne doit pas écraser la vitrine avec son cache
  * périmé. Une modification faite hors-ligne part donc vers les invités au

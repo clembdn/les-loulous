@@ -12,6 +12,7 @@ import Field from '../Field.jsx'
 import PlaceInput from '../places/PlaceInput.jsx'
 import { useTripData } from '../../context/TripDataContext.jsx'
 import { useDayView } from '../../hooks/useDayView.js'
+import { useIdeaActions } from '../../hooks/useIdeas.js'
 import { DEFAULT_CATEGORY } from '../../config/categories.js'
 import CategoryChips from '../CategoryChips.jsx'
 import { Disclosure } from '../resas/formParts.jsx'
@@ -22,6 +23,8 @@ import { newId } from '../../utils/fields.js'
 import { formatDuration } from '../../utils/format.js'
 
 const DURATIONS = [30, 60, 90, 120, 180, 240]
+// Dans le choix du jour : « sans jour », retour à la liste à caser.
+const SHELF = 'a-caser'
 
 function initialForm(stop) {
   return {
@@ -42,13 +45,15 @@ function initialForm(stop) {
  * La plupart des étapes s'ajoutent d'ailleurs sans cette fiche, par la
  * saisie rapide : ici, on complète.
  *
- * On peut aussi y changer l'étape de jour. L'ordre dans la journée se règle
- * en glissant (éditeur desktop, « Réorganiser » sur téléphone).
+ * On peut aussi y changer l'étape de jour, ou la remettre à caser. L'ordre
+ * dans la journée se règle en glissant (éditeur desktop, « Réorganiser » sur
+ * téléphone).
  */
 export default function StopSheet({ open, date, stop, near, onClose }) {
   const { currentUid } = useAuth()
   const { tripId, days, dayKeys, stopsByDate } = useTripData()
   const view = useDayView(date)
+  const ideaActions = useIdeaActions()
   // Monté à chaque ouverture (cf. TripUIContext) : le formulaire naît avec l'élément.
   const [form, setForm] = useState(() => initialForm(stop))
   // La catégorie suit le lieu choisi tant qu'on ne l'a pas choisie soi-même.
@@ -78,6 +83,13 @@ export default function StopSheet({ open, date, stop, near, onClose }) {
       durationMin: form.durationMin || null,
       category,
       notes: form.notes,
+    }
+
+    // Sans jour : elle repart à caser, telle qu'on vient de la corriger.
+    if (isEdit && targetDate === SHELF) {
+      ideaActions.shelve(date, next)
+      onClose()
+      return
     }
 
     // Changement de jour : l'étape part en fin de journée d'arrivée, dans le
@@ -173,12 +185,17 @@ export default function StopSheet({ open, date, stop, near, onClose }) {
                 className="w-full h-11 px-3 rounded-xl bg-surface-2 border border-border text-[15px] text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 {dayKeys.map((d) => <option key={d} value={d}>{formatDayFr(d)}</option>)}
+                <option value={SHELF}>À caser (sans jour)</option>
               </select>
             </Field>
           )}
         </div>
         {isEdit && targetDate !== date && (
-          <p className="-mt-3 text-[13px] text-muted">L’étape passera en fin de journée, le {formatDayFr(targetDate)}.</p>
+          <p className="-mt-3 text-[13px] text-muted">
+            {targetDate === SHELF
+              ? 'L’étape quittera la journée et attendra dans « À caser ».'
+              : `L’étape passera en fin de journée, le ${formatDayFr(targetDate)}.`}
+          </p>
         )}
 
         <div>

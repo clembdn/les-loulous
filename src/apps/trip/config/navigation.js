@@ -1,4 +1,4 @@
-import { CalendarDays, Globe2, Luggage, Plane, Sun, Ticket } from 'lucide-react'
+import { Bookmark, CalendarDays, Globe2, Luggage, Plane, Sun, Ticket } from 'lucide-react'
 
 // Trip Planner a deux niveaux, là où les autres apps n'en ont qu'un :
 //   /trip/voyages              la liste des voyages
@@ -21,9 +21,14 @@ export const WORLD_PATH = '/trip/monde'
 // cours ; après, le bilan. L'identifiant, lui, ne bouge pas.
 const OVERVIEW_LABEL = { upcoming: 'Aperçu', ongoing: 'Aujourd’hui', past: 'Bilan' }
 
+// Les lieux repérés, pas encore placés dans un jour. Pas pour les invités :
+// c'est le brouillon du couple, la vitrine ne le publie pas.
+export const IDEAS_ID = 'a-caser'
+
 export const TRIP_TABS = [
   { id: 'aujourdhui', label: 'Aujourd’hui', icon: Sun },
   { id: 'jours',      label: 'Jours',       icon: CalendarDays },
+  { id: IDEAS_ID,     label: 'À caser',     icon: Bookmark, ownersOnly: true },
   { id: 'resas',      label: 'Résas',       sidebarLabel: 'Réservations', icon: Ticket },
 ]
 
@@ -32,15 +37,21 @@ export const RUNNER_ID = 'deroule'
 
 // Segments reconnus sous /trip/<id> — tout le reste retombe sur DEFAULT_TAB.
 export const TAB_IDS = [...TRIP_TABS.map((t) => t.id), RUNNER_ID]
+export const GUEST_TAB_IDS = TAB_IDS.filter((id) => id !== IDEAS_ID)
 export const DEFAULT_TAB = 'jours'
 
 export function tripPath(tripId, tab = DEFAULT_TAB, sub = null) {
   return ['/trip', tripId, tab, sub && encodeURIComponent(sub)].filter(Boolean).join('/')
 }
 
-/** Les onglets d'un voyage, le premier nommé selon son statut (`tripStatus`). */
-export function tripTabs(status) {
-  return TRIP_TABS.map((t) => (t.id === 'aujourdhui' ? { ...t, label: OVERVIEW_LABEL[status] || t.label } : t))
+/**
+ * Les onglets d'un voyage, le premier nommé selon son statut (`tripStatus`).
+ * `guest` : sans ceux qui ne regardent que le couple.
+ */
+export function tripTabs(status, { guest = false } = {}) {
+  return TRIP_TABS
+    .filter((t) => !(guest && t.ownersOnly))
+    .map((t) => (t.id === 'aujourdhui' ? { ...t, label: OVERVIEW_LABEL[status] || t.label } : t))
 }
 
 const LIST_ITEM = { id: LIST_ID, label: 'Mes voyages', icon: Luggage }
@@ -53,13 +64,13 @@ function groupLabel(title) {
 }
 
 /** Les écrans d'un voyage dans la sidebar, en groupe à son nom. */
-export function tripSidebarGroup(trip, status) {
+export function tripSidebarGroup(trip, status, options) {
   return {
     type: 'group',
     label: groupLabel(trip.title),
     icon: Plane,
     accentClass: 'text-accent',
-    items: tripTabs(status).map((t) => ({ id: t.id, label: t.sidebarLabel || t.label, icon: t.icon })),
+    items: tripTabs(status, options).map((t) => ({ id: t.id, label: t.sidebarLabel || t.label, icon: t.icon })),
   }
 }
 

@@ -69,7 +69,7 @@ export function subscribeToDays(tripId, callback, onError, onSync) {
 // Seuls les champs présents dans `patch` sont écrits : renommer un jour ne
 // réécrit pas ses étapes, et inversement. `date` part à chaque fois — les
 // règles le comparent à l'identifiant du document.
-function dayPayload(date, patch, existing, currentUid) {
+export function dayDocPayload(date, patch, existing, currentUid) {
   const out = { date, ...stamp(existing, currentUid) }
   if ('stops' in patch) out.stops = normalizeStops(patch.stops, date)
   if ('title' in patch) out.title = optText(patch.title, 120)
@@ -88,7 +88,7 @@ function dayPayload(date, patch, existing, currentUid) {
  * planning de Cook'It).
  */
 export function saveDay(tripId, date, patch, existing, currentUid) {
-  return setDoc(partDoc(tripId, 'days', date), dayPayload(date, patch, existing, currentUid), { merge: true })
+  return setDoc(partDoc(tripId, 'days', date), dayDocPayload(date, patch, existing, currentUid), { merge: true })
 }
 
 /**
@@ -102,7 +102,7 @@ export function saveDays(tripId, changes, existingByDate, currentUid) {
   for (const [date, patch] of Object.entries(changes)) {
     batch.set(
       partDoc(tripId, 'days', date),
-      dayPayload(date, patch, existingByDate?.[date], currentUid),
+      dayDocPayload(date, patch, existingByDate?.[date], currentUid),
       { merge: true },
     )
   }

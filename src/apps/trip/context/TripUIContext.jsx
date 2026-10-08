@@ -10,9 +10,11 @@ import AttachmentViewer from '../components/attachments/AttachmentViewer.jsx'
 import NewItemSheet from '../components/resas/NewItemSheet.jsx'
 import ShareSheet from '../components/trips/ShareSheet.jsx'
 import StopView from '../components/days/StopView.jsx'
+import IdeaSheet from '../components/ideas/IdeaSheet.jsx'
+import PlaceIdeaSheet from '../components/ideas/PlaceIdeaSheet.jsx'
 import { hasCoords } from '../utils/geo.js'
 import { resaKey } from '../utils/reservations.js'
-import { RUNNER_ID } from '../config/navigation.js'
+import { IDEAS_ID, RUNNER_ID } from '../config/navigation.js'
 
 /**
  * Les feuilles d'un voyage, montées UNE fois.
@@ -49,6 +51,8 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
   const [newItem, setNewItem] = useState({ open: false, date: null })
   const [shareOpen, setShareOpen] = useState(false)
   const [stopView, setStopView] = useState({ open: false, date: null, stop: null })
+  const [ideaForm, setIdeaForm] = useState(CLOSED)
+  const [ideaPlace, setIdeaPlace] = useState({ open: false, idea: null })
   const [viewer, setViewer] = useState({ list: [], index: null })
 
   // Un point du voyage pour orienter la recherche de lieux : « Gare » doit
@@ -77,6 +81,7 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
       closeResa: () => goBack(`${basePath}/resas`),
       openDay: (date, options) => goTab('jours', date, options),
       openTab: (tab) => goTab(tab),
+      openIdeas: () => goTab(IDEAS_ID),
       // La journée en plein écran sur la carte, éventuellement à partir d'un
       // élément de la frise (la prochaine étape, depuis l'écran Aujourd'hui).
       openRunner: (date, startKey = null) => {
@@ -89,6 +94,7 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
     if (readOnly) {
       return {
         ...nav, editStay: null, editTransport: null, editStop: null, editDay: null, editTrip: null, newItem: null, shareTrip: null,
+        editIdea: null, placeIdea: null,
       }
     }
     return {
@@ -101,6 +107,9 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
       // « + » : étape, hébergement ou trajet, au jour donné.
       newItem: (date) => setNewItem({ open: true, date }),
       shareTrip: () => setShareOpen(true),
+      // Un lieu à caser : sa fiche, ou directement le choix du jour.
+      editIdea: (idea) => setIdeaForm((f) => ({ open: true, item: idea, defaults: null, nonce: f.nonce + 1 })),
+      placeIdea: (idea) => setIdeaPlace({ open: true, idea }),
     }
   }, [goTab, goBack, basePath, near, navigate, readOnly])
 
@@ -175,6 +184,22 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
             onTransport={(mode) => api.editTransport(null, { date: newItem.date, mode })}
           />
           <ShareSheet open={shareOpen} onClose={() => setShareOpen(false)} />
+          <IdeaSheet
+            key={`idea-${ideaForm.nonce}`}
+            open={ideaForm.open}
+            idea={ideaForm.item}
+            near={hasCoords(ideaForm.item) ? ideaForm.item : near}
+            onClose={() => setIdeaForm((f) => ({ ...f, open: false }))}
+            onPlace={(idea) => {
+              setIdeaForm((f) => ({ ...f, open: false }))
+              setIdeaPlace({ open: true, idea })
+            }}
+          />
+          <PlaceIdeaSheet
+            open={ideaPlace.open}
+            idea={ideaPlace.idea}
+            onClose={() => setIdeaPlace((p) => ({ ...p, open: false }))}
+          />
         </>
       )}
       <AttachmentViewer

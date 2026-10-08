@@ -754,6 +754,35 @@ service cloud.firestore {
       allow delete: if isAuthorizedUser();
     }
 
+    // Lieux « à caser » : repérés, pas encore placés dans un jour. Un document
+    // par lieu ; placé dans un jour, il est supprimé (même lot que la journée).
+    function hasValidTripIdeaShape(data) {
+      return data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 160
+        && data.category in ['visit', 'food', 'coffee', 'nature', 'beach', 'activity', 'shopping', 'night', 'other']
+        && optCoords(data)
+        && optStr(data, 'address', 300)
+        && optStr(data, 'mapsUrl', 2000)
+        && optStr(data, 'notes', 1000);
+    }
+
+    match /couples/main/trips/{tripId}/ideas/{ideaId} {
+      allow read: if isAuthorizedUser();
+
+      // `createdBy` peut être l'autre : « Annuler » après avoir placé un lieu
+      // le recrée avec son auteur d'origine.
+      allow create: if isAuthorizedUser()
+        && hasValidTripIdeaShape(request.resource.data)
+        && hasValidMetadata(request.resource.data);
+
+      allow update: if isAuthorizedUser()
+        && hasValidTripIdeaShape(request.resource.data)
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isAuthorizedUser();
+    }
+
     // Les pays et lieux visités hors de l'app, saisis à la main pour la carte
     // du monde : un seul document partagé, une liste bornée.
     match /couples/main/tripWorld/{docId} {

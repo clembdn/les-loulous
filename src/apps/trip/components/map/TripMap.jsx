@@ -4,6 +4,8 @@ import { ROUTE_COLOR, TRANSPORT_COLOR } from '../../config/palette.js'
 import { dayRoute } from '../../utils/route.js'
 import { legKey, routeLines } from '../../utils/legs.js'
 import { guessCategory } from '../../utils/categoryGuess.js'
+import { hasCoords } from '../../utils/geo.js'
+import { getCategory } from '../../config/categories.js'
 import MiniMap from './MiniMap.jsx'
 import { canUseWebGL, loadMaplibre, prefersReducedMotion } from './loadMaplibre.js'
 import { createMarkerElement, describeGroup, groupPoints, updateMarkerElement } from './markers.js'
@@ -14,6 +16,7 @@ const SINGLE_ZOOM = 14.5
 const FOCUS_ZOOM = 15.5
 // Les lieux d'intérêt du style (cf. scripts/trip-map-style.mjs), cliquables.
 const POI_LAYERS = ['poi_r1', 'poi_r7', 'poi_transit']
+const NO_IDEAS = []
 
 /**
  * La vraie carte d'une journée : fond OpenFreeMap (style « Lagon », cf.
@@ -27,6 +30,9 @@ const POI_LAYERS = ['poi_r1', 'poi_r7', 'poi_transit']
  *
  *  · `interactive` : on peut la déplacer et zoomer. Sinon elle est figée et
  *    `onPress` (« voir le déroulé ») la rend entièrement cliquable ;
+ *  · `ideas` : des lieux à caser, en repères creux hors du parcours (clé
+ *    `idea:<id>` pour `activeKey`, `onSelect` et `onHover`). Ils ne
+ *    comptent dans le cadrage que si la journée n'a aucun lieu ;
  *  · `activeKey` : l'élément de frise mis en avant (survol, étape courante) ;
  *  · `focusKey` : la carte vole jusqu'à cet élément (déroulé), au moins au
  *    zoom `focusZoom` ; nul = toute la journée ;
@@ -43,7 +49,7 @@ const POI_LAYERS = ['poi_r1', 'poi_r7', 'poi_transit']
  *    `fitKey` change.
  */
 export default function TripMap({
-  items, home = null, legs = null, colorIndexByStay = {}, pastKeys = null,
+  items, home = null, legs = null, colorIndexByStay = {}, pastKeys = null, ideas = null,
   activeKey = null, focusKey = null, dimOthers = false,
   interactive = false, onPress = null, pressLabel = 'Ouvrir la carte',
   onSelect = null, onHover = null, onPlaceClick = null, preview = null, fitKey = null,
@@ -57,7 +63,8 @@ export default function TripMap({
     () => groupPoints(baseRoute.home ? [...baseRoute.points, baseRoute.home] : baseRoute.points),
     [baseRoute],
   )
-  const empty = groups.length === 0
+  const ideaPoints = useMemo(() => (ideas || NO_IDEAS).filter(hasCoords), [ideas])
+  const empty = groups.length === 0 && ideaPoints.length === 0
   const [mode, setMode] = useState(() => (canUseWebGL() ? 'map' : 'fallback'))
   const [ready, setReady] = useState(false)
   const wrapperRef = useRef(null)
@@ -74,7 +81,7 @@ export default function TripMap({
     onPlaceClick,
   }
   const latest = useRef({})
-  latest.current = { route, groups, padding, activeKey, focusKey, dimOthers, pastKeys, colorIndexByStay, fallbackCenter, focusZoom, fitKey }
+  latest.current = { route, ideaPoints, padding, activeKey, focusKey, dimOthers, pastKeys, colorIndexByStay, fallbackCenter, focusZoom, fitKey }
   // Vue réglée à la main (glisser, molette), et pour quel jour.
   const userView = useRef(null)
 
@@ -87,8 +94,8 @@ export default function TripMap({
     let map = null
     loadMaplibre().then((maplibregl) => {
       if (cancelled || !containerRef.current) return
-      const { route: r, padding: pad, fallbackCenter: center } = latest.current
-      const bounds = boundsOfRoute(r, maplibregl)
+      const { route: r, ideaPoints: extra, padding: pad, fallbackCenter: center } = latest.current
+      const bounds = boundsOf(r, extra, maplibregl)
       map = new maplibregl.Map({
         container: containerRef.current,
         style: STYLE_URL,
@@ -161,6 +168,32 @@ export default function TripMap({
     if (!focus && !keepView) fitDay(map, { animate: true })
   }, [ready, groups]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Les lieux à caser : des repères creux, sous ceux de la journée.
+  const ideaMarkersRef = useRef([])
+  useEffect(() => {
+    const map = mapRef.current
+    if (!ready || !map) return undefined
+    const maplibregl = map.__lib
+    ideaMarkersRef.current = ideaPoints.map((idea) => {
+      const desc = describeIdea(idea)
+      const el = createMarkerElement(desc, {
+        onSelect: (keys) => handlers.current.onSelect(keys),
+        onHover: (keys) => handlers.current.onHover(keys),
+      })
+      updateIdeaElement(el, desc, latest.current.activeKey === desc.keys[0])
+      const marker = new maplibregl.Marker({ element: el }).setLngLat([idea.lng, idea.lat]).addTo(map)
+      return { marker, el, desc }
+    })
+    // Rien que des lieux à caser (l'écran « À caser ») : ce sont eux qu'on cadre.
+    const { route: r, fitKey: key } = latest.current
+    const keepView = key != null && userView.current === key
+    if (!r.points.length && !r.home && !keepView) fitDay(map, { animate: true })
+    return () => {
+      ideaMarkersRef.current.forEach((m) => m.marker.remove())
+      ideaMarkersRef.current = []
+    }
+  }, [ready, ideaPoints]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // L'élément mis en avant et le passé : repères et tronçons, sans recadrer.
   useEffect(() => {
     const map = mapRef.current
@@ -169,6 +202,7 @@ export default function TripMap({
       const desc = describeGroup(group, { colorIndexByStay, past: pastKeys })
       updateMarkerElement(el, desc, !!activeKey && desc.keys.includes(activeKey))
     }
+    for (const { el, desc } of ideaMarkersRef.current) updateIdeaElement(el, desc, activeKey === desc.keys[0])
     refreshRoute(map)
   }, [ready, activeKey, pastKeys, colorIndexByStay, dimOthers, route]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -222,8 +256,8 @@ export default function TripMap({
     // La taille peut avoir changé depuis la dernière mesure de MapLibre (son
     // ResizeObserver est asynchrone) : un cadrage sur l'ancienne serait faux.
     map.resize()
-    const { route: r, padding: pad } = latest.current
-    const bounds = boundsOfRoute(r, map.__lib)
+    const { route: r, ideaPoints: extra, padding: pad } = latest.current
+    const bounds = boundsOf(r, extra, map.__lib)
     if (!bounds) return
     const duration = animate && !prefersReducedMotion() ? 600 : 0
     map.fitBounds(bounds, { padding: pad, maxZoom: SINGLE_ZOOM, duration })
@@ -310,14 +344,36 @@ function PressLayer({ onPress, label }) {
   )
 }
 
-function boundsOfRoute(route, maplibregl) {
-  const pts = route.home ? [...route.points, route.home] : route.points
+/** Le cadre de la journée ; à défaut de journée, celui des lieux à caser. */
+function boundsOf(route, ideaPoints, maplibregl) {
+  const own = route.home ? [...route.points, route.home] : route.points
+  const pts = own.length ? own : ideaPoints
   if (!pts.length || !maplibregl) return null
   const bounds = new maplibregl.LngLatBounds()
   for (const p of pts) bounds.extend([p.lng, p.lat])
   // Une route peut faire un détour hors du cadre de ses deux bouts.
   for (const seg of route.segments) seg.line?.forEach((c) => bounds.extend(c))
   return bounds
+}
+
+function describeIdea(idea) {
+  return { keys: [`idea:${idea.id}`], name: idea.name, color: getCategory(idea.category).color }
+}
+
+function updateIdeaElement(anchor, desc, active) {
+  const pin = anchor.firstChild
+  pin.__keys = desc.keys
+  pin.className = `trip-marker trip-marker--idea${active ? ' is-active' : ''}`
+  // Le repère naît plein (createMarkerElement) : celui-ci est creux.
+  pin.style.backgroundColor = ''
+  pin.style.borderColor = desc.color
+  pin.style.color = desc.color
+  pin.setAttribute('aria-label', `${desc.name} · à caser`)
+  if (pin.__content !== '+') {
+    pin.__content = '+'
+    pin.textContent = '+'
+  }
+  anchor.style.zIndex = active ? '3' : '0'
 }
 
 /** Chaque tronçon libre qui a un trajet calculé reçoit son tracé (`line`). */

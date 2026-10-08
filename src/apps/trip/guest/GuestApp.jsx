@@ -16,7 +16,7 @@ import TodayView from '../views/TodayView.jsx'
 import DaysView from '../views/DaysView.jsx'
 import ResasView from '../views/ResasView.jsx'
 import DayRunner from '../components/days/DayRunner.jsx'
-import { RUNNER_ID, TAB_IDS, tripSidebarGroup, tripTabs } from '../config/navigation.js'
+import { GUEST_TAB_IDS, RUNNER_ID, tripSidebarGroup, tripTabs } from '../config/navigation.js'
 import { tripStatus } from '../utils/tripDates.js'
 import { guestPath } from '../utils/publicTrip.js'
 
@@ -87,7 +87,7 @@ export default function GuestApp() {
 
 function GuestTrip({ token, data, attachments }) {
   const base = guestPath(token)
-  const { tab, sub, goTab, goBack } = useTabRoute(base, TAB_IDS, 'aujourdhui')
+  const { tab, sub, goTab, goBack } = useTabRoute(base, GUEST_TAB_IDS, 'aujourdhui')
   const { trip } = data
 
   useEffect(() => {
@@ -123,8 +123,8 @@ function GuestTrip({ token, data, attachments }) {
 function GuestShell({ trip, tab, onChange, children }) {
   const today = useToday()
   const status = tripStatus(trip, today)
-  const tabs = useMemo(() => tripTabs(status), [status])
-  const sections = useMemo(() => [tripSidebarGroup(trip, status)], [trip, status])
+  const tabs = useMemo(() => tripTabs(status, { guest: true }), [status])
+  const sections = useMemo(() => [tripSidebarGroup(trip, status, { guest: true })], [trip, status])
   return (
     <AppShell
       title="Trip Planner"

@@ -26,9 +26,13 @@ const MAX_SUGGESTIONS = 5
  *
  * `near` oriente la recherche vers les lieux du jour. Le parent peut donner
  * le focus (`ref.focus()`, raccourci N sur ordinateur).
+ *
+ * `onAdd(place)` remplace l'ajout à la journée `date` (liste « à caser ») :
+ * il rend vrai si c'est ajouté. L'heure n'est alors pas lue dans la saisie.
  */
-const QuickAdd = forwardRef(function QuickAdd({ date, near = null, disabled = false, className }, ref) {
+const QuickAdd = forwardRef(function QuickAdd({ date = null, near = null, disabled = false, onAdd = null, placeholder = null, className }, ref) {
   const addStop = useAddStop()
+  const addPlace = (place, time) => (onAdd ? onAdd(place) : addStop(date, place, { time }))
   const inputRef = useRef(null)
   const [text, setText] = useState('')
   const [focused, setFocused] = useState(false)
@@ -41,7 +45,7 @@ const QuickAdd = forwardRef(function QuickAdd({ date, near = null, disabled = fa
 
   useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }), [])
 
-  const { time, query } = parseQuickAdd(text)
+  const { time, query } = onAdd ? { time: null, query: text.trim() } : parseQuickAdd(text)
   const search = usePlaceSearch(query, { near, enabled: focused && !reading })
   const results = search.results.slice(0, MAX_SUGGESTIONS)
   const canAddRaw = query.length >= 2
@@ -64,7 +68,7 @@ const QuickAdd = forwardRef(function QuickAdd({ date, near = null, disabled = fa
   function add(option) {
     if (!option) return
     const place = option.raw ? { name: option.name } : option
-    if (addStop(date, place, { time })) reset()
+    if (addPlace(place, time)) reset()
     inputRef.current?.focus()
   }
 
@@ -78,7 +82,7 @@ const QuickAdd = forwardRef(function QuickAdd({ date, near = null, disabled = fa
       setText('')
       return
     }
-    if (addStop(date, { ...read.place, category: guessCategory({ name: read.place.name }) })) reset()
+    if (addPlace({ ...read.place, category: guessCategory({ name: read.place.name }) }, null)) reset()
     // Pas localisé, ou seulement à peu près : le dire.
     if (read.message) toast(read.message)
   }
@@ -141,7 +145,7 @@ const QuickAdd = forwardRef(function QuickAdd({ date, near = null, disabled = fa
     blurTimer.current = setTimeout(() => setFocused(false), 150)
   }
 
-  const listId = `quick-add-${date}`
+  const listId = `quick-add-${date || 'ideas'}`
 
   return (
     <div className={className}>
@@ -150,7 +154,7 @@ const QuickAdd = forwardRef(function QuickAdd({ date, near = null, disabled = fa
           {reading || search.loading
             ? <Loader2 size={18} className="shrink-0 text-muted animate-spin" aria-hidden="true" />
             : <Plus size={18} className="shrink-0 text-accent" aria-hidden="true" />}
-          <span className="sr-only">Ajouter un lieu à cette journée</span>
+          <span className="sr-only">{onAdd ? 'Repérer un lieu' : 'Ajouter un lieu à cette journée'}</span>
           <input
             ref={inputRef}
             value={text}
@@ -159,7 +163,7 @@ const QuickAdd = forwardRef(function QuickAdd({ date, near = null, disabled = fa
             onFocus={onFocus}
             onBlur={onBlur}
             disabled={disabled || reading}
-            placeholder={disabled ? 'Journée complète' : 'Ajouter un lieu… (ex. 10h30 Tour de Belém)'}
+            placeholder={disabled ? 'Journée complète' : placeholder || 'Ajouter un lieu… (ex. 10h30 Tour de Belém)'}
             enterKeyHint="done"
             autoComplete="off"
             role="combobox"

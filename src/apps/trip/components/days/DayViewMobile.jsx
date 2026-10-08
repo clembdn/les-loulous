@@ -8,6 +8,7 @@ import { useTripData } from '../../context/TripDataContext.jsx'
 import { useTripUI } from '../../context/TripUIContext.jsx'
 import { useDayView } from '../../hooks/useDayView.js'
 import { useLegMode } from '../../hooks/useLegMode.js'
+import { useNearbyIdeas } from '../../hooks/useIdeas.js'
 import { MAX_STOPS_PER_DAY, saveDay } from '../../services/daysService.js'
 import { plural } from '../../utils/format.js'
 import TripMap from '../map/TripMap.jsx'
@@ -17,6 +18,7 @@ import DayStrip from './DayStrip.jsx'
 import DayTimeline from './DayTimeline.jsx'
 import QuickAdd from './QuickAdd.jsx'
 import ReorderList from './ReorderList.jsx'
+import NearbyIdeas from '../ideas/NearbyIdeas.jsx'
 import { DayDate, RouteLink } from './DayParts.jsx'
 
 // En bas : la feuille qui monte sur la carte, et le bouton « Déroulé ».
@@ -30,6 +32,7 @@ const MAP_PADDING = { top: 40, bottom: 96, left: 44, right: 44 }
  * La carte est figée (le doigt fait défiler la page, pas la carte) : un tap
  * l'ouvre en grand, en « déroulé » étape par étape. En bas de la frise, la
  * saisie rapide ; « Réorganiser » passe les étapes en liste à poignées.
+ * Dessous, les lieux à caser tout près, à ajouter d'un « + ».
  */
 export default function DayViewMobile({ date }) {
   const today = useToday()
@@ -38,6 +41,7 @@ export default function DayViewMobile({ date }) {
   const { tripId, days, stopsByDate, dayKeys, nights, segments, colorIndexByStay, attachmentsByParent, isLoading } = useTripData()
   const view = useDayView(date)
   const setLegMode = useLegMode(date)
+  const nearby = useNearbyIdeas(date)
   const openRunner = () => ui.openRunner(date)
   // Mode « Réorganiser » : l'ordre en cours (identifiants), enregistré en sortant.
   const [order, setOrder] = useState(null)
@@ -178,6 +182,8 @@ export default function DayViewMobile({ date }) {
           )}
         </div>
       </article>
+
+      {!reordering && <NearbyIdeas date={date} nearby={nearby} className="mx-3 mt-3" />}
 
       <TonightCard
         className="mx-3 mt-3"

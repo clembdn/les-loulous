@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { MapPin, Play, Plus, X } from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { formatDayFr } from '@/shared/lib/dates.js'
@@ -11,6 +11,7 @@ import { useTripUI } from '../../context/TripUIContext.jsx'
 import { useDayView } from '../../hooks/useDayView.js'
 import { useAddStop } from '../../hooks/useAddStop.js'
 import { useLegMode } from '../../hooks/useLegMode.js'
+import { useIdeaActions, useNearbyIdeas } from '../../hooks/useIdeas.js'
 import { getCategory } from '../../config/categories.js'
 import { MAX_STOPS_PER_DAY, saveDay, saveDays } from '../../services/daysService.js'
 import { insertionPointByTime, moveStop } from '../../utils/timeline.js'
@@ -22,6 +23,7 @@ import { DayWeather } from '../weather/WeatherBadge.jsx'
 import DayList from './DayList.jsx'
 import DayTimeline from './DayTimeline.jsx'
 import QuickAdd from './QuickAdd.jsx'
+import NearbyIdeas from '../ideas/NearbyIdeas.jsx'
 import { DayDate, RouteLink } from './DayParts.jsx'
 
 const sameOrder = (a = [], b = []) => a.length === b.length && a.every((s, i) => s.id === b[i]?.id)
@@ -36,6 +38,10 @@ const sameOrder = (a = [], b = []) => a.length === b.length && a.every((s, i) =>
  * ou sur un jour de la colonne de gauche pour les y envoyer (rangées à leur
  * heure). Glisser-déposer HTML natif — pas de bibliothèque : la souris suffit,
  * le téléphone a ses boutons dans la fiche de l'étape.
+ *
+ * Les lieux à caser tout près attendent sous la journée (et en repères creux
+ * sur la carte) : on les glisse dans la frise ou sur un jour ; une étape
+ * lâchée sur eux repart à caser.
  */
 export default function DayEditorDesktop({ date }) {
   const { currentUid } = useAuth()
@@ -43,12 +49,12 @@ export default function DayEditorDesktop({ date }) {
   const ui = useTripUI()
   const { readOnly } = ui
   const {
-    trip, tripId, days, dayKeys, nights, timelines, stopsByDate, colorIndexByStay, attachmentsByParent,
+    trip, tripId, days, dayKeys, nights, timelines, stopsByDate, colorIndexByStay, attachmentsByParent, ideas,
   } = useTripData()
   const view = useDayView(date)
   const setLegMode = useLegMode(date)
 
-  const [drag, setDrag] = useState(null) // { stopId, fromDate }
+  const [drag, setDrag] = useState(null) // { stopId, fromDate } ou { ideaId } (lieu à caser)
   const [drop, setDrop] = useState(null) // { date, beforeId } — position dans la journée affichée
   const [dropDay, setDropDay] = useState(null) // jour survolé dans la colonne de gauche
   const [hoverKey, setHoverKey] = useState(null) // élément allumé dans la frise et sur la carte
@@ -56,9 +62,12 @@ export default function DayEditorDesktop({ date }) {
   const wide = useMediaQuery('(min-width: 1280px)')
   const timelineRef = useRef(null)
 
-  // Un lieu touché sur la carte, en attente d'être ajouté.
+  // Un lieu touché sur la carte, en attente d'être ajouté (`ideaId` : un lieu à caser).
   const [picked, setPicked] = useState(null)
   const addStop = useAddStop()
+  const ideaActions = useIdeaActions()
+  const nearby = useNearbyIdeas(date)
+  const nearbyIdeas = useMemo(() => nearby.map((x) => x.idea), [nearby])
   const quickAddRef = useRef(null)
   useEffect(() => setPicked(null), [date])
 
@@ -84,9 +93,15 @@ export default function DayEditorDesktop({ date }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [date, dayKeys, ui, readOnly])
 
-  // Un repère cliqué sur la carte : son élément de frise s'allume et vient sous les yeux.
+  // Un repère cliqué sur la carte : son élément de frise s'allume et vient
+  // sous les yeux ; un lieu à caser propose d'être ajouté.
   function selectOnMap(key) {
     setHoverKey(key)
+    if (key.startsWith('idea:')) {
+      const idea = ideas.find((i) => `idea:${i.id}` === key)
+      if (idea) setPicked({ ...idea, ideaId: idea.id })
+      return
+    }
     timelineRef.current?.querySelector(`[data-key="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }
 
@@ -98,6 +113,11 @@ export default function DayEditorDesktop({ date }) {
 
   function commit(toDate, beforeId) {
     if (!drag) return
+    if (drag.ideaId) {
+      const idea = ideas.find((i) => i.id === drag.ideaId)
+      if (idea) ideaActions.place(idea, toDate, { beforeId: beforeId ?? null })
+      return reset()
+    }
     const changes = moveStop(stopsByDate, { fromDate: drag.fromDate, stopId: drag.stopId, toDate, beforeId })
     const unchanged = !changes || (toDate === drag.fromDate && sameOrder(changes[toDate], stopsByDate[toDate]))
     if (unchanged) return reset()
@@ -141,9 +161,33 @@ export default function DayEditorDesktop({ date }) {
   function dropOnDay(e, day) {
     e.preventDefault()
     if (!drag) return
+    if (drag.ideaId) {
+      const idea = ideas.find((i) => i.id === drag.ideaId)
+      if (idea) ideaActions.place(idea, day)
+      return reset()
+    }
     if (day === drag.fromDate) return reset()
     const moved = (stopsByDate[drag.fromDate] || []).find((s) => s.id === drag.stopId)
     commit(day, insertionPointByTime(stopsByDate[day] || [], moved?.time))
+  }
+
+  // Les lieux à caser : on en tire un vers la frise, on y lâche une étape.
+  const ideasDnd = readOnly ? null : {
+    shelving: !!drag?.stopId,
+    onDragOver: (e) => {
+      if (!drag?.stopId) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+      if (drop) setDrop(null)
+    },
+    onDrop: (e) => {
+      e.preventDefault()
+      const stop = (stopsByDate[drag?.fromDate] || []).find((s) => s.id === drag?.stopId)
+      if (stop) ideaActions.shelve(drag.fromDate, stop)
+      reset()
+    },
+    onIdeaDragStart: (ideaId) => setDrag({ ideaId }),
+    onDragEnd: reset,
   }
 
   const tonight = (
@@ -173,8 +217,9 @@ export default function DayEditorDesktop({ date }) {
       controls
       attribution="bottom-left"
       padding={{ top: 60, bottom: 60, left: 60, right: 60 }}
+      ideas={readOnly ? null : nearbyIdeas}
       onPlaceClick={readOnly ? undefined : setPicked}
-      preview={picked}
+      preview={picked?.ideaId ? null : picked}
       fitKey={date}
       className={className}
     />
@@ -192,7 +237,9 @@ export default function DayEditorDesktop({ date }) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-semibold text-fg truncate">{picked.name}</p>
-          <p className="text-[13px] text-muted">{picked.category ? getCategory(picked.category).label : 'Lieu de la carte'}</p>
+          <p className="text-[13px] text-muted">
+            {[picked.ideaId && 'À caser', picked.category ? getCategory(picked.category).label : 'Lieu de la carte'].filter(Boolean).join(' · ')}
+          </p>
         </div>
         <button type="button" onClick={() => setPicked(null)} aria-label="Fermer" className="h-8 w-8 -mr-1 -mt-1 rounded-full flex items-center justify-center text-muted hover:bg-surface-2">
           <X size={16} />
@@ -201,7 +248,12 @@ export default function DayEditorDesktop({ date }) {
       <Button
         className="mt-3 w-full"
         disabled={view.stopCount >= MAX_STOPS_PER_DAY}
-        onClick={() => { if (addStop(date, picked)) setPicked(null) }}
+        onClick={() => {
+          const done = picked.ideaId
+            ? ideaActions.place(ideas.find((i) => i.id === picked.ideaId) || picked, date)
+            : addStop(date, picked)
+          if (done) setPicked(null)
+        }}
       >
         <Plus size={15} /> Ajouter au {formatDayFr(date)}
       </Button>
@@ -338,6 +390,7 @@ export default function DayEditorDesktop({ date }) {
             )}
           </div>
         </section>
+        <NearbyIdeas date={date} nearby={nearby} dnd={ideasDnd} activeKey={hoverKey} onHover={setHoverKey} />
         {tonight}
       </div>
     </div>

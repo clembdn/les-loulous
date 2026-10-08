@@ -2,20 +2,22 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { subscribeToStays, subscribeToTransports } from '../services/reservationsService.js'
 import { subscribeToDays } from '../services/daysService.js'
 import { subscribeToAttachments } from '../services/attachmentsService.js'
+import { subscribeToIdeas } from '../services/ideasService.js'
 import { markSynced } from '../services/offlineService.js'
 import { tripDays } from '../utils/tripDates.js'
 import { buildDayTimeline } from '../utils/timeline.js'
 import { nightsOf, stayOrder, staySegments } from '../utils/nights.js'
 
 /**
- * Tout le contenu d'UN voyage : hébergements, trajets, jours, captures — et
+ * Tout le contenu d'UN voyage : hébergements, trajets, jours, captures, lieux
+ * à caser — et
  * ce qui s'en déduit (frises, nuits, couleurs), calculé une fois ici plutôt
  * que dans chaque écran.
  *
- * Quatre écoutes, ouvertes tant que le voyage est affiché. C'est aussi ce qui
+ * Cinq écoutes, ouvertes tant que le voyage est affiché. C'est aussi ce qui
  * l'emporte hors-ligne : une fois lus, ces documents restent dans le cache
  * IndexedDB de Firestore, captures comprises, et se relisent sans réseau.
- * Quand les quatre sont confirmées par le serveur, l'heure de synchro du
+ * Quand toutes sont confirmées par le serveur, l'heure de synchro du
  * voyage est notée (cf. services/offlineService.js).
  *
  * Le voyage lui-même (titre, dates) vient de `useTrips()` — il est déjà
@@ -26,9 +28,10 @@ const TripDataContext = createContext(null)
 // l'éditeur des vitrines invité s'en sert — les écrans n'ont pas à se redessiner.
 const TripConfirmedContext = createContext(false)
 
-const PARTS = ['stays', 'transports', 'days', 'attachments']
+const PARTS = ['stays', 'transports', 'days', 'attachments', 'ideas']
 const NOT_READY = Object.fromEntries(PARTS.map((p) => [p, false]))
 const NO_STOPS = []
+const NO_IDEAS = []
 
 export function TripDataProvider({ trip, children }) {
   const tripId = trip.id
@@ -36,8 +39,9 @@ export function TripDataProvider({ trip, children }) {
   const [transports, setTransports] = useState([])
   const [days, setDays] = useState({})
   const [attachments, setAttachments] = useState([])
+  const [ideas, setIdeas] = useState([])
   const [ready, setReady] = useState(NOT_READY)
-  // Les quatre parties confirmées par le serveur, sans écriture en attente :
+  // Toutes les parties confirmées par le serveur, sans écriture en attente :
   // ce qu'on affiche est ce qui est en base (cf. TripSharesContext).
   const [isConfirmed, setConfirmed] = useState(false)
 
@@ -48,12 +52,13 @@ export function TripDataProvider({ trip, children }) {
     setTransports([])
     setDays({})
     setAttachments([])
+    setIdeas([])
     setReady(NOT_READY)
     setConfirmed(false)
 
     const done = (part) => setReady((r) => (r[part] ? r : { ...r, [part]: true }))
 
-    // « Disponible hors-ligne » : les quatre parties confirmées par le
+    // « Disponible hors-ligne » : toutes les parties confirmées par le
     // serveur en même temps. Tenu hors de l'état React — l'heure de synchro
     // vit dans offlineService, seul l'indicateur se redessine.
     const fresh = {}
@@ -69,6 +74,7 @@ export function TripDataProvider({ trip, children }) {
       subscribeToTransports(tripId, (x) => { setTransports(x); done('transports') }, () => done('transports'), sync('transports')),
       subscribeToDays(tripId, (x) => { setDays(x); done('days') }, () => done('days'), sync('days')),
       subscribeToAttachments(tripId, (x) => { setAttachments(x); done('attachments') }, () => done('attachments'), sync('attachments')),
+      subscribeToIdeas(tripId, (x) => { setIdeas(x); done('ideas') }, () => done('ideas'), sync('ideas')),
     ]
     return () => unsubs.forEach((unsub) => unsub())
   }, [tripId])
@@ -81,6 +87,7 @@ export function TripDataProvider({ trip, children }) {
         transports={transports}
         days={days}
         attachments={attachments}
+        ideas={ideas}
         isLoading={!PARTS.every((p) => ready[p])}
       >
         {children}
@@ -91,9 +98,10 @@ export function TripDataProvider({ trip, children }) {
 
 /**
  * Ce qui se déduit du contenu d'un voyage, d'où qu'il vienne : les écoutes
- * du couple (ci-dessus) ou la vitrine d'un lien invité (guest/GuestApp.jsx).
+ * du couple (ci-dessus) ou la vitrine d'un lien invité (guest/GuestApp.jsx),
+ * qui ne publie pas les lieux à caser.
  */
-export function TripDataValue({ trip, stays, transports, days, attachments, isLoading, children }) {
+export function TripDataValue({ trip, stays, transports, days, attachments, ideas = NO_IDEAS, isLoading, children }) {
   const tripId = trip.id
 
   // Le voyage est renormalisé à chaque écho de la liste : on ne dépend que
@@ -133,6 +141,7 @@ export function TripDataValue({ trip, stays, transports, days, attachments, isLo
     stopsByDate,
     attachments,
     attachmentsByParent,
+    ideas,
     dayKeys,
     timelines,
     nights,
@@ -140,7 +149,7 @@ export function TripDataValue({ trip, stays, transports, days, attachments, isLo
     colorIndexByStay,
     isLoading,
   }), [
-    trip, tripId, stays, transports, days, stopsByDate, attachments, attachmentsByParent,
+    trip, tripId, stays, transports, days, stopsByDate, attachments, attachmentsByParent, ideas,
     dayKeys, timelines, nights, segments, colorIndexByStay, isLoading,
   ])
 
@@ -153,7 +162,7 @@ export function useTripData() {
   return ctx
 }
 
-/** Les quatre parties du voyage ouvert confirmées par le serveur, sans écriture en attente. */
+/** Toutes les parties du voyage ouvert confirmées par le serveur, sans écriture en attente. */
 export function useTripConfirmed() {
   return useContext(TripConfirmedContext)
 }
