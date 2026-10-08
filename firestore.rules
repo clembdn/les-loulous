@@ -601,6 +601,7 @@ service cloud.firestore {
         && optCoords(p);
     }
 
+    // `places` : les lieux du voyage résumés pour la carte du monde (cf. utils/world.js).
     function hasValidTripShape(data) {
       return data.title is string
         && data.title.size() > 0
@@ -608,7 +609,8 @@ service cloud.firestore {
         && data.startDate is string && isDateId(data.startDate)
         && data.endDate is string && isDateId(data.endDate)
         && data.endDate >= data.startDate
-        && optStr(data, 'notes', 2000);
+        && optStr(data, 'notes', 2000)
+        && (!('places' in data) || (data.places is list && data.places.size() <= 80));
     }
 
     function hasValidStayShape(data) {
@@ -750,6 +752,26 @@ service cloud.firestore {
       allow update: if false;
 
       allow delete: if isAuthorizedUser();
+    }
+
+    // Les pays et lieux visités hors de l'app, saisis à la main pour la carte
+    // du monde : un seul document partagé, une liste bornée.
+    match /couples/main/tripWorld/{docId} {
+      allow read: if isAuthorizedUser();
+
+      allow create: if isAuthorizedUser()
+        && docId == 'visited'
+        && request.resource.data.entries is list
+        && request.resource.data.entries.size() <= 300
+        && hasValidMetadata(request.resource.data)
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update: if isAuthorizedUser()
+        && request.resource.data.entries is list
+        && request.resource.data.entries.size() <= 300
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if false;
     }
 
     // Liens invités : le registre d'un voyage (un document par lien, son

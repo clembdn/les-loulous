@@ -12,16 +12,19 @@ import { TripWeatherProvider } from './context/TripWeatherContext.jsx'
 import { TripUIProvider, useTripUI } from './context/TripUIContext.jsx'
 import { TripSharesProvider } from './context/TripSharesContext.jsx'
 import { RouteFiller } from './hooks/useRouteFiller.js'
+import { TripPlacesWriter } from './hooks/useTripPlaces.js'
 import Shell from './components/layout/Shell.jsx'
 import Loader from './components/Loader.jsx'
 import TripFormSheet from './components/trips/TripFormSheet.jsx'
+import MisplacedBanner from './components/trips/MisplacedBanner.jsx'
 import TripsView from './views/TripsView.jsx'
 import ShareInView from './views/ShareInView.jsx'
+import WorldView from './views/WorldView.jsx'
 import TodayView from './views/TodayView.jsx'
 import DaysView from './views/DaysView.jsx'
 import ResasView from './views/ResasView.jsx'
 import DayRunner from './components/days/DayRunner.jsx'
-import { DEFAULT_TAB, LIST_ID, LIST_PATH, RUNNER_ID, TAB_IDS, tripPath } from './config/navigation.js'
+import { DEFAULT_TAB, LIST_ID, LIST_PATH, RUNNER_ID, TAB_IDS, tripPath, WORLD_ID, WORLD_PATH } from './config/navigation.js'
 import { currentTrip, defaultDay } from './utils/tripDates.js'
 
 export default function TripApp() {
@@ -31,6 +34,7 @@ export default function TripApp() {
       <Routes>
         <Route index element={<TripEntry />} />
         <Route path={LIST_ID} element={<TripsScreen />} />
+        <Route path={WORLD_ID} element={<WorldScreen />} />
         {/* Un lieu partagé depuis Google Maps (Android, cf. vite.config.js). */}
         <Route path="partage" element={<ShareInView />} />
         <Route path=":tripId/*" element={<TripScreens />} />
@@ -67,20 +71,36 @@ function useTripForm() {
   return { open, trip, openFor, close }
 }
 
+/** Les écrans de premier niveau de la sidebar : la liste, la carte du monde. */
+function useTopNav() {
+  const navigate = useNavigate()
+  return useCallback((id) => navigate(id === WORLD_ID ? WORLD_PATH : LIST_PATH), [navigate])
+}
+
 function TripsScreen() {
   const form = useTripForm()
+  const onChange = useTopNav()
   const create = () => form.openFor(null)
   return (
     <>
       <Shell
         active={LIST_ID}
-        onChange={() => {}}
+        onChange={onChange}
         sidebarAction={{ label: 'Nouveau voyage', icon: Plus, onClick: create }}
       >
         <TripsView onCreate={create} onEdit={form.openFor} />
       </Shell>
       <TripFormSheet open={form.open} trip={form.trip} onClose={form.close} />
     </>
+  )
+}
+
+function WorldScreen() {
+  const onChange = useTopNav()
+  return (
+    <Shell active={WORLD_ID} onChange={onChange} heading="Carte du monde" back={{ to: LIST_PATH, label: 'Voyages' }}>
+      <WorldView />
+    </Shell>
   )
 }
 
@@ -93,6 +113,7 @@ function TripScreens() {
 
   const onChange = useCallback((id) => {
     if (id === LIST_ID) navigate(LIST_PATH)
+    else if (id === WORLD_ID) navigate(WORLD_PATH)
     else goTab(id)
   }, [navigate, goTab])
 
@@ -108,6 +129,8 @@ function TripScreens() {
         <TripSharesProvider>
           {/* Les trajets entre les lieux, calculés une fois et rangés dans les jours. */}
           <RouteFiller />
+          {/* Ses lieux résumés pour la carte du monde de « Mes voyages ». */}
+          <TripPlacesWriter />
           <TripUIProvider
             goTab={goTab}
             goBack={goBack}
@@ -145,6 +168,7 @@ function TripShell({ trip, tab, sub, onChange, children }) {
   const add = { label: 'Ajouter', icon: Plus, onClick: () => ui.newItem(date) }
   return (
     <Shell trip={trip} active={tab} onChange={onChange} action={add} sidebarAction={add}>
+      <MisplacedBanner />
       {children}
     </Shell>
   )

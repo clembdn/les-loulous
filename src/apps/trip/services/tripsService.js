@@ -3,6 +3,8 @@ import {
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
 import { dateKey, optText, readMeta, stamp, text } from '../utils/fields.js'
+import { tripDays } from '../utils/tripDates.js'
+import { MAX_TRIP_PLACES, tripPlaces } from '../utils/world.js'
 import { ALL_TRIP_PARTS, partCol, tripDoc, tripsCol } from './refs.js'
 import { publicRefsOf } from './sharesService.js'
 
@@ -14,8 +16,15 @@ function normalizeTrip(raw) {
     startDate,
     endDate: dateKey(raw.endDate) || startDate,
     notes: optText(raw.notes, 2000),
+    // Les lieux du voyage, résumés pour la carte du monde (cf. utils/world.js).
+    // `null` : jamais résumé (voyage d'avant la V2·3).
+    places: Array.isArray(raw.places) ? raw.places.filter(isPlace).slice(0, MAX_TRIP_PLACES) : null,
     ...readMeta(raw),
   }
+}
+
+function isPlace(p) {
+  return Number.isFinite(p?.lat) && Number.isFinite(p?.lng)
 }
 
 function tripFields(fields) {
@@ -52,6 +61,28 @@ export function createTrip(fields, currentUid) {
 // l'enregistrement depuis une plus ancienne.
 export function updateTrip(trip, fields, currentUid) {
   return setDoc(tripDoc(trip.id), { ...tripFields(fields), ...stamp(trip, currentUid) }, { merge: true })
+}
+
+/**
+ * Range le résumé des lieux du voyage (`tripPlaces`) : « Mes voyages » dessine
+ * la carte du monde sans relire le contenu de chaque voyage.
+ */
+export function saveTripPlaces(trip, places, currentUid) {
+  return setDoc(tripDoc(trip.id), { places, ...stamp(trip, currentUid) }, { merge: true })
+}
+
+/**
+ * Résume un voyage jamais résumé (créé avant la carte du monde, ou jamais
+ * rouvert depuis) : ses hébergements et ses jours, lus une fois.
+ */
+export async function summarizeTrip(trip, currentUid) {
+  const [stays, days] = await Promise.all([getDocs(partCol(trip.id, 'stays')), getDocs(partCol(trip.id, 'days'))])
+  const places = tripPlaces({
+    stays: stays.docs.map((d) => d.data()),
+    days: Object.fromEntries(days.docs.map((d) => [d.id, d.data()])),
+    dayKeys: tripDays(trip),
+  })
+  return saveTripPlaces(trip, places, currentUid)
 }
 
 async function readParts(tripId) {

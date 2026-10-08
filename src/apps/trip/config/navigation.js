@@ -1,4 +1,4 @@
-import { CalendarDays, Luggage, Plane, Sun, Ticket } from 'lucide-react'
+import { CalendarDays, Globe2, Luggage, Plane, Sun, Ticket } from 'lucide-react'
 
 // Trip Planner a deux niveaux, là où les autres apps n'en ont qu'un :
 //   /trip/voyages              la liste des voyages
@@ -12,6 +12,9 @@ import { CalendarDays, Luggage, Plane, Sun, Ticket } from 'lucide-react'
 
 export const LIST_ID = 'voyages'
 export const LIST_PATH = '/trip/voyages'
+// La carte du monde : les pays visités, avec ou sans l'app.
+export const WORLD_ID = 'monde'
+export const WORLD_PATH = '/trip/monde'
 
 // Le premier écran change de nom avec le voyage : avant le départ, c'est un
 // aperçu (compte à rebours, ce qu'il reste à régler) ; pendant, la journée en
@@ -41,6 +44,7 @@ export function tripTabs(status) {
 }
 
 const LIST_ITEM = { id: LIST_ID, label: 'Mes voyages', icon: Luggage }
+const WORLD_ITEM = { id: WORLD_ID, label: 'Carte du monde', icon: Globe2 }
 
 // Le libellé de groupe de la sidebar tient sur 240 px : un titre de voyage
 // trop long passerait sur trois lignes.
@@ -61,7 +65,7 @@ export function tripSidebarGroup(trip, status) {
 
 /** Sidebar desktop : la liste, puis les écrans du voyage ouvert. */
 export function sidebarSections(trip, status) {
-  const list = { type: 'items', items: [LIST_ITEM] }
+  const list = { type: 'items', items: [LIST_ITEM, WORLD_ITEM] }
   if (!trip) return [list]
   return [list, tripSidebarGroup(trip, status)]
 }

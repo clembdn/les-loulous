@@ -5,10 +5,12 @@ import { Button } from '@/shared/ui/Button.jsx'
 import { Skeleton } from '@/shared/ui/Skeleton.jsx'
 import { useTrips } from '../context/TripsContext.jsx'
 import TripCard from '../components/trips/TripCard.jsx'
+import WorldPreview from '../components/world/WorldPreview.jsx'
 import { groupTrips } from '../utils/tripDates.js'
 
-// « Mes voyages » : en cours, à venir, passés. Un voyage passé s'archive
-// tout seul — son statut se déduit des dates, rien n'est jamais écrit pour ça.
+// « Mes voyages » : la carte du monde, puis les voyages en cours, à venir,
+// passés. Un voyage passé s'archive tout seul — son statut se déduit des
+// dates, rien n'est jamais écrit pour ça.
 export default function TripsView({ onCreate, onEdit }) {
   const { trips, isLoading } = useTrips()
   const today = useToday()
@@ -34,6 +36,7 @@ export default function TripsView({ onCreate, onEdit }) {
 
       {!isLoading && trips.length > 0 && (
         <div className="space-y-6">
+          <WorldPreview />
           <Group label="En cours" trips={groups.ongoing} today={today} onEdit={onEdit} />
           <Group label="À venir" trips={groups.upcoming} today={today} onEdit={onEdit} />
           <Group label="Passés" trips={groups.past} today={today} onEdit={onEdit} />
