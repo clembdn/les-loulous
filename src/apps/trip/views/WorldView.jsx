@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, Globe2, MapPinOff, Mountain, MapPin, Plus, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Globe2, Mountain, MapPin, Plus, X } from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { useToday } from '@/shared/lib/useToday.js'
 import { cn } from '@/shared/lib/utils.js'
@@ -132,7 +132,6 @@ function CountryList({ title, countries, onPick }) {
                   {[c.cities.slice(0, 4).join(' · '), c.trips.length > 0 && plural(c.trips.length, 'voyage')].filter(Boolean).join(' — ') || 'Ajouté à la main'}
                 </span>
               </span>
-              {c.suspicious.length > 0 && <MapPinOff size={15} className="shrink-0 text-amber-600" aria-label="Lieu à vérifier" />}
               <ChevronRight size={16} className="shrink-0 text-muted" />
             </button>
           </li>
@@ -165,15 +164,6 @@ function CountryDetail({ country, rawEntries, meta, onBack }) {
         </span>
       </div>
 
-      {country.suspicious.length > 0 && (
-        <div className="mt-4 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-[14px] text-amber-950">
-          <p className="font-semibold">Un lieu à Washington, vraiment ?</p>
-          <p className="mt-0.5 text-amber-900">
-            Les liens Google Maps collés avant le 6 octobre étaient placés à Washington par erreur. Ouvrez le voyage : un bandeau propose de les corriger.
-          </p>
-        </div>
-      )}
-
       {country.cities.length > 0 && (
         <section className="mt-5">
           <h2 className="text-[13px] font-semibold text-muted">Villes et lieux</h2>
@@ -199,7 +189,6 @@ function CountryDetail({ country, rawEntries, meta, onBack }) {
                     <span className="block text-[15px] font-medium text-fg truncate">{trip.title}</span>
                     <span className="block text-[13px] text-muted tabular">{formatTripRange(trip.startDate, trip.endDate)}</span>
                   </span>
-                  {country.suspicious.includes(trip) && <MapPinOff size={15} className="shrink-0 text-amber-600" />}
                   <ChevronRight size={16} className="shrink-0 text-muted" />
                 </Link>
               </li>

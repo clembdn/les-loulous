@@ -6,7 +6,6 @@ import { placeNamesVersion, readPlaceName, requestPlaceNames, subscribePlaceName
 import { subscribeToVisited } from '../services/worldService.js'
 import { prepareWorld, worldVisits } from '../utils/world.js'
 import { tripStatus } from '../utils/tripDates.js'
-import { nearIpCenter } from '../utils/misplaced.js'
 
 // Les contours (Natural Earth 1:110m, cf. scripts/trip-world.mjs) : livrés
 // avec l'app, chargés une fois, à la première carte du monde affichée.
@@ -85,9 +84,6 @@ export function useWorldVisits() {
         ...c,
         name: countryName(c.id),
         cities: citiesOf(c),
-        // Un lieu à Washington venu d'un lien Google Maps lu par l'ancien
-        // résolveur (cf. utils/misplaced.js) : à corriger dans son voyage.
-        suspicious: c.trips.filter(({ places }) => places.some(nearIpCenter)).map(({ trip }) => trip),
       }))
       .sort((a, b) => Number(b.visited) - Number(a.visited) || a.name.localeCompare(b.name, 'fr'))
   }, [visits, namesVersion]) // eslint-disable-line react-hooks/exhaustive-deps

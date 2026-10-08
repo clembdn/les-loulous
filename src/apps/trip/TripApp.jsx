@@ -16,7 +16,6 @@ import { TripPlacesWriter } from './hooks/useTripPlaces.js'
 import Shell from './components/layout/Shell.jsx'
 import Loader from './components/Loader.jsx'
 import TripFormSheet from './components/trips/TripFormSheet.jsx'
-import MisplacedBanner from './components/trips/MisplacedBanner.jsx'
 import TripsView from './views/TripsView.jsx'
 import ShareInView from './views/ShareInView.jsx'
 import WorldView from './views/WorldView.jsx'
@@ -168,7 +167,6 @@ function TripShell({ trip, tab, sub, onChange, children }) {
   const add = { label: 'Ajouter', icon: Plus, onClick: () => ui.newItem(date) }
   return (
     <Shell trip={trip} active={tab} onChange={onChange} action={add} sidebarAction={add}>
-      <MisplacedBanner />
       {children}
     </Shell>
   )
