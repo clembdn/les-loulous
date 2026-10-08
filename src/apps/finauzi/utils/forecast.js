@@ -7,7 +7,7 @@
 
 import { getAccountBalanceAt, getAccountDelta, expandOccurrences, touchesAccount } from './ledger.js'
 import { RECURRENCES_BY_ID, normalizeRecurrence, isRecurring } from './recurrence.js'
-import { toLocalDate } from '@/shared/lib/dates.js'
+import { toLocalDate } from '../../../shared/lib/dates.js'
 import { round2 } from './money.js'
 
 const DAY_MS = 86400000
@@ -108,6 +108,27 @@ function downsample(points, maxPoints) {
   return out
 }
 
+// Le solde en FIN de chaque jour où le compte bouge : tous les mouvements
+// d'un même jour d'abord, puis le solde. Sans ça, un loyer et l'apport qui le
+// couvre le même jour faisaient passer le compte « sous le seuil » le temps
+// d'un instant — ou pas, selon l'ordre de saisie des deux transactions
+// (constaté par forecast.test.mjs). La courbe (`buildAccountSeries`) fusionne
+// déjà les mouvements d'un même jour : les alertes disent maintenant la même chose.
+function endOfDayBalances(events, accountId, rate, startBalance) {
+  const days = []
+  let balance = startBalance
+  let i = 0
+  while (i < events.length) {
+    const { timestamp, date } = events[i]
+    while (i < events.length && events[i].timestamp === timestamp) {
+      balance += getAccountDelta(events[i].tx, accountId, rate)
+      i += 1
+    }
+    days.push({ date, balance })
+  }
+  return days
+}
+
 // Charge mensuelle nette d'un compte : ce qui tombe tous les mois, ramené au
 // mois. Positif = le compte se remplit, négatif = il se vide.
 export function getMonthlyNetFlow(transactions, accountId, rate, now = new Date()) {
@@ -146,11 +167,11 @@ export function getRunway(transactions, accountId, opening, { buffer = 0, rate, 
   // plus bas : −500 A$ le 15 mars » là où le creux réel des 36 mois était
   // −33 500 A$ en décembre 2028. Les deux dates de bascule, elles, ne sont
   // posées qu'une fois — c'est la PREMIÈRE qui intéresse, pas la dernière.
-  for (const event of events) {
-    balance += getAccountDelta(event.tx, accountId, rate)
-    if (balance < lowest.balance) lowest = { balance, date: event.date }
-    if (bufferDate === null && balance < buffer) bufferDate = event.date
-    if (zeroDate === null && balance < 0) zeroDate = event.date
+  for (const day of endOfDayBalances(events, accountId, rate, currentBalance)) {
+    balance = day.balance
+    if (balance < lowest.balance) lowest = { balance, date: day.date }
+    if (bufferDate === null && balance < buffer) bufferDate = day.date
+    if (zeroDate === null && balance < 0) zeroDate = day.date
   }
 
   const monthlyNetFlow = getMonthlyNetFlow(transactions, accountId, rate, now)
@@ -183,11 +204,11 @@ export function getTopUpNeeded(transactions, accountId, opening, { buffer = 0, r
   let balance = currentBalance
   let lowest = currentBalance
   let lowestDate = today
-  for (const event of events) {
-    balance += getAccountDelta(event.tx, accountId, rate)
+  for (const day of endOfDayBalances(events, accountId, rate, currentBalance)) {
+    balance = day.balance
     if (balance < lowest) {
       lowest = balance
-      lowestDate = event.date
+      lowestDate = day.date
     }
   }
 

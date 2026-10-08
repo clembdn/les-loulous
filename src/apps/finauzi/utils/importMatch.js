@@ -20,7 +20,7 @@
 
 import { expandOccurrences, getAccountDelta } from './ledger.js'
 import { guessCategory, prettifyLabel } from './importRules.js'
-import { getDefaultSplit } from '../config/accounts.js'
+import { getAccountCurrency, getDefaultSplit } from '../config/accounts.js'
 
 export const IMPORT_STATUS = {
   IMPORTED: 'imported',
@@ -33,11 +33,15 @@ export const IMPORT_STATUS = {
 const DAY_TOLERANCE = 4
 const DAY_MS = 86400000
 
-// Sur un virement inter-devises, le montant crédité dépend du taux du jour et
-// des frais : exiger le centime près ne rapprocherait jamais rien. Partout
+// Quand le montant attendu passe par une conversion — un virement, ou une
+// dépense saisie dans une autre devise que son compte (un hôtel à 412 € payé
+// avec la carte du joint en A$, envoyé depuis Trip Planner) — la banque a
+// débité à SON taux, frais compris : exiger le centime près ne rapprocherait
+// jamais rien, et le même paiement serait importé une seconde fois. Partout
 // ailleurs, un relevé est exact.
-function amountTolerance(tx, amount) {
-  if (tx.kind === 'transfer') return Math.max(0.5, Math.abs(amount) * 0.03)
+function amountTolerance(tx, amount, accountId) {
+  const converted = tx.kind === 'transfer' || (tx.currency && tx.currency !== getAccountCurrency(accountId))
+  if (converted) return Math.max(0.5, Math.abs(amount) * 0.03)
   return 0.02
 }
 
@@ -108,7 +112,7 @@ export function reconcileStatement(lines, { transactions, accountId, rate }) {
       const dayGap = daysBetween(candidate.date, lineDate)
       if (dayGap > DAY_TOLERANCE) continue
       const amountGap = Math.abs(Math.abs(candidate.delta) - Math.abs(line.amount))
-      if (amountGap > amountTolerance(candidate.tx, line.amount)) continue
+      if (amountGap > amountTolerance(candidate.tx, line.amount, accountId)) continue
       // Le meilleur candidat est le plus proche en montant, puis en date.
       if (!best || amountGap < best.amountGap || (amountGap === best.amountGap && dayGap < best.dayGap)) {
         best = { candidate, amountGap, dayGap }

@@ -35,7 +35,7 @@
 //     motif. De l'argent qui passe de l'un à l'autre change forcément qui est
 //     en avance — il n'y a rien à cocher.
 
-import { CLEMENT_UID, LISE_UID, AUTHORIZED_UIDS, getOtherUid } from '@/shared/config/people.js'
+import { CLEMENT_UID, LISE_UID, AUTHORIZED_UIDS, getOtherUid } from '../../../shared/config/people.js'
 import { getAccount, getAccountCurrency, JOINT_ACCOUNT_ID, SPLIT_COMMON } from '../config/accounts.js'
 import { toEUR, round2, txRate } from './money.js'
 import { getOccurrences } from './recurrence.js'
@@ -43,6 +43,16 @@ import { normalizeKind } from './ledger.js'
 
 function emptyByPerson(value = 0) {
   return { [CLEMENT_UID]: value, [LISE_UID]: value }
+}
+
+// Ce que l'un gagne, l'autre le perd : le côté de Lise est l'opposé EXACT de
+// celui de Clément, arrondi une seule fois. Arrondir les deux sommes chacune
+// de son côté les faisait diverger d'un ou deux centimes sur un long
+// historique — et le détail affiché du côté de Lise ne retombait plus sur le
+// solde (constaté par le test d'invariant de settlement.test.mjs).
+function opposed(clementValue) {
+  const c = round2(clementValue)
+  return { [CLEMENT_UID]: c, [LISE_UID]: 0 - c }
 }
 
 function monthKey(date) {
@@ -125,7 +135,7 @@ export function getContributions(transactions, rate, now = new Date()) {
     amountToEqualize: round2(Math.abs(gap)),
     isBalanced: Math.abs(gap) < 1,
     // Ce que l'écart d'apports pèse dans le solde global : la moitié.
-    credit: { [CLEMENT_UID]: round2(gap / 2), [LISE_UID]: round2(-gap / 2) },
+    credit: opposed(gap / 2),
   }
 }
 
@@ -206,7 +216,7 @@ export function getAdvances(transactions, rate, now = new Date()) {
   reasons.sort((a, b) => b.date - a.date)
 
   return {
-    net: { [CLEMENT_UID]: round2(net[CLEMENT_UID]), [LISE_UID]: round2(net[LISE_UID]) },
+    net: opposed(net[CLEMENT_UID]),
     reasons,
   }
 }
@@ -247,7 +257,7 @@ export function getSettlements(transactions, rate, now = new Date()) {
   entries.sort((a, b) => b.date - a.date)
 
   return {
-    net: { [CLEMENT_UID]: round2(net[CLEMENT_UID]), [LISE_UID]: round2(net[LISE_UID]) },
+    net: opposed(net[CLEMENT_UID]),
     entries,
   }
 }
@@ -263,12 +273,9 @@ export function getBalanceSummary(transactions, rate, now = new Date()) {
   const advances = getAdvances(transactions, rate, now)
   const settlements = getSettlements(transactions, rate, now)
 
-  const net = {}
-  for (const uid of AUTHORIZED_UIDS) {
-    net[uid] = round2(
-      contributions.credit[uid] + advances.net[uid] + settlements.net[uid],
-    )
-  }
+  const net = opposed(
+    contributions.credit[CLEMENT_UID] + advances.net[CLEMENT_UID] + settlements.net[CLEMENT_UID],
+  )
 
   const clementNet = net[CLEMENT_UID]
   const amount = Math.abs(clementNet)

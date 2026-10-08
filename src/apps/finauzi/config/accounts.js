@@ -1,5 +1,5 @@
 import { Users, User } from 'lucide-react'
-import { CLEMENT_UID, LISE_UID, AUTHORIZED_UIDS, getPersonLabel } from '@/shared/config/people.js'
+import { CLEMENT_UID, LISE_UID, AUTHORIZED_UIDS, getPersonLabel } from '../../../shared/config/people.js'
 
 // FinAuzi — les trois comptes réels du foyer.
 //
