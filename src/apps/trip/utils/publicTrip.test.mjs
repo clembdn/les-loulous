@@ -14,7 +14,7 @@ function sample(overrides = {}) {
   return {
     trip: { id: 't1', title: 'Portugal', startDate: '2027-05-12', endDate: '2027-05-14', notes: null, ...META },
     stays: [
-      { id: 'b', name: 'Pins', price: 80, accessCode: '1234', ...META },
+      { id: 'b', name: 'Pins', price: 80, accessCode: '1234', expense: { txId: 'tx1', amount: 80 }, ...META },
       { id: 'a', name: 'Alfama', price: null, ...META },
     ],
     transports: [],
@@ -37,6 +37,7 @@ test('la vitrine garde tout ce que l’invité voit, sans qui a écrit quoi', ()
   assert.equal(content.stays[1].accessCode, '1234', 'l’invité voit tout, codes compris')
   assert.equal(content.stays[0].createdBy, undefined)
   assert.equal(content.stays[0].updatedAt, undefined)
+  assert.equal(content.stays[1].expense, undefined, 'les comptes du couple ne partent pas')
   assert.deepEqual(Object.keys(content.days), ['2027-05-12', '2027-05-14'], 'ni jour vide, ni jour hors des dates')
   assert.deepEqual(content.days['2027-05-12'].legs, [], 'les trajets calculés partent aussi')
   assert.equal(content.days['2027-05-12'].createdBy, undefined)

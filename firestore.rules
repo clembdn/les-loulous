@@ -629,7 +629,18 @@ service cloud.firestore {
         && optStr(data, 'phone', 40)
         && optStr(data, 'mailUrl', 2000)
         && optStr(data, 'notes', 2000)
-        && hasValidMoney(data);
+        && hasValidMoney(data)
+        && hasValidExpenseLink(data);
+    }
+
+    // La dépense FinAuzi d'une réservation (« Envoyer à FinAuzi ») : un lien,
+    // facultatif.
+    function hasValidExpenseLink(data) {
+      return !('expense' in data) || data.expense == null
+        || (data.expense is map
+            && data.expense.txId is string
+            && data.expense.txId.size() > 0
+            && data.expense.txId.size() <= 64);
     }
 
     function hasValidTransportShape(data) {
@@ -642,7 +653,8 @@ service cloud.firestore {
         && optStr(data, 'confirmation', 120)
         && optStr(data, 'mailUrl', 2000)
         && optStr(data, 'notes', 2000)
-        && hasValidMoney(data);
+        && hasValidMoney(data)
+        && hasValidExpenseLink(data);
     }
 
     // `legs` : les trajets calculés (OpenRouteService), tracés encodés compris.

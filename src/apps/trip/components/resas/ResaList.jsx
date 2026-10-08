@@ -1,4 +1,4 @@
-import { ArrowRight, Paperclip } from 'lucide-react'
+import { ArrowRight, Paperclip, Wallet } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { formatDateFr, formatDayFr } from '@/shared/lib/dates.js'
 import { getStayKind, getTransportMode } from '../../config/reservations.js'
@@ -77,6 +77,7 @@ function ResaPass({ kind, item, active, files, color, onClick }) {
           </span>
           <span className="min-w-0 flex-1 truncate font-semibold text-fg/80">{label}</span>
           {item.price != null && <span className="shrink-0 tabular">{formatPrice(item.price, item.currency)}</span>}
+          {item.expense && <Wallet size={13} className="shrink-0 text-accent" aria-label="Dans FinAuzi" />}
         </span>
         <span className="mt-1.5 block text-[17px] font-semibold text-fg truncate">{title}</span>
 

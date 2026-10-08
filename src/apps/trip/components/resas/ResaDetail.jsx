@@ -12,6 +12,7 @@ import AttachmentThumb from '../attachments/AttachmentThumb.jsx'
 import CopyValue, { copyValue } from '../CopyValue.jsx'
 import TripMap, { placeItems, stayPlaceItems } from '../map/TripMap.jsx'
 import { resaTitle } from './resaDisplay.jsx'
+import ExpenseCard from './ExpenseCard.jsx'
 
 const MAP_PADDING = { top: 30, bottom: 30, left: 30, right: 30 }
 
@@ -143,6 +144,8 @@ export default function ResaDetail({ kind, item, attachments = [], colorIndex, o
             <p className="mt-1 text-[15px] text-fg whitespace-pre-line">{item.notes}</p>
           </section>
         )}
+
+        <ExpenseCard kind={kind} item={item} />
 
         {!isStay && item.mode !== 'car' && onReverse && (
           <Button variant="secondary" className="w-full" onClick={onReverse}>

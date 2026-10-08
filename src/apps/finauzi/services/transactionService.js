@@ -1,6 +1,6 @@
 import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, writeBatch,
-  query, orderBy,
+  query, orderBy, where, getDocs,
 } from 'firebase/firestore'
 import { db } from '@/shared/lib/firebase.js'
 import { AUTHORIZED_UIDS, CLEMENT_UID } from '@/shared/config/people.js'
@@ -282,4 +282,36 @@ export async function createContribution({ fromUid, amount, currency, amountRece
     category: 'transfer',
     rate,
   }, currentUid)
+}
+
+// ─── Pour les autres apps (Trip Planner : « Envoyer à FinAuzi ») ──────────
+// Trip écrit la dépense ET le lien vers elle dans UN lot : il lui faut
+// l'identifiant d'avance (un `addDoc` ne le rend qu'au retour du réseau,
+// jamais hors-ligne) et le document tel que FinAuzi l'écrirait.
+
+/** Une référence de transaction neuve, identifiant tiré d'avance. */
+export function newTransactionRef() {
+  return doc(txCollection())
+}
+
+/** Le document d'une nouvelle transaction, normalisé comme une saisie de FinAuzi. */
+export function newTransactionDocument(input, currentUid) {
+  const now = new Date().toISOString()
+  return { ...buildPayload(input), createdAt: now, createdBy: currentUid, updatedAt: now, updatedBy: currentUid }
+}
+
+/** Une transaction, suivie ; `null` si elle n'existe pas (ou plus). */
+export function subscribeToTransaction(id, callback, onError) {
+  return onSnapshot(txDoc(id), (snap) => {
+    callback(snap.exists() ? normalize({ id: snap.id, ...snap.data() }) : null)
+  }, (err) => {
+    console.error('[FinAuzi] transaction error:', err)
+    onError?.(err)
+  })
+}
+
+/** Les transactions datées entre `from` et `to` (AAAA-MM-JJ, inclus). Lecture attendue : hors-ligne, le cache. */
+export async function findTransactionsBetween(from, to) {
+  const snap = await getDocs(query(txCollection(), where('date', '>=', from), where('date', '<=', to)))
+  return snap.docs.map((d) => normalize({ id: d.id, ...d.data() }))
 }

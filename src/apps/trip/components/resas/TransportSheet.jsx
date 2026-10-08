@@ -15,6 +15,7 @@ import OcrPrefill from './OcrPrefill.jsx'
 import { transportFields } from '../../utils/resaParse.js'
 import { getTransportMode, TRANSPORT_MODES } from '../../config/reservations.js'
 import { deleteReservation, saveReservation } from '../../services/reservationsService.js'
+import { deleteSentExpense } from '../../services/expenseService.js'
 import { resaTitle } from './resaDisplay.jsx'
 import { formatPrice, plural } from '../../utils/format.js'
 
@@ -170,7 +171,13 @@ export default function TransportSheet({ open, transport, defaults, tripId, trip
   function remove() {
     deleteReservation('transport', tripId, transport.id, attachments.map((a) => a.id))
       .catch(() => toast.error('Suppression impossible'))
-    toast.success('Trajet supprimé')
+    // Sa dépense FinAuzi reste (on a pu la payer quand même : annulation
+    // payante) ; on propose de la supprimer, si c'est Trip qui l'avait créée.
+    const expense = transport.expense
+    toast.success('Trajet supprimé', expense?.created ? {
+      description: `Sa dépense (${formatPrice(expense.amount, expense.currency)}) reste dans FinAuzi.`,
+      action: { label: 'La supprimer', onClick: () => deleteSentExpense(expense.txId).catch(() => toast.error('Suppression impossible')) },
+    } : undefined)
     onClose()
     onDeleted?.()
   }

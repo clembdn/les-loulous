@@ -4,6 +4,7 @@ import { STAY_KIND_IDS, TRANSPORT_MODE_IDS } from '../config/reservations.js'
 import {
   currencyCode, enumValue, money, optText, place, readMeta, stamp, timePoint,
 } from '../utils/fields.js'
+import { normalizeExpenseLink } from '../utils/expense.js'
 import { queueAttachmentChanges } from './attachmentsService.js'
 import { listen } from './listen.js'
 import { partCol, partDoc } from './refs.js'
@@ -54,9 +55,13 @@ function transportFields(raw) {
 
 const FIELDS = { stay: stayFields, transport: transportFields }
 
-/** Une réservation telle qu'on la lit (`kind` : 'stay' | 'transport'). La vitrine invité la relit aussi. */
+/**
+ * Une réservation telle qu'on la lit (`kind` : 'stay' | 'transport'). La vitrine invité la relit aussi.
+ * `expense` : sa dépense dans FinAuzi (cf. utils/expense.js) — hors de FIELDS, qui sert aussi à
+ * écrire : enregistrer la fiche ne touche pas au lien (écriture par fusion).
+ */
 export function readReservation(kind, id, raw) {
-  return { id, ...FIELDS[kind](raw), ...readMeta(raw) }
+  return { id, ...FIELDS[kind](raw), expense: normalizeExpenseLink(raw?.expense), ...readMeta(raw) }
 }
 
 // `onSync(fromServer)` : cf. listen.js (indicateur hors-ligne).

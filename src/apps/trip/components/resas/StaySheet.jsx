@@ -16,6 +16,7 @@ import OcrPrefill from './OcrPrefill.jsx'
 import { stayFields } from '../../utils/resaParse.js'
 import { STAY_KINDS } from '../../config/reservations.js'
 import { deleteReservation, saveReservation } from '../../services/reservationsService.js'
+import { deleteSentExpense } from '../../services/expenseService.js'
 import { daysBetween } from '../../utils/tripDates.js'
 import { formatPrice, plural } from '../../utils/format.js'
 
@@ -129,7 +130,13 @@ export default function StaySheet({ open, stay, defaults, tripId, tripStart = nu
   function remove() {
     deleteReservation('stay', tripId, stay.id, attachments.map((a) => a.id))
       .catch(() => toast.error('Suppression impossible'))
-    toast.success('Hébergement supprimé')
+    // Sa dépense FinAuzi reste (on a pu la payer quand même : annulation
+    // payante) ; on propose de la supprimer, si c'est Trip qui l'avait créée.
+    const expense = stay.expense
+    toast.success('Hébergement supprimé', expense?.created ? {
+      description: `Sa dépense (${formatPrice(expense.amount, expense.currency)}) reste dans FinAuzi.`,
+      action: { label: 'La supprimer', onClick: () => deleteSentExpense(expense.txId).catch(() => toast.error('Suppression impossible')) },
+    } : undefined)
     onClose()
     onDeleted?.()
   }

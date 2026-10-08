@@ -11,12 +11,13 @@ export const PUBLIC_MAX_CHARS = 900_000
 // chacune) partent par paquets d'au plus 8 Mo.
 export const ATTACHMENT_BATCH_CHARS = 8_000_000
 
-const META = new Set(['createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
-
 // Qui a créé ou modifié quoi ne regarde pas l'invité — et un enregistrement
-// sans changement ne doit pas changer l'empreinte.
+// sans changement ne doit pas changer l'empreinte. Les comptes du couple
+// (`expense`, la dépense FinAuzi d'une réservation) non plus.
+const PRIVATE = new Set(['createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'expense'])
+
 function withoutMeta(item) {
-  return Object.fromEntries(Object.entries(item).filter(([key]) => !META.has(key)))
+  return Object.fromEntries(Object.entries(item).filter(([key]) => !PRIVATE.has(key)))
 }
 
 const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
