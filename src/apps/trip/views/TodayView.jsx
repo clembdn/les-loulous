@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ChevronRight, Flag, Share2 } from 'lucide-react'
+import { CalendarPlus, ChevronRight, Flag, Share2 } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { formatDayFr, shiftDateKey } from '@/shared/lib/dates.js'
 import { useMediaQuery } from '@/shared/lib/useMediaQuery.js'
@@ -68,6 +68,14 @@ function Heading({ title, subtitle }) {
           <p className="mt-0.5 text-[15px] text-muted first-letter:uppercase">{subtitle}</p>
           <OfflineBadge tripId={trip.id} className="mt-1.5" />
         </div>
+        <button
+          type="button"
+          onClick={ui.exportCalendar}
+          aria-label="Ajouter à l’agenda"
+          className="mt-1 h-10 w-10 shrink-0 rounded-full bg-surface text-accent inline-flex items-center justify-center shadow-sm"
+        >
+          <CalendarPlus size={17} />
+        </button>
         {ui.shareTrip && (
           <button
             type="button"
@@ -78,7 +86,7 @@ function Heading({ title, subtitle }) {
           </button>
         )}
       </div>
-      <TripHeader trip={trip} onEdit={ui.editTrip} onShare={ui.shareTrip} className="hidden lg:flex" />
+      <TripHeader trip={trip} onEdit={ui.editTrip} onShare={ui.shareTrip} onExport={ui.exportCalendar} className="hidden lg:flex" />
     </>
   )
 }

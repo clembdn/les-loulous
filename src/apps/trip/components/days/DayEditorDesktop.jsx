@@ -267,6 +267,7 @@ export default function DayEditorDesktop({ date }) {
         trip={trip}
         onEdit={ui.editTrip}
         onShare={ui.shareTrip}
+        onExport={ui.exportCalendar}
         className="lg:col-span-2"
         actions={(
           <>

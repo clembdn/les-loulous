@@ -12,6 +12,7 @@ import ShareSheet from '../components/trips/ShareSheet.jsx'
 import StopView from '../components/days/StopView.jsx'
 import IdeaSheet from '../components/ideas/IdeaSheet.jsx'
 import OptimizeSheet from '../components/days/OptimizeSheet.jsx'
+import CalendarSheet from '../components/trips/CalendarSheet.jsx'
 import PlaceIdeaSheet from '../components/ideas/PlaceIdeaSheet.jsx'
 import { hasCoords } from '../utils/geo.js'
 import { resaKey } from '../utils/reservations.js'
@@ -55,6 +56,7 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
   const [ideaForm, setIdeaForm] = useState(CLOSED)
   const [ideaPlace, setIdeaPlace] = useState({ open: false, idea: null })
   const [optimize, setOptimize] = useState({ open: false, date: null, nonce: 0 })
+  const [calendarOpen, setCalendarOpen] = useState(false)
   const [viewer, setViewer] = useState({ list: [], index: null })
 
   // Un point du voyage pour orienter la recherche de lieux : « Gare » doit
@@ -84,6 +86,8 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
       openDay: (date, options) => goTab('jours', date, options),
       openTab: (tab) => goTab(tab),
       openIdeas: () => goTab(IDEAS_ID),
+      // Le voyage dans un agenda (.ics) — invités compris : rien n'y est modifié.
+      exportCalendar: () => setCalendarOpen(true),
       // La journée en plein écran sur la carte, éventuellement à partir d'un
       // élément de la frise (la prochaine étape, depuis l'écran Aujourd'hui).
       openRunner: (date, startKey = null) => {
@@ -212,6 +216,7 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
           />
         </>
       )}
+      <CalendarSheet open={calendarOpen} onClose={() => setCalendarOpen(false)} />
       <AttachmentViewer
         attachments={viewer.list}
         index={viewer.index}

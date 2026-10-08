@@ -1,4 +1,4 @@
-import { Pencil, Share2 } from 'lucide-react'
+import { CalendarPlus, Pencil, Share2 } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { useToday } from '@/shared/lib/useToday.js'
 import { tripProgress } from '../../utils/tripDates.js'
@@ -8,8 +8,9 @@ import OfflineBadge from '../OfflineBadge.jsx'
 // L'en-tête d'un voyage sur ordinateur : où on en est, son titre, ses dates —
 // et de quoi le modifier, et s'il est disponible hors-ligne. Sur téléphone,
 // le titre est déjà dans la barre du haut. `actions` reçoit les boutons
-// propres à l'écran. Sans `onEdit` ni `onShare` (vue invité), pas de bouton.
-export default function TripHeader({ trip, onEdit, onShare, actions, className }) {
+// propres à l'écran. Sans `onEdit` ni `onShare` (vue invité), pas de bouton ;
+// `onExport` (le voyage dans un agenda) vaut aussi pour un invité.
+export default function TripHeader({ trip, onEdit, onShare, onExport, actions, className }) {
   const today = useToday()
   const progress = tripProgress(trip, today)
   return (
@@ -26,6 +27,17 @@ export default function TripHeader({ trip, onEdit, onShare, actions, className }
       </div>
       <div className="shrink-0 flex items-center gap-2 mt-1">
         {actions}
+        {onExport && (
+          <button
+            type="button"
+            onClick={onExport}
+            className="h-10 w-10 inline-flex items-center justify-center rounded-xl text-muted hover:text-fg hover:bg-surface transition"
+            aria-label="Ajouter à l’agenda"
+            title="Ajouter à l’agenda"
+          >
+            <CalendarPlus size={17} />
+          </button>
+        )}
         {onShare && (
           <button
             type="button"
