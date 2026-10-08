@@ -17,3 +17,21 @@ export async function fetchRun(run) {
   }
   return run.legs.map((leg, i) => [leg.key, body.legs?.[i] || { status: 'none' }])
 }
+
+// Les matrices déjà reçues, le temps de la session : rouvrir l'optimisation
+// d'une journée qui n'a pas changé ne rappelle pas le réseau.
+const matrices = new Map()
+
+/**
+ * Temps et distances entre tous les lieux `places` (`{ lat, lng }`), à pied
+ * et en voiture (cf. api/matrix.js) : `{ walk, car }`, ou une erreur.
+ */
+export async function fetchMatrix(places) {
+  const points = places.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(';')
+  if (matrices.has(points)) return matrices.get(points)
+  const res = await fetch(`/api/matrix?${new URLSearchParams({ points })}`)
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok || !body.walk || !body.car) throw new Error(body.error || `http-${res.status}`)
+  matrices.set(points, body)
+  return body
+}

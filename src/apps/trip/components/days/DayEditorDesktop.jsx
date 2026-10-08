@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MapPin, Play, Plus, X } from 'lucide-react'
+import { MapPin, Play, Plus, Route, X } from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import { formatDayFr } from '@/shared/lib/dates.js'
 import { useToday } from '@/shared/lib/useToday.js'
@@ -15,6 +15,7 @@ import { useIdeaActions, useNearbyIdeas } from '../../hooks/useIdeas.js'
 import { getCategory } from '../../config/categories.js'
 import { MAX_STOPS_PER_DAY, saveDay, saveDays } from '../../services/daysService.js'
 import { insertionPointByTime, moveStop } from '../../utils/timeline.js'
+import { canOptimize } from '../../utils/optimize.js'
 import { plural } from '../../utils/format.js'
 import TripHeader from '../trips/TripHeader.jsx'
 import TripMap from '../map/TripMap.jsx'
@@ -269,6 +270,17 @@ export default function DayEditorDesktop({ date }) {
         className="lg:col-span-2"
         actions={(
           <>
+            {ui.optimizeDay && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => ui.optimizeDay(date)}
+                disabled={!canOptimize(stopsByDate[date] || [])}
+                title="Le trajet le plus court entre les étapes"
+              >
+                <Route size={14} /> Optimiser
+              </Button>
+            )}
             <Button variant="secondary" size="sm" onClick={() => ui.openRunner(date)} disabled={!view.items.length}>
               <Play size={14} /> Déroulé
             </Button>

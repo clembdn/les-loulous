@@ -112,3 +112,60 @@ export async function computeRun(mode, pointsText, { key = process.env.ORS_API_K
     return { status: 502, body: { error: 'upstream-unavailable' } }
   }
 }
+
+// Matrices de temps de trajet (optimiser l'ordre d'une journée, V3·2) :
+// offre Standard, 500 par jour, 40 par minute, 3 500 cases par requête.
+const MATRIX_URL = 'https://api.openrouteservice.org/v2/matrix'
+// À pied pour les courtes distances, en voiture au-delà (cf. `autoMode`) :
+// les deux matrices, en deux requêtes.
+const MATRIX_PROFILES = { walk: 'foot-walking', car: 'driving-car' }
+
+// Secondes et mètres entiers ; `null` (pas de route : une île, un point en
+// mer) reste `null`, le client l'estime à vol d'oiseau.
+const roundGrid = (grid, n) => Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => {
+  const v = grid?.[i]?.[j]
+  return Number.isFinite(v) ? Math.round(v) : null
+}))
+
+async function matrix(profile, points, { key, fetchImpl }) {
+  const res = await fetchImpl(`${MATRIX_URL}/${profile}`, {
+    method: 'POST',
+    headers: {
+      authorization: key,
+      'content-type': 'application/json',
+      accept: 'application/json',
+    },
+    body: JSON.stringify({
+      locations: points.map((p) => [p.lng, p.lat]),
+      metrics: ['distance', 'duration'],
+    }),
+  })
+  if (res.status === 401 || res.status === 403) throw new OrsError(503, 'bad-key')
+  if (res.status === 429) throw new OrsError(429, 'rate-limited')
+  if (!res.ok) throw new OrsError(502, 'upstream-error')
+  const json = await res.json()
+  return {
+    durations: roundGrid(json?.durations, points.length),
+    distances: roundGrid(json?.distances, points.length),
+  }
+}
+
+/**
+ * Temps et distances de chaque lieu à chaque autre, à pied et en voiture.
+ * Rend `{ status, body }` : `body.walk` et `body.car` valent
+ * `{ durations: [[s]], distances: [[m]] }` (ligne = départ, colonne = arrivée ;
+ * en voiture, A → B n'est pas B → A).
+ */
+export async function computeMatrix(pointsText, { key = process.env.ORS_API_KEY, fetchImpl = fetch } = {}) {
+  const points = parsePoints(pointsText)
+  if (!points) return { status: 400, body: { error: 'bad-points' } }
+  if (!key) return { status: 503, body: { error: 'no-key' } }
+  const ctx = { key, fetchImpl }
+  try {
+    const [walk, car] = await Promise.all(Object.values(MATRIX_PROFILES).map((profile) => matrix(profile, points, ctx)))
+    return { status: 200, body: { walk, car } }
+  } catch (err) {
+    if (err instanceof OrsError) return { status: err.status, body: { error: err.code } }
+    return { status: 502, body: { error: 'upstream-unavailable' } }
+  }
+}

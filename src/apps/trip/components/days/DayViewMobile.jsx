@@ -11,6 +11,7 @@ import { useLegMode } from '../../hooks/useLegMode.js'
 import { useNearbyIdeas } from '../../hooks/useIdeas.js'
 import { MAX_STOPS_PER_DAY, saveDay } from '../../services/daysService.js'
 import { plural } from '../../utils/format.js'
+import { canOptimize } from '../../utils/optimize.js'
 import TripMap from '../map/TripMap.jsx'
 import TonightCard from '../resas/TonightCard.jsx'
 import { DayWeather } from '../weather/WeatherBadge.jsx'
@@ -128,15 +129,22 @@ export default function DayViewMobile({ date }) {
           <div className="shrink-0 flex flex-col items-end gap-1">
             <DayWeather date={date} className="mt-1 text-sm" />
             {stops.length > 1 && !ui.readOnly && (
-              <button
-                type="button"
-                onClick={toggleReorder}
-                className={reordering
-                  ? 'h-9 px-3.5 rounded-full bg-accent text-accent-fg text-[14px] font-semibold'
-                  : 'h-9 px-1 text-[14px] font-medium text-accent'}
-              >
-                {reordering ? 'Terminé' : 'Réorganiser'}
-              </button>
+              <span className="flex items-center gap-3">
+                {!reordering && canOptimize(stops) && (
+                  <button type="button" onClick={() => ui.optimizeDay(date)} className="h-9 px-1 text-[14px] font-medium text-accent">
+                    Optimiser
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={toggleReorder}
+                  className={reordering
+                    ? 'h-9 px-3.5 rounded-full bg-accent text-accent-fg text-[14px] font-semibold'
+                    : 'h-9 px-1 text-[14px] font-medium text-accent'}
+                >
+                  {reordering ? 'Terminé' : 'Réorganiser'}
+                </button>
+              </span>
             )}
           </div>
         </header>

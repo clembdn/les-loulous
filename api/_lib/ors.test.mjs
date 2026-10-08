@@ -6,7 +6,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { computeRun, parsePoints } from './ors.js'
+import { computeMatrix, computeRun, parsePoints } from './ors.js'
 import { decodePolyline, encodePolyline } from '../../src/apps/trip/utils/polyline.js'
 
 const LINE = [[38.6916, -9.216], [38.694, -9.21], [38.69751, -9.20321], [38.70, -9.18], [38.7166, -9.131]]
@@ -81,4 +81,41 @@ test('clé refusée, quota, panne : une erreur, pas un « sans route »', async 
 test('mode inconnu', async () => {
   const r = await computeRun('rocket', '38.69,-9.21;38.71,-9.13', { key: 'K', fetchImpl: async () => { throw new Error('non') } })
   assert.equal(r.status, 400)
+})
+
+// Réponses RÉELLES de /v2/matrix (capturées le 2026-10-08) : Belém, Pastéis
+// de Belém, Graça, Ponta Delgada (Açores, sans route depuis Lisbonne).
+const REAL_WALK = {
+  durations: [[0.0, 1120.51, 6371.0, null], [1120.51, 0.0, 5463.85, null], [6371.0, 5463.85, 0.0, null], [null, null, null, 0.0]],
+  distances: [[0.0, 1556.31, 8848.75, null], [1556.31, 0.0, 7588.81, null], [8848.75, 7588.81, 0.0, null], [null, null, null, 0.0]],
+}
+const REAL_CAR = {
+  durations: [[0.0, 472.96, 1206.64, null], [320.58, 0.0, 1086.94, null], [1264.18, 1136.92, 0.0, null], [null, null, null, 0.0]],
+  distances: [[0.0, 3891.4, 9480.41, null], [2684.71, 0.0, 8249.43, null], [9398.09, 8242.59, 0.0, null], [null, null, null, 0.0]],
+}
+const FOUR = '38.6916,-9.216;38.6975,-9.2032;38.7166,-9.131;37.7412,-25.6756'
+
+test('matrice : à pied et en voiture, arrondie, les « sans route » restent nuls', async () => {
+  const net = fakeFetch([{ status: 200, json: REAL_WALK }, { status: 200, json: REAL_CAR }])
+  const r = await computeMatrix(FOUR, { key: 'K', fetchImpl: net.impl })
+  assert.equal(r.status, 200)
+  assert.equal(net.calls.length, 2)
+  assert.match(net.calls[0].url, /\/v2\/matrix\/foot-walking$/)
+  assert.match(net.calls[1].url, /\/v2\/matrix\/driving-car$/)
+  assert.deepEqual(net.calls[0].body.locations[0], [-9.216, 38.6916], 'ORS attend [lng, lat]')
+  assert.deepEqual(net.calls[0].body.metrics, ['distance', 'duration'])
+  assert.deepEqual(r.body.walk.durations[0], [0, 1121, 6371, null])
+  assert.deepEqual(r.body.car.distances[1], [2685, 0, 8249, null])
+  assert.equal(r.body.car.durations[3][3], 0)
+})
+
+test('matrice : clé refusée → 503, quota → 429, sans clé → pas d’appel', async () => {
+  const bad = fakeFetch([{ status: 403, json: {} }, { status: 403, json: {} }])
+  assert.equal((await computeMatrix(FOUR, { key: 'K', fetchImpl: bad.impl })).status, 503)
+  const busy = fakeFetch([{ status: 429, json: {} }, { status: 429, json: {} }])
+  assert.equal((await computeMatrix(FOUR, { key: 'K', fetchImpl: busy.impl })).status, 429)
+  const none = fakeFetch([])
+  assert.equal((await computeMatrix(FOUR, { key: '', fetchImpl: none.impl })).status, 503)
+  assert.equal(none.calls.length, 0)
+  assert.equal((await computeMatrix('38.69,-9.21', { key: 'K', fetchImpl: none.impl })).status, 400)
 })

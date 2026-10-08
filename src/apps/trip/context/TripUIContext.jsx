@@ -11,6 +11,7 @@ import NewItemSheet from '../components/resas/NewItemSheet.jsx'
 import ShareSheet from '../components/trips/ShareSheet.jsx'
 import StopView from '../components/days/StopView.jsx'
 import IdeaSheet from '../components/ideas/IdeaSheet.jsx'
+import OptimizeSheet from '../components/days/OptimizeSheet.jsx'
 import PlaceIdeaSheet from '../components/ideas/PlaceIdeaSheet.jsx'
 import { hasCoords } from '../utils/geo.js'
 import { resaKey } from '../utils/reservations.js'
@@ -53,6 +54,7 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
   const [stopView, setStopView] = useState({ open: false, date: null, stop: null })
   const [ideaForm, setIdeaForm] = useState(CLOSED)
   const [ideaPlace, setIdeaPlace] = useState({ open: false, idea: null })
+  const [optimize, setOptimize] = useState({ open: false, date: null, nonce: 0 })
   const [viewer, setViewer] = useState({ list: [], index: null })
 
   // Un point du voyage pour orienter la recherche de lieux : « Gare » doit
@@ -94,7 +96,7 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
     if (readOnly) {
       return {
         ...nav, editStay: null, editTransport: null, editStop: null, editDay: null, editTrip: null, newItem: null, shareTrip: null,
-        editIdea: null, placeIdea: null,
+        editIdea: null, placeIdea: null, optimizeDay: null,
       }
     }
     return {
@@ -110,6 +112,8 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
       // Un lieu à caser : sa fiche, ou directement le choix du jour.
       editIdea: (idea) => setIdeaForm((f) => ({ open: true, item: idea, defaults: null, nonce: f.nonce + 1 })),
       placeIdea: (idea) => setIdeaPlace({ open: true, idea }),
+      // Le trajet le plus court entre les étapes d'une journée.
+      optimizeDay: (date) => setOptimize((o) => ({ open: true, date, nonce: o.nonce + 1 })),
     }
   }, [goTab, goBack, basePath, near, navigate, readOnly])
 
@@ -194,6 +198,12 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
               setIdeaForm((f) => ({ ...f, open: false }))
               setIdeaPlace({ open: true, idea })
             }}
+          />
+          <OptimizeSheet
+            key={`optimize-${optimize.nonce}`}
+            open={optimize.open}
+            date={optimize.date}
+            onClose={() => setOptimize((o) => ({ ...o, open: false }))}
           />
           <PlaceIdeaSheet
             open={ideaPlace.open}

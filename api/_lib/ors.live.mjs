@@ -7,7 +7,7 @@
 // Volontairement hors du motif *.test.mjs : il lui faut Internet.
 
 import { readFileSync } from 'node:fs'
-import { computeRun } from './ors.js'
+import { computeMatrix, computeRun } from './ors.js'
 import { decodePolyline } from '../../src/apps/trip/utils/polyline.js'
 import { haversineM } from '../../src/apps/trip/utils/geo.js'
 
@@ -67,5 +67,24 @@ for (const [label, mode, points, expected] of CASES) {
   problems.forEach((p) => console.log('   ', p))
   // 40 requêtes par minute au plus.
   await new Promise((r) => setTimeout(r, 2000))
+}
+// Matrice (optimiser l'ordre d'une journée) : Belém, Pastéis, Graça, Açores.
+{
+  const { status, body } = await computeMatrix(`${BELEM};${PASTEIS};${GRACA};${ACORES}`, { key })
+  const problems = []
+  if (status !== 200) problems.push(`HTTP ${status} ${JSON.stringify(body)}`)
+  for (const mode of ['walk', 'car']) {
+    const m = body[mode]
+    if (!m) { problems.push(`${mode} absent`); continue }
+    const walkBelemGraca = m.distances?.[0]?.[2]
+    if (!(walkBelemGraca > 6000 && walkBelemGraca < 12000)) problems.push(`${mode} Belém → Graça : ${walkBelemGraca} m`)
+    if (m.durations?.[0]?.[3] !== null) problems.push(`${mode} Belém → Açores devrait être nul : ${m.durations?.[0]?.[3]}`)
+    if (m.durations?.[1]?.[1] !== 0) problems.push(`${mode} diagonale non nulle`)
+  }
+  if (body.walk && body.car && !(body.walk.durations[0][2] > body.car.durations[0][2])) problems.push('à pied plus rapide qu’en voiture ?')
+  if (problems.length) failed++
+  console.log(problems.length ? '✗' : '✓', 'matrice à pied / en voiture',
+    body.walk ? `Belém → Graça ${Math.round(body.walk.durations[0][2] / 60)} min à pied, ${Math.round(body.car.durations[0][2] / 60)} min en voiture` : '')
+  problems.forEach((p) => console.log('   ', p))
 }
 process.exit(failed ? 1 : 0)
