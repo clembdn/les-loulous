@@ -103,6 +103,7 @@ export async function readTripContents(tripId) {
     stops,
     attachments: parts.attachments.size,
     ideas: parts.ideas.size,
+    packing: parts.packing.size,
     shares: parts.shares.size,
   }
 }

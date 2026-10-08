@@ -111,6 +111,7 @@ export default function TripFormSheet({ open, trip = null, onClose, onDeleted })
           contents.transports > 0 && plural(contents.transports, 'trajet réservé', 'trajets réservés'),
           contents.attachments > 0 && plural(contents.attachments, 'capture'),
           contents.ideas > 0 && plural(contents.ideas, 'lieu à caser', 'lieux à caser'),
+          contents.packing > 0 && plural(contents.packing, 'affaire de la valise', 'affaires de la valise'),
           contents.shares > 0 && plural(contents.shares, 'lien invité', 'liens invités'),
         ].filter(Boolean)
       : []

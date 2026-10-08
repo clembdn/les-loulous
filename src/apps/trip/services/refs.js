@@ -5,13 +5,14 @@ import { db } from '@/shared/lib/firebase.js'
 //   trips/{tripId}
 //     stays/{id} · transports/{id} · days/{AAAA-MM-JJ} · attachments/{id}
 //     ideas/{id}       (lieux « à caser », cf. ideasService)
+//     packing/{id}     (la valise, cf. packingService)
 //     shares/{jeton}   (liens invités, cf. sharesService)
 const TRIPS_PATH = 'couples/main/trips'
 
 // Les sous-collections d'un voyage : ce qu'il faut écouter pour l'emporter
 // hors-ligne, et ce qu'il faut balayer pour le supprimer (Firestore ne
 // supprime jamais les sous-collections avec leur parent).
-export const TRIP_PARTS = ['stays', 'transports', 'days', 'attachments', 'ideas']
+export const TRIP_PARTS = ['stays', 'transports', 'days', 'attachments', 'ideas', 'packing']
 export const ALL_TRIP_PARTS = [...TRIP_PARTS, 'shares']
 
 export function tripsCol() {

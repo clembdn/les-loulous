@@ -23,8 +23,9 @@ import TodayView from './views/TodayView.jsx'
 import DaysView from './views/DaysView.jsx'
 import ResasView from './views/ResasView.jsx'
 import IdeasView from './views/IdeasView.jsx'
+import PackingView from './views/PackingView.jsx'
 import DayRunner from './components/days/DayRunner.jsx'
-import { DEFAULT_TAB, IDEAS_ID, LIST_ID, LIST_PATH, RUNNER_ID, TAB_IDS, tripPath, WORLD_ID, WORLD_PATH } from './config/navigation.js'
+import { DEFAULT_TAB, IDEAS_ID, LIST_ID, PACKING_ID, LIST_PATH, RUNNER_ID, TAB_IDS, tripPath, WORLD_ID, WORLD_PATH } from './config/navigation.js'
 import { currentTrip, defaultDay } from './utils/tripDates.js'
 
 export default function TripApp() {
@@ -148,6 +149,7 @@ function TripScreens() {
                 {tab === 'jours' && <DaysView selectedDate={sub} />}
                 {tab === 'resas' && <ResasView selectedKey={sub} />}
                 {tab === IDEAS_ID && <IdeasView />}
+                {tab === PACKING_ID && <PackingView />}
               </TripShell>
             )}
           </TripUIProvider>

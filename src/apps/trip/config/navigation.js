@@ -1,4 +1,4 @@
-import { Bookmark, CalendarDays, Globe2, Luggage, Plane, Sun, Ticket } from 'lucide-react'
+import { Backpack, Bookmark, CalendarDays, Globe2, Luggage, Plane, Sun, Ticket } from 'lucide-react'
 
 // Trip Planner a deux niveaux, là où les autres apps n'en ont qu'un :
 //   /trip/voyages              la liste des voyages
@@ -24,12 +24,15 @@ const OVERVIEW_LABEL = { upcoming: 'Aperçu', ongoing: 'Aujourd’hui', past: 'B
 // Les lieux repérés, pas encore placés dans un jour. Pas pour les invités :
 // c'est le brouillon du couple, la vitrine ne le publie pas.
 export const IDEAS_ID = 'a-caser'
+// La valise, cochée à deux. Pas pour les invités non plus.
+export const PACKING_ID = 'valise'
 
 export const TRIP_TABS = [
   { id: 'aujourdhui', label: 'Aujourd’hui', icon: Sun },
   { id: 'jours',      label: 'Jours',       icon: CalendarDays },
   { id: IDEAS_ID,     label: 'À caser',     icon: Bookmark, ownersOnly: true },
   { id: 'resas',      label: 'Résas',       sidebarLabel: 'Réservations', icon: Ticket },
+  { id: PACKING_ID,   label: 'Valise',      icon: Backpack, ownersOnly: true },
 ]
 
 // Plein écran, hors des onglets : la journée déroulée étape par étape sur la carte.
@@ -37,7 +40,7 @@ export const RUNNER_ID = 'deroule'
 
 // Segments reconnus sous /trip/<id> — tout le reste retombe sur DEFAULT_TAB.
 export const TAB_IDS = [...TRIP_TABS.map((t) => t.id), RUNNER_ID]
-export const GUEST_TAB_IDS = TAB_IDS.filter((id) => id !== IDEAS_ID)
+export const GUEST_TAB_IDS = TAB_IDS.filter((id) => !TRIP_TABS.find((t) => t.id === id)?.ownersOnly)
 export const DEFAULT_TAB = 'jours'
 
 export function tripPath(tripId, tab = DEFAULT_TAB, sub = null) {

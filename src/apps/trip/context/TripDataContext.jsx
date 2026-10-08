@@ -3,6 +3,7 @@ import { subscribeToStays, subscribeToTransports } from '../services/reservation
 import { subscribeToDays } from '../services/daysService.js'
 import { subscribeToAttachments } from '../services/attachmentsService.js'
 import { subscribeToIdeas } from '../services/ideasService.js'
+import { subscribeToPacking } from '../services/packingService.js'
 import { markSynced } from '../services/offlineService.js'
 import { tripDays } from '../utils/tripDates.js'
 import { buildDayTimeline } from '../utils/timeline.js'
@@ -10,11 +11,11 @@ import { nightsOf, stayOrder, staySegments } from '../utils/nights.js'
 
 /**
  * Tout le contenu d'UN voyage : hébergements, trajets, jours, captures, lieux
- * à caser — et
+ * à caser, valise — et
  * ce qui s'en déduit (frises, nuits, couleurs), calculé une fois ici plutôt
  * que dans chaque écran.
  *
- * Cinq écoutes, ouvertes tant que le voyage est affiché. C'est aussi ce qui
+ * Six écoutes, ouvertes tant que le voyage est affiché. C'est aussi ce qui
  * l'emporte hors-ligne : une fois lus, ces documents restent dans le cache
  * IndexedDB de Firestore, captures comprises, et se relisent sans réseau.
  * Quand toutes sont confirmées par le serveur, l'heure de synchro du
@@ -28,10 +29,11 @@ const TripDataContext = createContext(null)
 // l'éditeur des vitrines invité s'en sert — les écrans n'ont pas à se redessiner.
 const TripConfirmedContext = createContext(false)
 
-const PARTS = ['stays', 'transports', 'days', 'attachments', 'ideas']
+const PARTS = ['stays', 'transports', 'days', 'attachments', 'ideas', 'packing']
 const NOT_READY = Object.fromEntries(PARTS.map((p) => [p, false]))
 const NO_STOPS = []
 const NO_IDEAS = []
+const NO_PACKING = []
 
 export function TripDataProvider({ trip, children }) {
   const tripId = trip.id
@@ -40,6 +42,7 @@ export function TripDataProvider({ trip, children }) {
   const [days, setDays] = useState({})
   const [attachments, setAttachments] = useState([])
   const [ideas, setIdeas] = useState([])
+  const [packing, setPacking] = useState([])
   const [ready, setReady] = useState(NOT_READY)
   // Toutes les parties confirmées par le serveur, sans écriture en attente :
   // ce qu'on affiche est ce qui est en base (cf. TripSharesContext).
@@ -53,6 +56,7 @@ export function TripDataProvider({ trip, children }) {
     setDays({})
     setAttachments([])
     setIdeas([])
+    setPacking([])
     setReady(NOT_READY)
     setConfirmed(false)
 
@@ -75,6 +79,7 @@ export function TripDataProvider({ trip, children }) {
       subscribeToDays(tripId, (x) => { setDays(x); done('days') }, () => done('days'), sync('days')),
       subscribeToAttachments(tripId, (x) => { setAttachments(x); done('attachments') }, () => done('attachments'), sync('attachments')),
       subscribeToIdeas(tripId, (x) => { setIdeas(x); done('ideas') }, () => done('ideas'), sync('ideas')),
+      subscribeToPacking(tripId, (x) => { setPacking(x); done('packing') }, () => done('packing'), sync('packing')),
     ]
     return () => unsubs.forEach((unsub) => unsub())
   }, [tripId])
@@ -88,6 +93,7 @@ export function TripDataProvider({ trip, children }) {
         days={days}
         attachments={attachments}
         ideas={ideas}
+        packing={packing}
         isLoading={!PARTS.every((p) => ready[p])}
       >
         {children}
@@ -99,9 +105,9 @@ export function TripDataProvider({ trip, children }) {
 /**
  * Ce qui se déduit du contenu d'un voyage, d'où qu'il vienne : les écoutes
  * du couple (ci-dessus) ou la vitrine d'un lien invité (guest/GuestApp.jsx),
- * qui ne publie pas les lieux à caser.
+ * qui ne publie ni les lieux à caser, ni la valise.
  */
-export function TripDataValue({ trip, stays, transports, days, attachments, ideas = NO_IDEAS, isLoading, children }) {
+export function TripDataValue({ trip, stays, transports, days, attachments, ideas = NO_IDEAS, packing = NO_PACKING, isLoading, children }) {
   const tripId = trip.id
 
   // Le voyage est renormalisé à chaque écho de la liste : on ne dépend que
@@ -142,6 +148,7 @@ export function TripDataValue({ trip, stays, transports, days, attachments, idea
     attachments,
     attachmentsByParent,
     ideas,
+    packing,
     dayKeys,
     timelines,
     nights,
@@ -149,7 +156,7 @@ export function TripDataValue({ trip, stays, transports, days, attachments, idea
     colorIndexByStay,
     isLoading,
   }), [
-    trip, tripId, stays, transports, days, stopsByDate, attachments, attachmentsByParent, ideas,
+    trip, tripId, stays, transports, days, stopsByDate, attachments, attachmentsByParent, ideas, packing,
     dayKeys, timelines, nights, segments, colorIndexByStay, isLoading,
   ])
 

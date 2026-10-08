@@ -783,6 +783,35 @@ service cloud.firestore {
       allow delete: if isAuthorizedUser();
     }
 
+    // La valise : une affaire par document, commune (`owner` nul) ou à l'un
+    // des deux, cochée par l'un ou l'autre.
+    function hasValidTripPackingShape(data) {
+      return data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && data.category in ['papers', 'electronics', 'toiletries', 'health', 'clothes', 'misc']
+        && (!('owner' in data) || data.owner == null || isValidPersonUid(data.owner))
+        && data.checked is bool
+        && (!('checkedBy' in data) || data.checkedBy == null || isValidPersonUid(data.checkedBy))
+        && optStr(data, 'checkedAt', 40);
+    }
+
+    match /couples/main/trips/{tripId}/packing/{itemId} {
+      allow read: if isAuthorizedUser();
+
+      // `createdBy` peut être l'autre : « Annuler » une suppression remet
+      // l'affaire avec son auteur d'origine.
+      allow create: if isAuthorizedUser()
+        && hasValidTripPackingShape(request.resource.data)
+        && hasValidMetadata(request.resource.data);
+
+      allow update: if isAuthorizedUser()
+        && hasValidTripPackingShape(request.resource.data)
+        && request.resource.data.updatedBy == request.auth.uid;
+
+      allow delete: if isAuthorizedUser();
+    }
+
     // Les pays et lieux visités hors de l'app, saisis à la main pour la carte
     // du monde : un seul document partagé, une liste bornée.
     match /couples/main/tripWorld/{docId} {
