@@ -30,6 +30,10 @@ const NO_IDEAS = []
  *
  *  · `interactive` : on peut la déplacer et zoomer. Sinon elle est figée et
  *    `onPress` (« voir le déroulé ») la rend entièrement cliquable ;
+ *  · `cooperative` (avec `interactive`) : sur téléphone, deux doigts pour
+ *    déplacer la carte, un doigt fait défiler la page (carte posée dans une
+ *    page qui défile, cf. récap) ;
+ *  · `dots` : les étapes en points sans numéro (tout un voyage, cf. récap) ;
  *  · `ideas` : des lieux à caser, en repères creux hors du parcours (clé
  *    `idea:<id>` pour `activeKey`, `onSelect` et `onHover`). Ils ne
  *    comptent dans le cadrage que si la journée n'a aucun lieu ;
@@ -49,9 +53,9 @@ const NO_IDEAS = []
  *    `fitKey` change.
  */
 export default function TripMap({
-  items, home = null, legs = null, colorIndexByStay = {}, pastKeys = null, ideas = null,
+  items, home = null, legs = null, colorIndexByStay = {}, pastKeys = null, ideas = null, dots = false,
   activeKey = null, focusKey = null, dimOthers = false,
-  interactive = false, onPress = null, pressLabel = 'Ouvrir la carte',
+  interactive = false, cooperative = false, onPress = null, pressLabel = 'Ouvrir la carte',
   onSelect = null, onHover = null, onPlaceClick = null, preview = null, fitKey = null,
   padding = DEFAULT_PADDING, fallbackCenter = null, controls = false, focusZoom = FOCUS_ZOOM,
   attribution = 'top-right', className,
@@ -81,7 +85,7 @@ export default function TripMap({
     onPlaceClick,
   }
   const latest = useRef({})
-  latest.current = { route, ideaPoints, padding, activeKey, focusKey, dimOthers, pastKeys, colorIndexByStay, fallbackCenter, focusZoom, fitKey }
+  latest.current = { route, ideaPoints, dots, padding, activeKey, focusKey, dimOthers, pastKeys, colorIndexByStay, fallbackCenter, focusZoom, fitKey }
   // Vue réglée à la main (glisser, molette), et pour quel jour.
   const userView = useRef(null)
 
@@ -106,6 +110,14 @@ export default function TripMap({
         touchPitch: false,
         maxZoom: 17.5,
         fadeDuration: 120,
+        ...(interactive && cooperative ? {
+          cooperativeGestures: true,
+          locale: {
+            'CooperativeGesturesHandler.MobileHelpText': 'Deux doigts pour déplacer la carte',
+            'CooperativeGesturesHandler.WindowsHelpText': 'Ctrl + molette pour zoomer',
+            'CooperativeGesturesHandler.MacHelpText': '⌘ + molette pour zoomer',
+          },
+        } : {}),
         ...(bounds
           ? { bounds, fitBoundsOptions: { padding: pad, maxZoom: SINGLE_ZOOM } }
           : { center: center ? [center.lng, center.lat] : [0, 20], zoom: center ? 11 : 1 }),
@@ -143,17 +155,17 @@ export default function TripMap({
       mapRef.current = null
       setReady(false)
     }
-  }, [showMap, interactive, controls, attribution])
+  }, [showMap, interactive, cooperative, controls, attribution])
 
   // Les lieux du jour : repères et tracé, puis cadrage sur toute la journée.
   useEffect(() => {
     const map = mapRef.current
     if (!ready || !map) return
     const maplibregl = map.__lib
-    const { colorIndexByStay: colors, pastKeys: past, activeKey: active } = latest.current
+    const { colorIndexByStay: colors, pastKeys: past, activeKey: active, dots: asDots } = latest.current
     markersRef.current.forEach((m) => m.marker.remove())
     markersRef.current = groups.map((group) => {
-      const desc = describeGroup(group, { colorIndexByStay: colors, past })
+      const desc = describeGroup(group, { colorIndexByStay: colors, past, dots: asDots })
       const el = createMarkerElement(desc, {
         onSelect: (keys) => handlers.current.onSelect(keys),
         onHover: (keys) => handlers.current.onHover(keys),
@@ -199,7 +211,7 @@ export default function TripMap({
     const map = mapRef.current
     if (!ready || !map) return
     for (const { el, group } of markersRef.current) {
-      const desc = describeGroup(group, { colorIndexByStay, past: pastKeys })
+      const desc = describeGroup(group, { colorIndexByStay, past: pastKeys, dots })
       updateMarkerElement(el, desc, !!activeKey && desc.keys.includes(activeKey))
     }
     for (const { el, desc } of ideaMarkersRef.current) updateIdeaElement(el, desc, activeKey === desc.keys[0])

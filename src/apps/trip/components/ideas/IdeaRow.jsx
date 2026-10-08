@@ -30,7 +30,12 @@ export default function IdeaRow({
   return (
     <li
       draggable={draggable || undefined}
-      onDragStart={draggable ? (e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart?.() } : undefined}
+      onDragStart={draggable ? (e) => {
+        e.dataTransfer.effectAllowed = 'move'
+        // Firefox ne démarre pas un glisser sans donnée (comme la frise, cf. DayTimeline).
+        e.dataTransfer.setData('text/plain', idea.id)
+        onDragStart?.()
+      } : undefined}
       onDragEnd={draggable ? onDragEnd : undefined}
       onMouseEnter={onHover ? () => onHover(`idea:${idea.id}`) : undefined}
       onMouseLeave={onHover ? () => onHover(null) : undefined}

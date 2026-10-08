@@ -25,6 +25,8 @@
 
 .trip-marker--circle { border-radius: 999px; }
 .trip-marker--square { border-radius: 9px; width: 28px; padding: 0; }
+/* Une étape sur la carte de tout un voyage : un point, sans numéro. */
+.trip-marker--dot { border-radius: 999px; min-width: 14px; width: 14px; height: 14px; padding: 0; border-width: 2px; }
 .trip-marker svg { width: 15px; height: 15px; flex-shrink: 0; }
 
 .trip-marker.is-active {

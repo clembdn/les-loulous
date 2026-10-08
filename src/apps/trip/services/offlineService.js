@@ -1,6 +1,6 @@
 import { getDocsFromServer } from 'firebase/firestore'
 import { tripsToPrewarm } from '../utils/tripDates.js'
-import { partCol, TRIP_PARTS } from './refs.js'
+import { partCol, SIDE_PARTS, TRIP_PARTS } from './refs.js'
 import { prefetchTripTiles } from './mapTiles.js'
 
 // Ce qui est emporté hors-ligne, et depuis quand.
@@ -83,7 +83,12 @@ export function prewarmTrips(trips, today) {
     const last = getSyncedAt(trip.id)
     if (warming.has(trip.id) || (last && Date.now() - last < PREWARM_EVERY_MS)) continue
     warming.add(trip.id)
-    Promise.all(TRIP_PARTS.map((part) => getDocsFromServer(partCol(trip.id, part))))
+    // Une partie annexe illisible ne gâche pas le préchargement du reste.
+    const read = (part) => {
+      const docs = getDocsFromServer(partCol(trip.id, part))
+      return SIDE_PARTS.includes(part) ? docs.catch(() => ({ docs: [] })) : docs
+    }
+    Promise.all(TRIP_PARTS.map(read))
       .then((snaps) => {
         markSynced(trip.id)
         // Les cartes aussi : les tuiles autour de chaque lieu, sans attendre.

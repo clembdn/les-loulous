@@ -67,17 +67,23 @@ export function packingProgress(items) {
 
 /**
  * Ce qu'on reprend d'une autre liste (la liste type, un voyage passé) : sans
- * ce qui y est déjà (même nom, au pluriel près, pour la même personne),
- * sans doublon, décoché. Rend `[{ name, category, owner }]`.
+ * ce qui y est déjà, sans doublon, décoché. « Déjà là » : même nom (au
+ * pluriel près) pour la même personne ; pour une affaire COMMUNE, le même
+ * nom pour qui que ce soit — si Clément a son passeport, la liste type
+ * n'ajoute pas un « Passeport » commun en plus.
+ * Rend `[{ name, category, owner }]`.
  */
 export function itemsToAdd(source, existing) {
   const seen = new Set(existing.map((it) => `${it.owner || ''}|${packingKey(it.name)}`))
+  const anyone = new Set(existing.map((it) => packingKey(it.name)))
   const out = []
   for (const it of source) {
     const owner = it.owner || null
-    const key = `${owner || ''}|${packingKey(it.name)}`
-    if (!packingKey(it.name) || seen.has(key)) continue
+    const name = packingKey(it.name)
+    const key = `${owner || ''}|${name}`
+    if (!name || seen.has(key) || (!owner && anyone.has(name))) continue
     seen.add(key)
+    anyone.add(name)
     out.push({ name: it.name, category: it.category || guessPackingCategory(it.name), owner })
   }
   return out

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
+import { useToday } from '@/shared/lib/useToday.js'
 import { formatDayFr } from '@/shared/lib/dates.js'
 import { confirm as haptic } from '@/shared/lib/haptics.js'
 import { toast } from '@/shared/ui/sonner.jsx'
@@ -14,10 +15,12 @@ import { insertStopByTime } from '../utils/timeline.js'
 
 /**
  * Les lieux à caser du voyage, du dernier repéré au premier, et où chacun
- * irait le mieux : `suggestions[id]` = `{ date, distanceM }` ou absent.
- * `pointsByDate` : les lieux connus de chaque jour (cf. utils/ideas.js).
+ * irait le mieux : `suggestions[id]` = `{ date, distanceM }` ou absent — un
+ * jour d'aujourd'hui ou plus tard (`from`). `pointsByDate` : les lieux connus
+ * de chaque jour (cf. utils/ideas.js).
  */
 export function useIdeas() {
+  const today = useToday()
   const { ideas, dayKeys, timelines, nights, stopsByDate } = useTripData()
   const pointsByDate = useMemo(() => dayPoints(dayKeys, timelines, nights), [dayKeys, timelines, nights])
   const sorted = useMemo(() => sortIdeas(ideas), [ideas])
@@ -25,12 +28,12 @@ export function useIdeas() {
     const stopCounts = Object.fromEntries(Object.entries(stopsByDate).map(([d, s]) => [d, s.length]))
     const out = {}
     for (const idea of ideas) {
-      const best = closestDay(idea, pointsByDate, { stopCounts })
+      const best = closestDay(idea, pointsByDate, { stopCounts, from: today })
       if (best) out[idea.id] = best
     }
     return out
-  }, [ideas, pointsByDate, stopsByDate])
-  return { ideas: sorted, pointsByDate, suggestions }
+  }, [ideas, pointsByDate, stopsByDate, today])
+  return { ideas: sorted, pointsByDate, suggestions, from: today }
 }
 
 /** Les lieux à caser près d'une journée, du plus proche au plus lointain : `[{ idea, distanceM }]`. */

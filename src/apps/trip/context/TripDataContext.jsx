@@ -5,6 +5,7 @@ import { subscribeToAttachments } from '../services/attachmentsService.js'
 import { subscribeToIdeas } from '../services/ideasService.js'
 import { subscribeToPacking } from '../services/packingService.js'
 import { markSynced } from '../services/offlineService.js'
+import { SIDE_PARTS } from '../services/refs.js'
 import { tripDays } from '../utils/tripDates.js'
 import { buildDayTimeline } from '../utils/timeline.js'
 import { nightsOf, stayOrder, staySegments } from '../utils/nights.js'
@@ -73,13 +74,20 @@ export function TripDataProvider({ trip, children }) {
       if (fromServer && all) markSynced(tripId)
     }
 
+    // Une écoute en erreur ne rendra plus rien : la partie est « chargée »
+    // (vide). Une partie annexe en erreur ne bloque pas la synchro du reste.
+    const fail = (part) => () => {
+      done(part)
+      if (SIDE_PARTS.includes(part)) sync(part)(true)
+    }
+
     const unsubs = [
-      subscribeToStays(tripId, (x) => { setStays(x); done('stays') }, () => done('stays'), sync('stays')),
-      subscribeToTransports(tripId, (x) => { setTransports(x); done('transports') }, () => done('transports'), sync('transports')),
-      subscribeToDays(tripId, (x) => { setDays(x); done('days') }, () => done('days'), sync('days')),
-      subscribeToAttachments(tripId, (x) => { setAttachments(x); done('attachments') }, () => done('attachments'), sync('attachments')),
-      subscribeToIdeas(tripId, (x) => { setIdeas(x); done('ideas') }, () => done('ideas'), sync('ideas')),
-      subscribeToPacking(tripId, (x) => { setPacking(x); done('packing') }, () => done('packing'), sync('packing')),
+      subscribeToStays(tripId, (x) => { setStays(x); done('stays') }, fail('stays'), sync('stays')),
+      subscribeToTransports(tripId, (x) => { setTransports(x); done('transports') }, fail('transports'), sync('transports')),
+      subscribeToDays(tripId, (x) => { setDays(x); done('days') }, fail('days'), sync('days')),
+      subscribeToAttachments(tripId, (x) => { setAttachments(x); done('attachments') }, fail('attachments'), sync('attachments')),
+      subscribeToIdeas(tripId, (x) => { setIdeas(x); done('ideas') }, fail('ideas'), sync('ideas')),
+      subscribeToPacking(tripId, (x) => { setPacking(x); done('packing') }, fail('packing'), sync('packing')),
     ]
     return () => unsubs.forEach((unsub) => unsub())
   }, [tripId])

@@ -59,6 +59,13 @@ test('à égalité (même hôtel), le jour le moins chargé, puis le plus tôt',
   assert.equal(closestDay(BELEM, nearer, { stopCounts: counts }).date, '2027-05-12')
 })
 
+test('pendant le voyage, jamais un jour passé', () => {
+  const points = { '2027-05-12': [HOTEL_LX], '2027-05-13': [{ lat: 38.75, lng: -9.2 }] }
+  assert.equal(closestDay(BELEM, points).date, '2027-05-12')
+  assert.equal(closestDay(BELEM, points, { from: '2027-05-13' }).date, '2027-05-13')
+  assert.equal(closestDay(BELEM, points, { from: '2027-05-14' }), null)
+})
+
 test('ce qui est près d’une journée, du plus proche au plus lointain', () => {
   const ideas = [
     { id: 'pena', name: 'Pena', ...PENA },

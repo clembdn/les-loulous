@@ -10,7 +10,8 @@ import { tripStatus } from '../utils/tripDates.js'
 // Les contours (Natural Earth 1:110m, cf. scripts/trip-world.mjs) : livrés
 // avec l'app, chargés une fois, à la première carte du monde affichée.
 let worldPromise = null
-function loadWorld() {
+/** Les contours du monde, chargés une fois (la carte du monde, le récap d'un voyage). */
+export function loadWorld() {
   worldPromise ||= fetch('/trip-map/world.json')
     .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
     .then((json) => prepareWorld(json.countries))

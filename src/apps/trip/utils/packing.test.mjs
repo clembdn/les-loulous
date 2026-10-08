@@ -64,6 +64,14 @@ test('reprendre une liste : sans ce qui est déjà là pour la même personne, s
   ])
 })
 
+test('la liste type n’ajoute pas une affaire commune que quelqu’un a déjà', () => {
+  const existing = [{ name: 'Passeport', owner: 'u1' }]
+  const added = itemsToAdd([{ name: 'Passeport', category: 'papers' }, { name: 'Gourde', category: 'misc' }], existing)
+  assert.deepEqual(added.map((i) => i.name), ['Gourde'])
+  // Mais l'affaire d'une personne s'ajoute même si une commune existe.
+  assert.deepEqual(itemsToAdd([{ name: 'Gourde', owner: 'u2' }], [{ name: 'Gourde', owner: null }]).map((i) => i.owner), ['u2'])
+})
+
 test('les suggestions : la liste type, moins ce qui est déjà là, au début des mots', () => {
   const s = packingSuggestions('ch', [{ name: 'Chaussettes' }])
   assert.deepEqual(s.map((t) => t.name), ['Chargeur de téléphone', 'Chaussures de marche'])

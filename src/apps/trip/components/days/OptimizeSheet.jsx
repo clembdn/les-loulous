@@ -19,6 +19,8 @@ import { buildDayTimeline } from '../../utils/timeline.js'
 import TripMap from '../map/TripMap.jsx'
 
 const MAP_PADDING = { top: 28, bottom: 28, left: 28, right: 28 }
+// Une liste vide STABLE : un `[]` neuf à chaque rendu relancerait le calcul.
+const NO_STOPS = []
 
 const placesKey = (places) => places.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join(';')
 
@@ -35,7 +37,7 @@ export default function OptimizeSheet({ open, date, onClose }) {
   const { currentUid } = useAuth()
   const online = useOnline()
   const { tripId, days, dayKeys, stays, transports, stopsByDate, colorIndexByStay } = useTripData()
-  const stops = stopsByDate[date] || []
+  const stops = stopsByDate[date] || NO_STOPS
 
   const model = useMemo(() => {
     if (!date) return null

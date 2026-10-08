@@ -24,6 +24,9 @@ import { DayWeather } from '../components/weather/WeatherBadge.jsx'
 import NextUpCard from '../components/today/NextUpCard.jsx'
 import DayPreviewCard from '../components/today/DayPreviewCard.jsx'
 import TripChecks from '../components/today/TripChecks.jsx'
+import { RecapCountries, RecapDays, RecapDistances, RecapMap } from '../components/today/TripRecap.jsx'
+import { useTripRecap } from '../hooks/useTripRecap.js'
+import { formatKm } from '../utils/recap.js'
 import { CARD, Eyebrow, HERO_CARD, SectionTitle, Stat } from '../components/today/parts.jsx'
 
 /**
@@ -252,11 +255,15 @@ function BeforeTrip({ progress }) {
   )
 }
 
+/**
+ * Après le voyage, le bilan : ce qu'on a parcouru (par la route, en train, en
+ * avion), où l'on est passé (pays, villes, jour par jour), et tout le trajet
+ * sur une carte (cf. utils/recap.js).
+ */
 function TripDone() {
   const ui = useTripUI()
-  const { trip, dayKeys, nights, transports, isLoading } = useTripData()
-  const stops = useStopCount()
-  const booked = nights.filter((n) => n.stays.length > 0).length
+  const { trip, dayKeys, isLoading } = useTripData()
+  const { recap, route, countries } = useTripRecap()
 
   return (
     <Page>
@@ -279,9 +286,9 @@ function TripDone() {
           <dl className="mt-6 lg:mt-0 grid grid-cols-2 gap-3">
             {[
               { value: dayKeys.length, singular: 'jour' },
-              { value: booked, singular: 'nuit réservée', pluralForm: 'nuits réservées' },
-              { value: stops, singular: 'étape' },
-              { value: transports.length, singular: 'trajet' },
+              { value: formatKm(recap.distance.totalM), singular: 'parcourus', pluralForm: 'parcourus' },
+              { value: recap.stops, singular: 'étape' },
+              { value: countries?.length, singular: 'pays', pluralForm: 'pays' },
             ].map((s) => (
               <Stat
                 key={s.singular}
@@ -294,6 +301,16 @@ function TripDone() {
           </dl>
         </div>
       </section>
+      <div className={COLUMNS}>
+        <div className={STACK}>
+          <RecapMap route={route} />
+          <RecapDays perDay={recap.perDay} />
+        </div>
+        <aside className={cn(STACK, 'lg:sticky lg:top-6')}>
+          <RecapDistances distance={recap.distance} />
+          <RecapCountries countries={countries} />
+        </aside>
+      </div>
     </Page>
   )
 }

@@ -18,15 +18,17 @@ import { rankDays } from '../../utils/ideas.js'
 export default function PlaceIdeaSheet({ open, idea, onClose }) {
   const today = useToday()
   const { dayKeys, days, stopsByDate } = useTripData()
-  const { pointsByDate } = useIdeas()
+  const { pointsByDate, from } = useIdeas()
   const actions = useIdeaActions()
 
   const ranked = useMemo(() => {
     if (!idea) return { byDate: {}, best: null }
     const stopCounts = Object.fromEntries(Object.entries(stopsByDate).map(([d, s]) => [d, s.length]))
     const list = rankDays(idea, pointsByDate, { stopCounts })
-    return { byDate: Object.fromEntries(list.map((d) => [d.date, d.distanceM])), best: list[0]?.date || null }
-  }, [idea, pointsByDate, stopsByDate])
+    // Les distances de tous les jours ; la suggestion, parmi ceux à venir seulement.
+    const best = list.find((d) => d.date >= from)?.date || null
+    return { byDate: Object.fromEntries(list.map((d) => [d.date, d.distanceM])), best }
+  }, [idea, pointsByDate, stopsByDate, from])
 
   function pick(date) {
     if (actions.place(idea, date)) onClose()

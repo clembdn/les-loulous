@@ -52,11 +52,13 @@ export function distanceToPoints(place, points) {
  * Les jours où caser un lieu, du plus proche au plus lointain (≤ `maxM`).
  * À distance égale (souvent : le même hôtel plusieurs nuits), le jour le
  * moins chargé d'abord, puis le plus tôt. `stopCounts` : `{ [date]: n }`.
- * Rend `[{ date, distanceM }]`.
+ * `from` (AAAA-MM-JJ) : pas de jour avant celui-là — pendant le voyage, on ne
+ * suggère pas un jour passé. Rend `[{ date, distanceM }]`.
  */
-export function rankDays(place, pointsByDate, { stopCounts = {}, maxM = NEAR_DAY_M } = {}) {
+export function rankDays(place, pointsByDate, { stopCounts = {}, maxM = NEAR_DAY_M, from = null } = {}) {
   if (!hasCoords(place)) return []
   return Object.entries(pointsByDate)
+    .filter(([date]) => !from || date >= from)
     .map(([date, points]) => ({ date, distanceM: distanceToPoints(place, points) }))
     .filter((d) => d.distanceM <= maxM)
     .sort((a, b) => {

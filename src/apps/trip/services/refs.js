@@ -13,6 +13,11 @@ const TRIPS_PATH = 'couples/main/trips'
 // hors-ligne, et ce qu'il faut balayer pour le supprimer (Firestore ne
 // supprime jamais les sous-collections avec leur parent).
 export const TRIP_PARTS = ['stays', 'transports', 'days', 'attachments', 'ideas', 'packing']
+// Les parties annexes : le brouillon du couple (lieux à caser, valise), jamais
+// publié aux invités. Si leur lecture échoue (règles pas encore publiées,
+// par exemple), le reste du voyage ne doit pas en pâtir : ni sa synchro, ni
+// sa vitrine, ni son préchargement.
+export const SIDE_PARTS = ['ideas', 'packing']
 export const ALL_TRIP_PARTS = [...TRIP_PARTS, 'shares']
 
 export function tripsCol() {

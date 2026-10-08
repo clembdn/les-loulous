@@ -35,8 +35,12 @@ export function groupPoints(points) {
   return groups
 }
 
-/** Forme, couleur et contenu du repère d'un groupe de points. */
-export function describeGroup(group, { colorIndexByStay = {}, past = null } = {}) {
+/**
+ * Forme, couleur et contenu du repère d'un groupe de points. `dots` : les
+ * étapes en simples points, sans numéro (tout un voyage sur une carte, où
+ * les numéros de chaque journée se répéteraient).
+ */
+export function describeGroup(group, { colorIndexByStay = {}, past = null, dots = false } = {}) {
   const stops = group.points.filter((p) => p.kind === 'stop')
   const lead = stops[0] || group.points[0]
   const keys = group.points.map((p) => p.itemKey).filter(Boolean)
@@ -44,6 +48,7 @@ export function describeGroup(group, { colorIndexByStay = {}, past = null } = {}
   const name = group.points.map((p) => p.name).filter(Boolean).join(' · ')
 
   if (lead.kind === 'stop') {
+    if (dots) return { keys, name, shape: 'dot', color: isPast ? PAST_COLOR : getCategory(lead.category).color, label: '' }
     const label = stops.map((s) => s.number).join('·')
     return { keys, name, shape: 'circle', color: isPast ? PAST_COLOR : getCategory(lead.category).color, label }
   }
@@ -86,5 +91,5 @@ export function updateMarkerElement(anchor, desc, active) {
     if (desc.label != null) pin.textContent = desc.label
     else pin.innerHTML = content
   }
-  anchor.style.zIndex = active ? '3' : desc.shape === 'square' ? '1' : '2'
+  anchor.style.zIndex = active ? '3' : desc.shape === 'dot' ? '0' : desc.shape === 'square' ? '1' : '2'
 }
