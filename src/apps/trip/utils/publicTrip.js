@@ -32,8 +32,8 @@ export function publicTripContent({ trip, stays, transports, days, dayKeys, atta
   for (const date of dayKeys) {
     const day = days[date]
     if (!day) continue
-    const { title, notes, stops } = day
-    if (title || notes || stops.length) shownDays[date] = { date, title, notes, stops }
+    const { title, notes, stops, legs = [] } = day
+    if (title || notes || stops.length || legs.length) shownDays[date] = { date, title, notes, stops, legs }
   }
   return JSON.parse(JSON.stringify({
     trip: { title: trip.title, startDate: trip.startDate, endDate: trip.endDate, notes: trip.notes },

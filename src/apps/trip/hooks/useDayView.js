@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useTripData } from '../context/TripDataContext.jsx'
 import { tonightStay } from '../utils/nights.js'
 import { timelineLegs } from '../utils/route.js'
+import { routedLegs } from '../utils/legs.js'
 import { dayRouteUrl } from '../utils/mapsUrl.js'
 import { hasCoords } from '../utils/geo.js'
 
@@ -9,8 +10,9 @@ const NO_ITEMS = []
 
 /**
  * Tout ce qu'affiche une journée, quel que soit l'écran (téléphone, éditeur
- * desktop, Aujourd'hui) : sa frise, les distances, l'hébergement du soir, le
- * lien vers le parcours complet dans Google Maps.
+ * desktop, Aujourd'hui) : sa frise, les trajets entre ses lieux (calculés
+ * quand ils le sont, à vol d'oiseau sinon), l'hébergement du soir, le lien
+ * vers le parcours complet dans Google Maps.
  */
 export function useDayView(date) {
   const { days, dayKeys, timelines, stays, colorIndexByStay, attachmentsByParent } = useTripData()
@@ -29,7 +31,7 @@ export function useDayView(date) {
     return {
       day,
       items,
-      legs: timelineLegs(items),
+      legs: routedLegs(timelineLegs(items), day?.legs),
       stopCount: items.filter((it) => it.type === 'stop').length,
       tonight,
       tonightColor: tonight ? colorIndexByStay[tonight.id] : 0,

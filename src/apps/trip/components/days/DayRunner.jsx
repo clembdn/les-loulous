@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { BedDouble, ChevronRight, Footprints, Maximize2, Navigation, X } from 'lucide-react'
+import { BedDouble, ChevronRight, Maximize2, Navigation, X } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { formatDayFr, shiftDateKey } from '@/shared/lib/dates.js'
 import { useTripData } from '../../context/TripDataContext.jsx'
@@ -12,12 +12,13 @@ import { stayColor } from '../../config/palette.js'
 import { goUrl } from '../../utils/mapsUrl.js'
 import { destinationOf, focusOf } from '../../utils/today.js'
 import { pastKeys } from '../../utils/timeline.js'
-import { formatDistance } from '../../utils/geo.js'
+import { legSummary } from '../../utils/legs.js'
 import { formatUntil, plural } from '../../utils/format.js'
 import TripMap from '../map/TripMap.jsx'
 import ItemBadge from '../ItemBadge.jsx'
 import WeatherBadge from '../weather/WeatherBadge.jsx'
 import { itemText } from './itemText.js'
+import { LEG_ICONS } from './legIcons.js'
 
 const GAP = 12
 const MAP_PADDING = { top: 96, bottom: 270, left: 48, right: 48 }
@@ -126,6 +127,7 @@ export default function DayRunner({ date }) {
     <div className="fixed inset-0 z-40 bg-[#F3F2EE] text-fg">
       <TripMap
         items={view.items}
+        legs={view.legs}
         home={view.tonight}
         colorIndexByStay={colorIndexByStay}
         pastKeys={past}
@@ -273,7 +275,7 @@ function StepCard({ card, active, past, focus, day, colorIndexByStay, weatherOf,
   const onDetails = item.type === 'stop'
     ? () => ui.openStop(day, item.stop)
     : () => ui.openResa(item.type === 'transport' ? 'transport' : 'stay', item.type === 'transport' ? item.transport.id : item.stay.id)
-  const walking = leg && leg.distanceM <= 1500
+  const LegIcon = leg ? LEG_ICONS[leg.mode] : null
 
   return (
     <article data-card onClick={active ? undefined : onPick} className={cn(base, !active && 'scale-[0.96]')}>
@@ -287,8 +289,8 @@ function StepCard({ card, active, past, focus, day, colorIndexByStay, weatherOf,
       {sub && <p className="mt-1 text-[13px] text-muted line-clamp-1">{sub}</p>}
       {leg && prev && (
         <p className="mt-1.5 flex items-center gap-1.5 text-[13px] text-muted min-w-0">
-          {walking && <Footprints size={14} className="shrink-0" aria-hidden="true" />}
-          <span className="truncate">≈ {formatDistance(leg.distanceM)} depuis {itemText(prev).title}</span>
+          <LegIcon size={14} className="shrink-0" aria-hidden="true" />
+          <span className="truncate">{legSummary(leg).text} depuis {itemText(prev).title}</span>
         </p>
       )}
       <Actions go={go} detailsLabel={item.type === 'stop' ? 'Détails' : 'Réservation'} onDetails={onDetails} />

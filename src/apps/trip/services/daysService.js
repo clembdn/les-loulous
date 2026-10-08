@@ -4,11 +4,12 @@ import { DEFAULT_CATEGORY, STOP_CATEGORY_IDS } from '../config/categories.js'
 import {
   dateKey, enumValue, optNumber, optText, place, readMeta, stamp, text, timeOfDay,
 } from '../utils/fields.js'
+import { normalizeLegs } from '../utils/legs.js'
 import { listen } from './listen.js'
 import { partCol, partDoc } from './refs.js'
 
 // Une page par jour, comme le planning de Cook'It :
-//   days/{AAAA-MM-JJ} → { date, title, notes, stops: [étape] }
+//   days/{AAAA-MM-JJ} → { date, title, notes, stops: [étape], legs: [trajet calculé] }
 // Les étapes vivent DANS le document du jour : réordonner est une seule
 // écriture, et ouvrir une journée une seule lecture.
 
@@ -45,6 +46,8 @@ export function normalizeDay(raw) {
     title: optText(raw.title, 120),
     notes: optText(raw.notes, 2000),
     stops: normalizeStops(raw.stops, date),
+    // Les trajets calculés entre ses lieux (V2, cf. utils/legs.js).
+    legs: normalizeLegs(raw.legs),
     ...readMeta(raw),
   }
 }
@@ -71,6 +74,7 @@ function dayPayload(date, patch, existing, currentUid) {
   if ('stops' in patch) out.stops = normalizeStops(patch.stops, date)
   if ('title' in patch) out.title = optText(patch.title, 120)
   if ('notes' in patch) out.notes = optText(patch.notes, 2000)
+  if ('legs' in patch) out.legs = normalizeLegs(patch.legs)
   return out
 }
 

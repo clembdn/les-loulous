@@ -8,6 +8,7 @@ import { Skeleton } from '@/shared/ui/Skeleton.jsx'
 import { useTripData } from '../context/TripDataContext.jsx'
 import { useTripUI } from '../context/TripUIContext.jsx'
 import { useDayView } from '../hooks/useDayView.js'
+import { useLegMode } from '../hooks/useLegMode.js'
 import { useNow } from '../hooks/useNow.js'
 import { tripProgress } from '../utils/tripDates.js'
 import { focusOf } from '../utils/today.js'
@@ -90,6 +91,7 @@ function DuringTrip({ today, now, progress }) {
   const wide = useMediaQuery('(min-width: 1024px)')
   const { trip, dayKeys, attachmentsByParent, colorIndexByStay, isLoading } = useTripData()
   const view = useDayView(today)
+  const setLegMode = useLegMode(today)
   const focus = useMemo(() => focusOf(view.items, now), [view.items, now])
   const past = useMemo(() => pastKeys(view.items, now), [view.items, now])
   const tomorrow = shiftDateKey(today, 1)
@@ -103,7 +105,7 @@ function DuringTrip({ today, now, progress }) {
         <div className={STACK}>
           {isLoading
             ? <Skeleton className="h-72 rounded-3xl" />
-            : <NextUpCard date={today} focus={focus} items={view.items} past={past} tonight={view.tonight} isLastDay={view.isLastDay} />}
+            : <NextUpCard date={today} focus={focus} items={view.items} legs={view.legs} past={past} tonight={view.tonight} isLastDay={view.isLastDay} />}
 
           <section>
             <SectionTitle className="flex items-center justify-between">
@@ -125,6 +127,7 @@ function DuringTrip({ today, now, progress }) {
                     colorIndexByStay={colorIndexByStay}
                     onStop={(stop) => ui.openStop(today, stop)}
                     onResa={ui.openResa}
+                    onLegMode={setLegMode}
                     now={now}
                   />
                 )}
@@ -152,6 +155,7 @@ function DuringTrip({ today, now, progress }) {
             <div className={cn(CARD, 'overflow-hidden')}>
               <TripMap
                 items={view.items}
+                legs={view.legs}
                 home={view.tonight}
                 colorIndexByStay={colorIndexByStay}
                 pastKeys={past}

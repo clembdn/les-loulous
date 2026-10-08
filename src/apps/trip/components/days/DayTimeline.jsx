@@ -1,21 +1,23 @@
-import { Footprints, GripVertical, Paperclip } from 'lucide-react'
+import { GripVertical, Paperclip } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
+import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover.jsx'
 import { getCategory } from '../../config/categories.js'
 import { getStayKind } from '../../config/reservations.js'
 import { directionsUrl } from '../../utils/mapsUrl.js'
-import { formatDistance, hasCoords } from '../../utils/geo.js'
+import { hasCoords } from '../../utils/geo.js'
+import { getLegMode, LEG_MODES, legSummary } from '../../utils/legs.js'
 import { formatDuration } from '../../utils/format.js'
 import { pastKeys } from '../../utils/timeline.js'
 import ItemBadge from '../ItemBadge.jsx'
 import { transportText } from './itemText.js'
-
-// En dessous, on marche ; au-dessus, Google choisit le mode habituel.
-const WALKING_MAX_M = 1500
+import { LEG_ICONS } from './legIcons.js'
 
 /**
  * La frise d'une journée : étapes numérotées (les numéros et les couleurs de
- * la carte), trajets réservés, arrivées et départs d'hébergement, et la
- * distance entre deux lieux avec son lien « Itinéraire ».
+ * la carte), trajets réservés, arrivées et départs d'hébergement, et le
+ * trajet entre deux lieux (durée et distance calculées, sinon à vol
+ * d'oiseau) avec son lien « Itinéraire ». `onLegMode(leg, mode)` permet d'en
+ * changer le mode (absent pour un invité).
  *
  * `now` (« HH:MM ») grise ce qui est passé — l'écran Aujourd'hui (cf. `pastKeys`).
  * `activeKey` / `onHover` : l'élément survolé, allumé en même temps sur la
@@ -25,7 +27,7 @@ const WALKING_MAX_M = 1500
  * Une étape lâchée se range AVANT `dropBeforeId` (en fin de liste s'il est nul).
  */
 export default function DayTimeline({
-  items, legs = {}, attachmentsByParent = {}, colorIndexByStay = {}, onStop, onResa,
+  items, legs = {}, attachmentsByParent = {}, colorIndexByStay = {}, onStop, onResa, onLegMode = null,
   now = null, dnd = null, activeKey = null, onHover = null,
 }) {
   if (!items.length) return null
@@ -83,7 +85,7 @@ export default function DayTimeline({
                 />
               )}
             </div>
-            {leg && <LegRow leg={leg} past={past} />}
+            {leg && <LegRow leg={leg} past={past} onMode={onLegMode} />}
           </li>
         )
       })}
@@ -184,23 +186,65 @@ function StayEventRow({ item, past, active, colorIndexByStay, onMouseEnter, atta
   )
 }
 
-function LegRow({ leg, past }) {
-  const walking = leg.distanceM <= WALKING_MAX_M
+function LegRow({ leg, past, onMode }) {
+  const mode = getLegMode(leg.mode)
+  const Icon = LEG_ICONS[leg.mode]
+  const { routed, text } = legSummary(leg)
+  const icon = <Icon size={14} className="shrink-0" aria-hidden="true" />
   return (
     <div className={cn('grid grid-cols-[46px_28px_minmax(0,1fr)] gap-x-2.5 items-center px-2', past && 'opacity-55')}>
       <span />
-      <span aria-hidden="true" className="justify-self-center h-8 border-l-2 border-dotted border-border-strong" />
-      <a
-        href={directionsUrl(leg.to, { origin: leg.from, mode: walking ? 'walking' : null })}
-        target="_blank"
-        rel="noreferrer"
-        className="justify-self-start h-8 inline-flex items-center gap-1.5 text-[13px] text-muted hover:text-accent transition"
-        title="À vol d’oiseau — ouvrir l’itinéraire dans Google Maps"
-      >
-        {walking && <Footprints size={13} className="shrink-0" aria-hidden="true" />}
-        ≈ {formatDistance(leg.distanceM)}
-        <span className="text-accent">· Itinéraire</span>
-      </a>
+      <span
+        aria-hidden="true"
+        className={cn('justify-self-center h-8 border-l-2', routed ? 'border-solid border-accent/40' : 'border-dotted border-border-strong')}
+      />
+      <span className="justify-self-start h-8 inline-flex items-center gap-1 text-[13px] text-muted min-w-0">
+        {onMode ? (
+          <Popover>
+            <PopoverTrigger
+              className="h-8 -ml-1.5 pl-1.5 pr-1 inline-flex items-center gap-1.5 rounded-lg hover:bg-surface-2 hover:text-fg transition"
+              aria-label={`${mode.label} — changer de mode`}
+              title="Changer de mode"
+            >
+              {icon}
+              <span className="tabular">{text}</span>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="p-1 bg-surface text-fg border-border shadow-lg">
+              {LEG_MODES.map((m) => {
+                const ModeIcon = LEG_ICONS[m.id]
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => onMode(leg, m.id)}
+                    aria-pressed={m.id === leg.mode}
+                    className={cn(
+                      'w-full h-10 pl-2.5 pr-4 rounded-xl inline-flex items-center gap-2.5 text-[14px] transition',
+                      m.id === leg.mode ? 'bg-accent/10 text-accent font-semibold' : 'hover:bg-surface-2',
+                    )}
+                  >
+                    <ModeIcon size={16} /> {m.label}
+                  </button>
+                )
+              })}
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <span className="inline-flex items-center gap-1.5" title={mode.label}>
+            {icon}
+            <span className="tabular">{text}</span>
+          </span>
+        )}
+        <a
+          href={directionsUrl(leg.to, { origin: leg.from, mode: mode.travelmode })}
+          target="_blank"
+          rel="noreferrer"
+          className="h-8 inline-flex items-center text-accent hover:underline"
+          title="Ouvrir l’itinéraire dans Google Maps"
+        >
+          · Itinéraire
+        </a>
+      </span>
     </div>
   )
 }

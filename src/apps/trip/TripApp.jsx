@@ -11,6 +11,7 @@ import { TripDataProvider } from './context/TripDataContext.jsx'
 import { TripWeatherProvider } from './context/TripWeatherContext.jsx'
 import { TripUIProvider, useTripUI } from './context/TripUIContext.jsx'
 import { TripSharesProvider } from './context/TripSharesContext.jsx'
+import { RouteFiller } from './hooks/useRouteFiller.js'
 import Shell from './components/layout/Shell.jsx'
 import Loader from './components/Loader.jsx'
 import TripFormSheet from './components/trips/TripFormSheet.jsx'
@@ -105,6 +106,8 @@ function TripScreens() {
       <TripWeatherProvider>
         {/* Les liens invités, et leurs vitrines tenues à jour tant que le voyage est ouvert. */}
         <TripSharesProvider>
+          {/* Les trajets entre les lieux, calculés une fois et rangés dans les jours. */}
+          <RouteFiller />
           <TripUIProvider
             goTab={goTab}
             goBack={goBack}

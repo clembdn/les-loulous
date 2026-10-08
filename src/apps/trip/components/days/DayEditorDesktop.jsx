@@ -10,6 +10,7 @@ import { useTripData } from '../../context/TripDataContext.jsx'
 import { useTripUI } from '../../context/TripUIContext.jsx'
 import { useDayView } from '../../hooks/useDayView.js'
 import { useAddStop } from '../../hooks/useAddStop.js'
+import { useLegMode } from '../../hooks/useLegMode.js'
 import { getCategory } from '../../config/categories.js'
 import { MAX_STOPS_PER_DAY, saveDay, saveDays } from '../../services/daysService.js'
 import { insertionPointByTime, moveStop } from '../../utils/timeline.js'
@@ -45,6 +46,7 @@ export default function DayEditorDesktop({ date }) {
     trip, tripId, days, dayKeys, nights, timelines, stopsByDate, colorIndexByStay, attachmentsByParent,
   } = useTripData()
   const view = useDayView(date)
+  const setLegMode = useLegMode(date)
 
   const [drag, setDrag] = useState(null) // { stopId, fromDate }
   const [drop, setDrop] = useState(null) // { date, beforeId } — position dans la journée affichée
@@ -160,6 +162,7 @@ export default function DayEditorDesktop({ date }) {
   const map = (className) => (
     <TripMap
       items={view.items}
+      legs={view.legs}
       home={view.tonight}
       colorIndexByStay={colorIndexByStay}
       activeKey={hoverKey}
@@ -301,6 +304,7 @@ export default function DayEditorDesktop({ date }) {
               colorIndexByStay={colorIndexByStay}
               onStop={(stop) => ui.openStop(date, stop)}
               onResa={ui.openResa}
+              onLegMode={setLegMode}
               dnd={dnd}
               activeKey={hoverKey}
               onHover={setHoverKey}

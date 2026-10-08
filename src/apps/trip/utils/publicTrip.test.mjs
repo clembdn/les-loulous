@@ -20,7 +20,8 @@ function sample(overrides = {}) {
     transports: [],
     days: {
       '2027-05-12': { id: '2027-05-12', date: '2027-05-12', title: 'Lisbonne', notes: null, stops: [{ id: 's1', name: 'Belém' }], ...META },
-      '2027-05-13': { id: '2027-05-13', date: '2027-05-13', title: null, notes: null, stops: [], ...META },
+      '2027-05-13': { id: '2027-05-13', date: '2027-05-13', title: null, notes: null, stops: [], legs: [], ...META },
+      '2027-05-14': { id: '2027-05-14', date: '2027-05-14', title: null, notes: null, stops: [], legs: [{ status: 'ok' }], ...META },
       '2027-05-20': { id: '2027-05-20', date: '2027-05-20', title: 'Hors voyage', notes: null, stops: [], ...META },
     },
     dayKeys: ['2027-05-12', '2027-05-13', '2027-05-14'],
@@ -36,7 +37,8 @@ test('la vitrine garde tout ce que l’invité voit, sans qui a écrit quoi', ()
   assert.equal(content.stays[1].accessCode, '1234', 'l’invité voit tout, codes compris')
   assert.equal(content.stays[0].createdBy, undefined)
   assert.equal(content.stays[0].updatedAt, undefined)
-  assert.deepEqual(Object.keys(content.days), ['2027-05-12'], 'ni jour vide, ni jour hors des dates')
+  assert.deepEqual(Object.keys(content.days), ['2027-05-12', '2027-05-14'], 'ni jour vide, ni jour hors des dates')
+  assert.deepEqual(content.days['2027-05-12'].legs, [], 'les trajets calculés partent aussi')
   assert.equal(content.days['2027-05-12'].createdBy, undefined)
   assert.deepEqual(content.attachmentIds, ['y', 'z'], 'les identifiants seulement, sans les images')
 })

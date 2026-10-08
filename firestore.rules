@@ -643,13 +643,15 @@ service cloud.firestore {
         && hasValidMoney(data);
     }
 
-    // `stops`, `title` et `notes` ne sont validés QUE s'ils sont là : une
+    // `legs` : les trajets calculés (OpenRouteService), tracés encodés compris.
+    // `stops`, `legs`, `title` et `notes` ne sont validés QUE s'ils sont là : une
     // journée s'écrit par fusion, champ par champ (cf. les mésaventures de
     // `program/{parity}` plus haut).
     function hasValidTripDayShape(data, dateId) {
       return isDateId(dateId)
         && data.date == dateId
         && (!('stops' in data) || (data.stops is list && data.stops.size() <= 40))
+        && (!('legs' in data) || (data.legs is list && data.legs.size() <= 60))
         && optStr(data, 'title', 120)
         && optStr(data, 'notes', 2000);
     }

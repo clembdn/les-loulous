@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '@/shared/lib/utils.js'
 import { ROUTE_COLOR, TRANSPORT_COLOR } from '../../config/palette.js'
 import { dayRoute } from '../../utils/route.js'
+import { legKey, routeLines } from '../../utils/legs.js'
 import { guessCategory } from '../../utils/categoryGuess.js'
 import MiniMap from './MiniMap.jsx'
 import { canUseWebGL, loadMaplibre, prefersReducedMotion } from './loadMaplibre.js'
@@ -35,20 +36,27 @@ const POI_LAYERS = ['poi_r1', 'poi_r7', 'poi_transit']
  *  · `onPlaceClick(place | null)` : un lieu d'intérêt de la carte touché
  *    (musée, plage, café…), `{ name, lat, lng, category }` — pour l'ajouter ;
  *  · `preview` : ce lieu, marqué en pointillés le temps de décider ;
+ *  · `legs` (`useDayView`) : les trajets calculés, tracés par la route au
+ *    lieu de la ligne pointillée à vol d'oiseau ;
  *  · `fitKey` (le jour affiché) : si on a soi-même déplacé ou zoomé la
  *    carte, elle ne se recadre plus à chaque lieu ajouté, seulement quand
  *    `fitKey` change.
  */
 export default function TripMap({
-  items, home = null, colorIndexByStay = {}, pastKeys = null,
+  items, home = null, legs = null, colorIndexByStay = {}, pastKeys = null,
   activeKey = null, focusKey = null, dimOthers = false,
   interactive = false, onPress = null, pressLabel = 'Ouvrir la carte',
   onSelect = null, onHover = null, onPlaceClick = null, preview = null, fitKey = null,
   padding = DEFAULT_PADDING, fallbackCenter = null, controls = false, focusZoom = FOCUS_ZOOM,
   attribution = 'top-right', className,
 }) {
-  const route = useMemo(() => dayRoute(items, { home }), [items, home])
-  const groups = useMemo(() => groupPoints(route.home ? [...route.points, route.home] : route.points), [route])
+  const baseRoute = useMemo(() => dayRoute(items, { home }), [items, home])
+  // Les tracés arrivent après coup : ils redessinent la ligne, pas les repères.
+  const route = useMemo(() => withLines(baseRoute, routeLines(legs)), [baseRoute, legs])
+  const groups = useMemo(
+    () => groupPoints(baseRoute.home ? [...baseRoute.points, baseRoute.home] : baseRoute.points),
+    [baseRoute],
+  )
   const empty = groups.length === 0
   const [mode, setMode] = useState(() => (canUseWebGL() ? 'map' : 'fallback'))
   const [ready, setReady] = useState(false)
@@ -162,7 +170,7 @@ export default function TripMap({
       updateMarkerElement(el, desc, !!activeKey && desc.keys.includes(activeKey))
     }
     refreshRoute(map)
-  }, [ready, activeKey, pastKeys, colorIndexByStay, dimOthers]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, activeKey, pastKeys, colorIndexByStay, dimOthers, route]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Voler jusqu'à un élément (déroulé), ou revenir à toute la journée.
   useEffect(() => {
@@ -307,10 +315,28 @@ function boundsOfRoute(route, maplibregl) {
   if (!pts.length || !maplibregl) return null
   const bounds = new maplibregl.LngLatBounds()
   for (const p of pts) bounds.extend([p.lng, p.lat])
+  // Une route peut faire un détour hors du cadre de ses deux bouts.
+  for (const seg of route.segments) seg.line?.forEach((c) => bounds.extend(c))
   return bounds
 }
 
-/** Les tronçons du jour en GeoJSON : réservés (pointillés bleu nuit) ou libres (points lagon). */
+/** Chaque tronçon libre qui a un trajet calculé reçoit son tracé (`line`). */
+function withLines(route, lines) {
+  if (!lines.size) return route
+  return {
+    ...route,
+    segments: route.segments.map((seg) => {
+      if (seg.booked) return seg
+      const line = lines.get(legKey(route.points[seg.from], route.points[seg.to]))
+      return line ? { ...seg, line } : seg
+    }),
+  }
+}
+
+/**
+ * Les tronçons du jour en GeoJSON : réservés (pointillés bleu nuit), calculés
+ * (trait plein lagon, par la route) ou libres (points lagon, à vol d'oiseau).
+ */
 function routeData(route, { highlight = null, dim = false, past = null } = {}) {
   return {
     type: 'FeatureCollection',
@@ -322,10 +348,11 @@ function routeData(route, { highlight = null, dim = false, past = null } = {}) {
         type: 'Feature',
         properties: {
           booked: seg.booked,
+          routed: !!seg.line,
           active,
           faded: (dim && !!highlight && !active) || (!!past && past.has(b.itemKey)),
         },
-        geometry: { type: 'LineString', coordinates: [[a.lng, a.lat], [b.lng, b.lat]] },
+        geometry: { type: 'LineString', coordinates: seg.line || [[a.lng, a.lat], [b.lng, b.lat]] },
       }
     }),
   }
@@ -339,12 +366,38 @@ function addRouteLayers(map) {
     id: 'trip-route-free',
     type: 'line',
     source: 'trip-route',
-    filter: ['!', ['get', 'booked']],
+    filter: ['all', ['!', ['get', 'booked']], ['!', ['get', 'routed']]],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': ROUTE_COLOR,
       'line-width': ['case', ['get', 'active'], 5.5, 4.5],
       'line-dasharray': [0.1, 1.9],
+      'line-opacity': ['case', ['get', 'faded'], 0.35, 1],
+    },
+  })
+  // Un trajet calculé suit la route : trait plein, liseré blanc pour se
+  // détacher des routes du fond.
+  map.addLayer({
+    id: 'trip-route-routed-casing',
+    type: 'line',
+    source: 'trip-route',
+    filter: ['get', 'routed'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': '#FFFFFF',
+      'line-width': ['case', ['get', 'active'], 8.5, 7],
+      'line-opacity': ['case', ['get', 'faded'], 0.35, 0.9],
+    },
+  })
+  map.addLayer({
+    id: 'trip-route-routed',
+    type: 'line',
+    source: 'trip-route',
+    filter: ['get', 'routed'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': ROUTE_COLOR,
+      'line-width': ['case', ['get', 'active'], 5.5, 4],
       'line-opacity': ['case', ['get', 'faded'], 0.35, 1],
     },
   })

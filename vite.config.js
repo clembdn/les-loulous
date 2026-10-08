@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath, URL } from 'node:url'
@@ -11,6 +11,10 @@ function vercelApiDev() {
   return {
     name: 'vercel-api-dev',
     configureServer(server) {
+      // Les secrets des fonctions (ORS_API_KEY) se lisent dans .env, comme
+      // Vercel les lit dans ses variables. Sans préfixe VITE_ : jamais envoyés au navigateur.
+      const env = loadEnv(server.config.mode, process.cwd(), '')
+      if (env.ORS_API_KEY && !process.env.ORS_API_KEY) process.env.ORS_API_KEY = env.ORS_API_KEY
       server.middlewares.use(async (req, res, next) => {
         const match = req.url?.match(/^\/api\/([\w-]+)(?:\?|$)/)
         if (!match) return next()

@@ -32,8 +32,8 @@ const BAND_PADDING = { top: 28, bottom: 28, left: 48, right: 48 }
  *
  * `focus` vient de `focusOf` (utils/today.js), `items` et `past` de la journée.
  */
-export default function NextUpCard({ date, focus, items, past, tonight, isLastDay, className }) {
-  if (focus.item) return <ItemFocus date={date} focus={focus} items={items} past={past} tonight={tonight} className={className} />
+export default function NextUpCard({ date, focus, items, legs = null, past, tonight, isLastDay, className }) {
+  if (focus.item) return <ItemFocus date={date} focus={focus} items={items} legs={legs} past={past} tonight={tonight} className={className} />
   return <RestFocus date={date} free={focus.kind === 'free'} tonight={tonight} isLastDay={isLastDay} className={className} />
 }
 
@@ -47,7 +47,7 @@ function GoLink({ place }) {
   )
 }
 
-function ItemFocus({ date, focus, items, past, tonight, className }) {
+function ItemFocus({ date, focus, items, legs, past, tonight, className }) {
   const ui = useTripUI()
   const phone = !useMediaQuery('(min-width: 1024px)')
   const { attachmentsByParent, colorIndexByStay } = useTripData()
@@ -75,6 +75,7 @@ function ItemFocus({ date, focus, items, past, tonight, className }) {
       {phone && (
         <TripMap
           items={items}
+          legs={legs}
           home={tonight}
           colorIndexByStay={colorIndexByStay}
           pastKeys={past}

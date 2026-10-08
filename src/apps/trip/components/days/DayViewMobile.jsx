@@ -7,6 +7,7 @@ import { toast } from '@/shared/ui/sonner.jsx'
 import { useTripData } from '../../context/TripDataContext.jsx'
 import { useTripUI } from '../../context/TripUIContext.jsx'
 import { useDayView } from '../../hooks/useDayView.js'
+import { useLegMode } from '../../hooks/useLegMode.js'
 import { MAX_STOPS_PER_DAY, saveDay } from '../../services/daysService.js'
 import { plural } from '../../utils/format.js'
 import TripMap from '../map/TripMap.jsx'
@@ -36,6 +37,7 @@ export default function DayViewMobile({ date }) {
   const { currentUid } = useAuth()
   const { tripId, days, stopsByDate, dayKeys, nights, segments, colorIndexByStay, attachmentsByParent, isLoading } = useTripData()
   const view = useDayView(date)
+  const setLegMode = useLegMode(date)
   const openRunner = () => ui.openRunner(date)
   // Mode « Réorganiser » : l'ordre en cours (identifiants), enregistré en sortant.
   const [order, setOrder] = useState(null)
@@ -80,6 +82,7 @@ export default function DayViewMobile({ date }) {
       <div className="relative">
         <TripMap
           items={view.items}
+          legs={view.legs}
           home={view.tonight}
           colorIndexByStay={colorIndexByStay}
           fallbackCenter={ui.near}
@@ -154,6 +157,7 @@ export default function DayViewMobile({ date }) {
               colorIndexByStay={colorIndexByStay}
               onStop={(stop) => ui.openStop(date, stop)}
               onResa={ui.openResa}
+              onLegMode={setLegMode}
             />
           ))}
           {!isLoading && !reordering && view.items.length === 0 && (
