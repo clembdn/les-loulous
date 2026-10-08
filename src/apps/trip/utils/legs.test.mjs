@@ -107,3 +107,10 @@ test('résumé d’un trajet : calculé, sinon à vol d’oiseau', async () => {
   assert.deepEqual(legSummary(routed['stop-a']), { routed: true, text: '20 min · 1,6 km' })
   assert.deepEqual(legSummary(routed['stop-b']), { routed: false, text: '≈ 6,6 km' })
 })
+
+test('un « pas de route » rangé par la première version (bug ORS) est recalculé', () => {
+  const old = { from: A, to: B, mode: 'walk', manual: false, status: 'none' }
+  assert.equal(normalizeLeg(old).status, 'pending', 'sans version : à refaire')
+  assert.equal(normalizeLeg({ ...old, v: 2 }).status, 'none', 'calculé depuis le correctif : définitif')
+  assert.equal(normalizeLeg({ ...ok(A, B, 'walk') }).status, 'ok', 'un trajet calculé reste valable')
+})

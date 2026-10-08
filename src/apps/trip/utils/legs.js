@@ -31,6 +31,11 @@ export const WALKING_MAX_M = 1500
 // Plafond des règles Firestore (`legs.size() <= 60`).
 export const MAX_LEGS_PER_DAY = 60
 
+// Version du calcul. La première version en ligne (commit 35925db) rangeait
+// TOUS les trajets en « pas de route » (ORS ne renvoyait pas `segments`) :
+// un « pas de route » d'une version plus ancienne est donc recalculé.
+export const LEG_VERSION = 2
+
 // OpenRouteService accepte 50 points par requête.
 export const MAX_RUN_POINTS = 50
 
@@ -69,7 +74,8 @@ export function normalizeLeg(raw) {
   const from = point(raw?.from)
   const to = point(raw?.to)
   if (!from || !to) return null
-  const status = ['ok', 'none'].includes(raw.status) ? raw.status : 'pending'
+  let status = ['ok', 'none'].includes(raw.status) ? raw.status : 'pending'
+  if (status === 'none' && raw.v !== LEG_VERSION) status = 'pending'
   return {
     from,
     to,
@@ -79,6 +85,7 @@ export function normalizeLeg(raw) {
     distanceM: status === 'ok' ? optNum(raw.distanceM) : null,
     durationS: status === 'ok' ? optNum(raw.durationS) : null,
     polyline: status === 'ok' && typeof raw.polyline === 'string' ? raw.polyline : null,
+    v: LEG_VERSION,
   }
 }
 
@@ -146,7 +153,7 @@ export function legRuns(missing) {
  */
 export function mergeLegs(routed, results) {
   return Object.values(routed).slice(0, MAX_LEGS_PER_DAY).map((leg) => {
-    const base = { from: point(leg.from), to: point(leg.to), mode: leg.mode, manual: leg.manual }
+    const base = { from: point(leg.from), to: point(leg.to), mode: leg.mode, manual: leg.manual, v: LEG_VERSION }
     const r = results[leg.key] || leg.route
     if (!r) return { ...base, status: 'pending', distanceM: null, durationS: null, polyline: null }
     return {
@@ -169,7 +176,7 @@ export function withLegMode(stored, leg, mode) {
   const manual = mode !== autoMode(leg.distanceM)
   return [
     ...others,
-    { from: point(leg.from), to: point(leg.to), mode, manual, status: 'pending', distanceM: null, durationS: null, polyline: null },
+    { from: point(leg.from), to: point(leg.to), mode, manual, status: 'pending', distanceM: null, durationS: null, polyline: null, v: LEG_VERSION },
   ].slice(-MAX_LEGS_PER_DAY)
 }
 

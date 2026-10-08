@@ -41,7 +41,10 @@ async function directions(profile, points, { key, fetchImpl }) {
     },
     body: JSON.stringify({
       coordinates: points.map((p) => [p.lng, p.lat]),
-      instructions: false,
+      // Indispensable : sans instructions, ORS ne rend pas `segments`, donc
+      // ni la distance ni la durée de chaque tronçon (constaté le 2026-10-08).
+      // Le guidage pas à pas qui vient avec est ignoré.
+      instructions: true,
       // Un lieu au bord de l'eau ou au fond d'une allée : chercher la route
       // jusqu'à 1 km autour plutôt que d'échouer (350 m par défaut).
       radiuses: points.map(() => 1000),

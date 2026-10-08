@@ -50,6 +50,7 @@ test('une course A → B → C : une requête, découpée par tronçon', async (
   assert.match(net.calls[0].url, /\/v2\/directions\/foot-walking\/json$/)
   assert.equal(net.calls[0].headers.authorization, 'K')
   assert.deepEqual(net.calls[0].body.coordinates[0], [-9.216, 38.6916], 'ORS attend [lng, lat]')
+  assert.equal(net.calls[0].body.instructions, true, 'sans instructions, ORS ne rend pas `segments`')
   assert.deepEqual(r.body.legs.map((l) => [l.status, l.distanceM, l.durationS]), [['ok', 1312, 940], ['ok', 7020, 655]])
   const first = decodePolyline(r.body.legs[0].polyline)
   assert.deepEqual(first[0], LINE[0])
