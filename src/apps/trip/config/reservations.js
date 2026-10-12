@@ -43,5 +43,6 @@ export function getTransportMode(id) {
 }
 
 // Les devises qu'on croise le plus depuis l'Australie ; le prix reste dans la
-// devise payée, jamais converti (comme dans FinAuzi).
-export const CURRENCIES = ['EUR', 'AUD', 'USD', 'GBP', 'NZD', 'JPY', 'THB', 'IDR', 'SGD', 'CHF', 'CAD']
+// devise payée, jamais converti (comme dans FinAuzi). XPF : le franc
+// Pacifique de la Nouvelle-Calédonie.
+export const CURRENCIES = ['EUR', 'AUD', 'USD', 'GBP', 'NZD', 'XPF', 'JPY', 'THB', 'IDR', 'SGD', 'CHF', 'CAD']
