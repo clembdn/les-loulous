@@ -1,5 +1,5 @@
 import {
-  BedDouble, BedSingle, Bus, Car, Home, Hotel, Plane, Route, Ship, Tent, TrainFront,
+  BedDouble, BedSingle, Bus, Car, Home, Hotel, Plane, Route, Ship, Tent, Ticket, TrainFront,
 } from 'lucide-react'
 
 // Hébergements : un séjour couvre des nuits (cf. utils/nights.js).
@@ -18,6 +18,11 @@ export const STAY_KINDS = [
  * réservation la plus courante d'un road trip, et elle a exactement la forme
  * d'un trajet — une prise, un retour, une référence, un justificatif. Seuls
  * les libellés des deux extrémités changent.
+ *
+ * L'activité réservée (plongée, excursion, spectacle) aussi : un billet, une
+ * capture, un prix, un début et une fin — mais UN seul lieu (`single`). Son
+ * arrivée reprend le lieu du départ à l'enregistrement : la frise, la carte
+ * et l'agenda la lisent comme un trajet sur place.
  */
 export const TRANSPORT_MODES = [
   { id: 'flight', label: 'Vol', icon: Plane, refPlaceholder: 'TP 1024', fromLabel: 'Départ', toLabel: 'Arrivée' },
@@ -25,6 +30,7 @@ export const TRANSPORT_MODES = [
   { id: 'bus',    label: 'Bus',   icon: Bus, refPlaceholder: 'FlixBus 042', fromLabel: 'Départ', toLabel: 'Arrivée' },
   { id: 'ferry',  label: 'Ferry', icon: Ship, refPlaceholder: 'Traversée 7:30', fromLabel: 'Départ', toLabel: 'Arrivée' },
   { id: 'car',    label: 'Location de voiture', short: 'Voiture', icon: Car, refPlaceholder: 'Hertz · Clio', fromLabel: 'Prise', toLabel: 'Retour' },
+  { id: 'activity', label: 'Activité', icon: Ticket, refPlaceholder: 'Baptême de plongée', fromLabel: 'Début', toLabel: 'Fin', single: true },
   { id: 'other',  label: 'Autre', icon: Route, refPlaceholder: '', fromLabel: 'Départ', toLabel: 'Arrivée' },
 ]
 
@@ -40,6 +46,11 @@ export function getStayKind(id) {
 
 export function getTransportMode(id) {
   return TRANSPORT_MODE_BY_ID[id] || TRANSPORT_MODE_BY_ID.other
+}
+
+/** Un seul lieu (activité) : pas de départ ni d'arrivée, pas de retour à créer. */
+export function isSinglePlace(mode) {
+  return getTransportMode(mode).single === true
 }
 
 // Les devises qu'on croise le plus depuis l'Australie ; le prix reste dans la

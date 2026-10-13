@@ -66,7 +66,8 @@ export function tripRecap({ dayKeys, days, timelines, stays, transports, nights 
   })
 
   for (const t of transports) {
-    if (t.mode === 'car' || !hasCoords(t.from) || !hasCoords(t.to)) continue
+    // La location et l'activité (sur place) ne sont pas des distances parcourues.
+    if (t.mode === 'car' || t.mode === 'activity' || !hasCoords(t.from) || !hasCoords(t.to)) continue
     const m = haversineM(t.from, t.to)
     const mode = RECAP_MODES.includes(t.mode) ? t.mode : 'other'
     byMode[mode] += m

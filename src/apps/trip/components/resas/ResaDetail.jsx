@@ -1,18 +1,20 @@
-import { ArrowLeftRight, Copy, ExternalLink, Mail, Navigation, Pencil, Phone } from 'lucide-react'
+import { ArrowLeftRight, CircleCheck, Copy, ExternalLink, Mail, Navigation, Pencil, Phone, Wallet } from 'lucide-react'
 import { formatDayFr } from '@/shared/lib/dates.js'
 import { cn } from '@/shared/lib/utils.js'
 import { Button } from '@/shared/ui/Button.jsx'
-import { getStayKind, getTransportMode } from '../../config/reservations.js'
-import { stayColor, TRANSPORT_COLOR } from '../../config/palette.js'
+import { getStayKind, getTransportMode, isSinglePlace } from '../../config/reservations.js'
+import { stayColor, transportColor } from '../../config/palette.js'
 import { directionsUrl, placeUrl } from '../../utils/mapsUrl.js'
 import { hasCoords } from '../../utils/geo.js'
 import { daysBetween } from '../../utils/tripDates.js'
 import { formatPrice, plural } from '../../utils/format.js'
+import { amountLeft, paymentLine } from '../../utils/payment.js'
 import AttachmentThumb from '../attachments/AttachmentThumb.jsx'
 import CopyValue, { copyValue } from '../CopyValue.jsx'
 import TripMap, { placeItems, stayPlaceItems } from '../map/TripMap.jsx'
 import { resaTitle } from './resaDisplay.jsx'
 import ExpenseCard from './ExpenseCard.jsx'
+import EurHint from '../EurHint.jsx'
 
 const MAP_PADDING = { top: 30, bottom: 30, left: 30, right: 30 }
 
@@ -26,7 +28,8 @@ export default function ResaDetail({ kind, item, attachments = [], colorIndex, o
   const isStay = kind === 'stay'
   const mode = isStay ? null : getTransportMode(item.mode)
   const label = isStay ? getStayKind(item.kind).label : mode.label
-  const color = isStay ? stayColor(colorIndex).hex : TRANSPORT_COLOR.hex
+  const single = !isStay && isSinglePlace(item.mode)
+  const color = isStay ? stayColor(colorIndex).hex : transportColor(item.mode).hex
   const big = isStay
     ? item.accessCode && { label: 'Code d’accès', value: item.accessCode }
     : item.seat && { label: 'Place', value: item.seat }
@@ -40,6 +43,7 @@ export default function ResaDetail({ kind, item, attachments = [], colorIndex, o
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-semibold text-muted">
             {label}{item.price != null ? ` · ${formatPrice(item.price, item.currency)}` : ''}
+            {item.price != null && <EurHint amount={item.price} currency={item.currency} className="ml-1 font-normal" />}
           </p>
           <h2 className="mt-0.5 text-[26px] leading-8 font-bold tracking-[-0.02em] text-fg">{resaTitle(kind, item)}</h2>
         </div>
@@ -58,8 +62,8 @@ export default function ResaDetail({ kind, item, attachments = [], colorIndex, o
           </>
         ) : (
           <>
-            <Moment label={mode.fromLabel} point={item.from} place={item.from.name} />
-            <Moment label={mode.toLabel} point={item.to} place={item.to.name} />
+            <Moment label={mode.fromLabel} point={item.from} place={single ? null : item.from.name} />
+            <Moment label={mode.toLabel} point={item.to} place={single ? null : item.to.name} />
           </>
         )}
       </div>
@@ -76,6 +80,8 @@ export default function ResaDetail({ kind, item, attachments = [], colorIndex, o
       )}
 
       <div className="px-5 pb-5 pt-5 space-y-6">
+        <Payment item={item} />
+
         {attachments.length > 0 && (
           <section>
             <h3 className="text-[15px] font-semibold text-fg">À montrer sur place</h3>
@@ -95,7 +101,7 @@ export default function ResaDetail({ kind, item, attachments = [], colorIndex, o
 
         {located && (
           <section>
-            <h3 className="text-[15px] font-semibold text-fg">{isStay ? 'Adresse' : mode.fromLabel}</h3>
+            <h3 className="text-[15px] font-semibold text-fg">{isStay ? 'Adresse' : single ? 'Lieu' : mode.fromLabel}</h3>
             {hasCoords(place) && (
               <div className="mt-2.5 rounded-2xl overflow-hidden">
                 <TripMap
@@ -106,7 +112,7 @@ export default function ResaDetail({ kind, item, attachments = [], colorIndex, o
                 />
               </div>
             )}
-            <p className="mt-2 text-[15px] text-fg">{place.address || place.name}</p>
+            <p className="mt-2 text-[15px] text-fg">{single && place.name ? [place.name, place.address].filter(Boolean).join(' · ') : place.address || place.name}</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <a href={directionsUrl(place)} target="_blank" rel="noreferrer" className={cn(PRIMARY, !item.phone && 'col-span-2')}>
                 <Navigation size={16} /> Y aller
@@ -147,7 +153,7 @@ export default function ResaDetail({ kind, item, attachments = [], colorIndex, o
 
         <ExpenseCard kind={kind} item={item} />
 
-        {!isStay && item.mode !== 'car' && onReverse && (
+        {!isStay && item.mode !== 'car' && !single && onReverse && (
           <Button variant="secondary" className="w-full" onClick={onReverse}>
             <ArrowLeftRight size={16} /> Créer le retour
           </Button>
@@ -160,6 +166,39 @@ export default function ResaDetail({ kind, item, attachments = [], colorIndex, o
 const PRIMARY = 'h-12 rounded-xl bg-accent text-accent-fg inline-flex items-center justify-center gap-2 text-[15px] font-semibold hover:opacity-90 transition'
 const SECONDARY = 'h-12 rounded-xl bg-surface-2 text-fg inline-flex items-center justify-center gap-2 text-[15px] font-medium hover:bg-border transition'
 const LINK = 'inline-flex items-center gap-1.5 h-11 px-4 rounded-xl bg-surface-2 text-[14px] text-fg hover:bg-border transition'
+
+/**
+ * Le paiement : réglé (vert) ou ce qu'il reste à payer (ambre), et par qui.
+ * Rien quand on ne sait ni le prix ni l'état.
+ */
+function Payment({ item }) {
+  const line = paymentLine(item)
+  if (!line && item.price == null) return null
+  const settled = item.paymentStatus === 'paid'
+  const left = amountLeft(item)
+  const amount = item.paymentStatus && !settled && left != null ? left : item.price
+  return (
+    <section className={cn(
+      'rounded-2xl px-4 py-3 flex items-start gap-3',
+      settled ? 'bg-emerald-50 text-emerald-900' : item.paymentStatus ? 'bg-amber-50 text-amber-900' : 'bg-surface-2 text-fg',
+    )}
+    >
+      {settled
+        ? <CircleCheck size={18} className="mt-0.5 shrink-0 text-emerald-600" />
+        : <Wallet size={18} className={cn('mt-0.5 shrink-0', item.paymentStatus ? 'text-amber-600' : 'text-muted')} />}
+      <div className="min-w-0">
+        {amount != null && (
+          <p className="text-[17px] font-semibold tabular">
+            {formatPrice(amount, item.currency)}
+            <EurHint amount={amount} currency={item.currency} className="ml-1.5 text-[14px] font-normal opacity-75" />
+            {amount !== item.price && <span className="ml-1.5 text-[13px] font-normal opacity-75">sur {formatPrice(item.price, item.currency)}</span>}
+          </p>
+        )}
+        <p className="text-[14px]">{line || 'Paiement : à préciser'}</p>
+      </div>
+    </section>
+  )
+}
 
 /** La valeur à montrer au comptoir, en très grand ; un tap la copie. */
 function BigValue({ label, value }) {

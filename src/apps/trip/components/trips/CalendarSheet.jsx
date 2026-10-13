@@ -93,6 +93,8 @@ export default function CalendarSheet({ open, onClose }) {
 
   const toggle = (key) => setOptions((o) => ({ ...o, [key]: !o[key] }))
 
+  const activities = transports.filter((t) => t.mode === 'activity').length
+  const trips = transports.length - activities
   return (
     <ThemedSheet
       open={open}
@@ -114,7 +116,8 @@ export default function CalendarSheet({ open, onClose }) {
     >
       <ul className="space-y-1.5 text-[15px] text-fg">
         {stays.length > 0 && <Line>{plural(stays.length, 'hébergement')} : les nuits, l’arrivée et le départ</Line>}
-        {transports.length > 0 && <Line>{plural(transports.length, 'trajet réservé', 'trajets réservés')}</Line>}
+        {trips > 0 && <Line>{plural(trips, 'trajet réservé', 'trajets réservés')}</Line>}
+        {activities > 0 && <Line>{plural(activities, 'activité réservée', 'activités réservées')}</Line>}
         <Toggle on={options.stops} onClick={() => toggle('stops')} disabled={!stopCount}>
           {plural(stopCount, 'étape à heure fixe', 'étapes à heure fixe')}
         </Toggle>

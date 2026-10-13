@@ -5,7 +5,7 @@ import { curvePath, groupCoincident, projectPoints } from '../../utils/geo.js'
 import { dayRoute } from '../../utils/route.js'
 import { getTransportMode } from '../../config/reservations.js'
 import { getCategory } from '../../config/categories.js'
-import { ROUTE_COLOR, stayColor, TRANSPORT_COLOR } from '../../config/palette.js'
+import { ROUTE_COLOR, stayColor, TRANSPORT_COLOR, transportColor } from '../../config/palette.js'
 
 const PAD = 26
 // Deux pastilles de 20 px plus proches que ça se chevauchent : un seul repère « 1·2 ».
@@ -96,7 +96,7 @@ export default function MiniMap({ items, home = null, colorIndexByStay = {}, wid
           m.numbers.length
             ? <NumberMarker key={m.key} at={m.at} label={m.numbers.join('·')} color={m.color} />
             : m.first.kind === 'transport'
-              ? <IconMarker key={m.key} at={m.at} icon={getTransportMode(m.first.mode).icon} color={TRANSPORT_COLOR.hex} />
+              ? <IconMarker key={m.key} at={m.at} icon={getTransportMode(m.first.mode).icon} color={transportColor(m.first.mode).hex} />
               : <IconMarker key={m.key} at={m.at} icon={BedDouble} color={stayColor(colorIndexByStay[m.first.stayId]).hex} square />
         ))}
       </svg>

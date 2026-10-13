@@ -40,7 +40,7 @@ export function normalizeExpenseLink(raw) {
 export function expenseTitle(kind, item, tripTitle, transportLabel = '') {
   const what = kind === 'stay'
     ? item.name
-    : [transportLabel, item.ref, [item.from?.name, item.to?.name].filter(Boolean).join(' → ')].filter(Boolean).join(' ')
+    : [transportLabel, item.ref, [...new Set([item.from?.name, item.to?.name].filter(Boolean))].join(' → ')].filter(Boolean).join(' ')
   return [what || 'Réservation', tripTitle].filter(Boolean).join(' · ').slice(0, 120)
 }
 

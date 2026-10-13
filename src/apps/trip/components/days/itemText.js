@@ -1,7 +1,7 @@
 import { BedDouble } from 'lucide-react'
 import { formatDateFr } from '@/shared/lib/dates.js'
 import { getCategory } from '../../config/categories.js'
-import { getStayKind, getTransportMode } from '../../config/reservations.js'
+import { getStayKind, getTransportMode, isSinglePlace } from '../../config/reservations.js'
 import { formatDuration } from '../../utils/format.js'
 
 // Comment on DIT un élément de la frise, partout pareil : dans la frise, en
@@ -14,6 +14,13 @@ export function transportText(item) {
   const ref = t.ref || mode.label
   const from = t.from.name || 'départ'
   const to = t.to.name || 'arrivée'
+  if (isSinglePlace(t.mode)) {
+    const title = t.ref || t.from.name || mode.label
+    const where = t.ref ? t.from.name : null
+    if (item.phase === 'arrival') return { title: `Fin · ${title}`, sub: where || mode.label }
+    if (item.phase === 'departure') return { title, sub: [where, `jusqu’au ${formatDateFr(t.to.date)}`].filter(Boolean).join(' · ') }
+    return { title, sub: [where || mode.label, item.endTime && `jusqu’à ${item.endTime}`].filter(Boolean).join(' · ') }
+  }
   if (t.mode === 'car') {
     if (item.phase === 'arrival') return { title: `Retour · ${ref}`, sub: to }
     if (item.phase === 'departure') return { title: `Prise · ${ref}`, sub: `${from} · retour le ${formatDateFr(t.to.date)}` }

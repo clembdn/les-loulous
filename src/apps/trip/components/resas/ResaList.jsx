@@ -1,10 +1,12 @@
 import { ArrowRight, Paperclip, Wallet } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { formatDateFr, formatDayFr } from '@/shared/lib/dates.js'
-import { getStayKind, getTransportMode } from '../../config/reservations.js'
-import { stayColor, TRANSPORT_COLOR } from '../../config/palette.js'
+import { getStayKind, getTransportMode, isSinglePlace } from '../../config/reservations.js'
+import { stayColor, transportColor } from '../../config/palette.js'
 import { daysBetween } from '../../utils/tripDates.js'
 import { formatPrice, formatShortRange, plural } from '../../utils/format.js'
+import { paymentTag } from '../../utils/payment.js'
+import EurHint from '../EurHint.jsx'
 
 /**
  * Les réservations comme des cartes d'embarquement : groupées par jour (en-têtes
@@ -34,7 +36,7 @@ export default function ResaList({ entries, selectedKey, attachmentsByParent, co
                   item={item}
                   active={key === selectedKey}
                   files={attachmentsByParent[item.id]?.length || 0}
-                  color={kind === 'stay' ? stayColor(colorIndexByStay[item.id]).hex : TRANSPORT_COLOR.hex}
+                  color={kind === 'stay' ? stayColor(colorIndexByStay[item.id]).hex : transportColor(item.mode).hex}
                   onClick={() => onSelect(kind, item.id)}
                 />
               </li>
@@ -50,10 +52,17 @@ function ResaPass({ kind, item, active, files, color, onClick }) {
   const isStay = kind === 'stay'
   const mode = isStay ? null : getTransportMode(item.mode)
   const Icon = isStay ? getStayKind(item.kind).icon : mode.icon
-  const label = isStay ? getStayKind(item.kind).label : [mode.short || mode.label, item.mode !== 'car' && item.ref].filter(Boolean).join(' · ')
+  const single = !isStay && isSinglePlace(item.mode)
+  const label = isStay
+    ? getStayKind(item.kind).label
+    : single
+      ? [mode.label, item.ref && item.from.name].filter(Boolean).join(' · ')
+      : [mode.short || mode.label, item.mode !== 'car' && item.ref].filter(Boolean).join(' · ')
   const title = isStay
     ? item.name
-    : item.mode === 'car'
+    : single
+      ? item.ref || item.from.name || mode.label
+      : item.mode === 'car'
       ? item.ref || mode.label
       : [item.from.name, item.to.name].filter(Boolean).join(' → ') || item.ref || mode.label
   const keyValue = isStay
@@ -76,7 +85,13 @@ function ResaPass({ kind, item, active, files, color, onClick }) {
             <Icon size={14} />
           </span>
           <span className="min-w-0 flex-1 truncate font-semibold text-fg/80">{label}</span>
-          {item.price != null && <span className="shrink-0 tabular">{formatPrice(item.price, item.currency)}</span>}
+          {item.price != null && (
+            <span className="shrink-0 tabular">
+              {formatPrice(item.price, item.currency)}
+              <EurHint amount={item.price} currency={item.currency} className="ml-1 text-[12px] text-muted/80" />
+            </span>
+          )}
+          <PaymentTag item={item} />
           {item.expense && <Wallet size={13} className="shrink-0 text-accent" aria-label="Dans FinAuzi" />}
         </span>
         <span className="mt-1.5 block text-[17px] font-semibold text-fg truncate">{title}</span>
@@ -119,6 +134,20 @@ function ResaPass({ kind, item, active, files, color, onClick }) {
         )}
       </span>
     </button>
+  )
+}
+
+function PaymentTag({ item }) {
+  const tag = paymentTag(item)
+  if (!tag) return null
+  return (
+    <span className={cn(
+      'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+      tag.tone === 'ok' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900',
+    )}
+    >
+      {tag.label}
+    </span>
   )
 }
 

@@ -10,10 +10,14 @@ import { toast } from '@/shared/ui/sonner.jsx'
 import Field from '../Field.jsx'
 import PlaceInput from '../places/PlaceInput.jsx'
 import AttachmentField from '../attachments/AttachmentField.jsx'
-import { ChoiceChips, DateTimeField, Disclosure, FILLED, FormSection, lastCurrency, PriceField, rememberCurrency } from './formParts.jsx'
+import {
+  ChoiceChips, DateTimeField, Disclosure, FILLED, FormSection, lastCurrency, PaymentFields, paymentForm, paymentSummaryText,
+  rememberCurrency,
+} from './formParts.jsx'
+import { payerOptions } from '../../utils/payment.js'
 import OcrPrefill from './OcrPrefill.jsx'
 import { transportFields } from '../../utils/resaParse.js'
-import { getTransportMode, TRANSPORT_MODES } from '../../config/reservations.js'
+import { getTransportMode, isSinglePlace, TRANSPORT_MODES } from '../../config/reservations.js'
 import { deleteReservation, saveReservation } from '../../services/reservationsService.js'
 import { deleteSentExpense } from '../../services/expenseService.js'
 import { resaTitle } from './resaDisplay.jsx'
@@ -29,6 +33,7 @@ const NOUNS = {
   bus: ['Nouveau bus', 'Modifier le bus'],
   ferry: ['Nouveau ferry', 'Modifier le ferry'],
   car: ['Nouvelle location', 'Modifier la location'],
+  activity: ['Nouvelle activité', 'Modifier l’activité'],
   other: ['Nouveau trajet réservé', 'Modifier le trajet'],
 }
 
@@ -53,6 +58,7 @@ function initialForm(transport, defaults) {
       confirmation: '',
       price: '',
       currency: reverse.currency || lastCurrency(),
+      ...paymentForm(null),
       mailUrl: '',
       notes: '',
     }
@@ -69,6 +75,7 @@ function initialForm(transport, defaults) {
     confirmation: transport?.confirmation || '',
     price: transport?.price != null ? String(transport.price).replace('.', ',') : '',
     currency: transport?.currency || lastCurrency(),
+    ...paymentForm(transport),
     mailUrl: transport?.mailUrl || '',
     notes: transport?.notes || '',
   }
@@ -83,7 +90,9 @@ function initialForm(transport, defaults) {
  * Le type vient de la tuile choisie (« Vol ») : on ne le redemande pas.
  * « Créer le retour » ouvre un nouveau trajet, départ et arrivée inversés.
  */
-export default function TransportSheet({ open, transport, defaults, tripId, tripStart = null, attachments = [], near, onClose, onDeleted, onReverse }) {
+export default function TransportSheet({
+  open, transport, defaults, tripId, tripStart = null, companions = [], guests = [], onAddPayer = null, attachments = [], near, onClose, onDeleted, onReverse,
+}) {
   const { currentUid } = useAuth()
   // Monté à chaque ouverture (cf. TripUIContext) : le formulaire naît avec l'élément.
   const [form, setForm] = useState(() => initialForm(transport, defaults))
@@ -98,6 +107,8 @@ export default function TransportSheet({ open, transport, defaults, tripId, trip
   const guessedDate = useRef(transport ? null : form.from.date)
   const isEdit = !!transport
   const mode = getTransportMode(form.mode)
+  // Une activité : un seul lieu, son arrivée le reprend à l'enregistrement.
+  const single = isSinglePlace(form.mode)
   const nouns = NOUNS[form.mode] || NOUNS.other
 
   const set = (patch) => { setForm((f) => ({ ...f, ...patch })); setError(null) }
@@ -123,7 +134,7 @@ export default function TransportSheet({ open, transport, defaults, tripId, trip
     }
     if (take('fromPlace', f.fromName, !form.fromPlace.name)) patch.fromPlace = { ...form.fromPlace, name: f.fromName }
     if (take('toPlace', f.toName, !form.toPlace.name)) patch.toPlace = { ...form.toPlace, name: f.toName }
-    if (take('seat', f.seat, !form.seat && form.mode !== 'car')) patch.seat = f.seat
+    if (take('seat', f.seat, !form.seat && form.mode !== 'car' && !single)) patch.seat = f.seat
     if (take('confirmation', f.confirmation, !form.confirmation)) patch.confirmation = f.confirmation
     if (take('price', f.price, !form.price)) {
       patch.price = String(f.price.amount).replace('.', ',')
@@ -143,7 +154,8 @@ export default function TransportSheet({ open, transport, defaults, tripId, trip
 
   function submit(e) {
     e.preventDefault()
-    if (!form.from.date) return setError('Choisissez la date de départ.')
+    if (!form.from.date) return setError(single ? 'Choisissez le jour de l’activité.' : 'Choisissez la date de départ.')
+    if (single && !form.ref.trim() && !form.fromPlace.name.trim()) return setError('Donnez un nom à l’activité.')
     if (form.to.date && form.to.date < form.from.date) return setError('L’arrivée précède le départ.')
     if (form.to.date === form.from.date && form.from.time && form.to.time && form.to.time < form.from.time) {
       return setError('Arrivée avant le départ le même jour : s’il arrive le lendemain, changez la date d’arrivée.')
@@ -153,18 +165,23 @@ export default function TransportSheet({ open, transport, defaults, tripId, trip
       mode: form.mode,
       ref: form.ref,
       from: { ...form.fromPlace, date: form.from.date, time: form.from.time || null },
-      to: { ...form.toPlace, date: form.to.date || form.from.date, time: form.to.time || null },
-      seat: form.seat,
+      to: { ...(single ? form.fromPlace : form.toPlace), date: form.to.date || form.from.date, time: form.to.time || null },
+      seat: single ? '' : form.seat,
       confirmation: form.confirmation,
       price: form.price,
       currency: form.currency,
+      paidBy: form.paidBy,
+      paymentStatus: form.paymentStatus,
+      deposit: form.deposit,
+      dueDate: form.dueDate,
       mailUrl: form.mailUrl,
       notes: form.notes,
     }
     const { done } = saveReservation('transport', tripId, transport, values, files, currentUid)
     done.catch(() => toast.error('Enregistrement impossible'))
     if (form.price) rememberCurrency(form.currency)
-    toast.success(isEdit ? 'Trajet enregistré' : 'Trajet ajouté')
+    if (single) toast.success(isEdit ? 'Activité enregistrée' : 'Activité ajoutée')
+    else toast.success(isEdit ? 'Trajet enregistré' : 'Trajet ajouté')
     onClose()
   }
 
@@ -174,7 +191,7 @@ export default function TransportSheet({ open, transport, defaults, tripId, trip
     // Sa dépense FinAuzi reste (on a pu la payer quand même : annulation
     // payante) ; on propose de la supprimer, si c'est Trip qui l'avait créée.
     const expense = transport.expense
-    toast.success('Trajet supprimé', expense?.created ? {
+    toast.success(single ? 'Activité supprimée' : 'Trajet supprimé', expense?.created ? {
       description: `Sa dépense (${formatPrice(expense.amount, expense.currency)}) reste dans FinAuzi.`,
       action: { label: 'La supprimer', onClick: () => deleteSentExpense(expense.txId).catch(() => toast.error('Suppression impossible')) },
     } : undefined)
@@ -182,12 +199,10 @@ export default function TransportSheet({ open, transport, defaults, tripId, trip
     onDeleted?.()
   }
 
-  const priceValue = Number(String(form.price).replace(',', '.'))
   const summary = [
-    form.price && Number.isFinite(priceValue) && formatPrice(priceValue, form.currency),
     form.mailUrl && 'lien du mail',
     form.notes && 'notes',
-  ].filter(Boolean).join(' · ') || 'prix, lien du mail, notes'
+  ].filter(Boolean).join(' · ') || 'lien du mail, notes'
 
   return (
     <>
@@ -200,7 +215,7 @@ export default function TransportSheet({ open, transport, defaults, tripId, trip
         footer={(
           <div className="flex gap-2">
             {isEdit && (
-              <Button type="button" variant="danger" size="icon" className="h-11 w-11" onClick={() => setConfirmDelete(true)} aria-label="Supprimer le trajet">
+              <Button type="button" variant="danger" size="icon" className="h-11 w-11" onClick={() => setConfirmDelete(true)} aria-label={single ? 'Supprimer l’activité' : 'Supprimer le trajet'}>
                 <Trash2 size={17} />
               </Button>
             )}
@@ -219,13 +234,13 @@ export default function TransportSheet({ open, transport, defaults, tripId, trip
             {changeMode ? (
               <ChoiceChips options={TRANSPORT_MODES} value={form.mode} onChange={(m) => { set({ mode: m }); setChangeMode(false) }} />
             ) : null}
-            <Field label={form.mode === 'car' ? 'Loueur et véhicule' : 'Numéro'} optional>
+            <Field label={form.mode === 'car' ? 'Loueur et véhicule' : single ? 'Activité' : 'Numéro'} optional={!single}>
               <Input
                 value={form.ref}
                 onChange={(e) => set({ ref: e.target.value })}
                 placeholder={mode.refPlaceholder}
                 autoFocus={!isEdit}
-                className={cn('font-mono text-[15px]', hl('ref'))}
+                className={cn(single ? 'text-[15px]' : 'font-mono text-[15px]', hl('ref'))}
               />
             </Field>
             {!changeMode && (
@@ -235,31 +250,49 @@ export default function TransportSheet({ open, transport, defaults, tripId, trip
             )}
           </FormSection>
 
-          <FormSection title={mode.fromLabel}>
-            <PlaceInput
-              key={`from-${transport?.id || 'new'}`}
-              value={form.fromPlace}
-              onChange={(fromPlace) => set({ fromPlace })}
-              placeholder={form.mode === 'flight' ? 'Aéroport de Lisbonne, ou lien Google Maps' : 'Gare, agence… ou lien Google Maps'}
-              near={near}
-            />
-            <DateTimeField label="Le" date={form.from.date} time={form.from.time} onChange={changeFrom} highlight={filled.has('from')} />
-          </FormSection>
+          {single ? (
+            <FormSection title="Où et quand">
+              <PlaceInput
+                key={`from-${transport?.id || 'new'}`}
+                value={form.fromPlace}
+                onChange={(fromPlace) => set({ fromPlace })}
+                placeholder="Club, plage, rendez-vous… ou lien Google Maps"
+                near={near}
+              />
+              <div className="grid sm:grid-cols-2 gap-3">
+                <DateTimeField label="Début" date={form.from.date} time={form.from.time} onChange={changeFrom} highlight={filled.has('from')} />
+                <DateTimeField label="Fin" date={form.to.date} time={form.to.time} min={form.from.date} onChange={(to) => set({ to })} highlight={filled.has('to')} />
+              </div>
+            </FormSection>
+          ) : (
+            <>
+              <FormSection title={mode.fromLabel}>
+                <PlaceInput
+                  key={`from-${transport?.id || 'new'}`}
+                  value={form.fromPlace}
+                  onChange={(fromPlace) => set({ fromPlace })}
+                  placeholder={form.mode === 'flight' ? 'Aéroport de Lisbonne, ou lien Google Maps' : 'Gare, agence… ou lien Google Maps'}
+                  near={near}
+                />
+                <DateTimeField label="Le" date={form.from.date} time={form.from.time} onChange={changeFrom} highlight={filled.has('from')} />
+              </FormSection>
 
-          <FormSection title={mode.toLabel}>
-            <PlaceInput
-              key={`to-${transport?.id || 'new'}`}
-              value={form.toPlace}
-              onChange={(toPlace) => set({ toPlace })}
-              placeholder="Lieu d’arrivée, ou lien Google Maps"
-              near={near}
-            />
-            <DateTimeField label="Le" date={form.to.date} time={form.to.time} min={form.from.date} onChange={(to) => set({ to })} highlight={filled.has('to')} />
-          </FormSection>
+              <FormSection title={mode.toLabel}>
+                <PlaceInput
+                  key={`to-${transport?.id || 'new'}`}
+                  value={form.toPlace}
+                  onChange={(toPlace) => set({ toPlace })}
+                  placeholder="Lieu d’arrivée, ou lien Google Maps"
+                  near={near}
+                />
+                <DateTimeField label="Le" date={form.to.date} time={form.to.time} min={form.from.date} onChange={(to) => set({ to })} highlight={filled.has('to')} />
+              </FormSection>
+            </>
+          )}
 
-          <FormSection title="Au contrôle">
-            <div className={form.mode === 'car' ? 'grid gap-3' : 'grid grid-cols-2 gap-3'}>
-              {form.mode !== 'car' && (
+          <FormSection title={single ? 'Réservation' : 'Au contrôle'}>
+            <div className={form.mode === 'car' || single ? 'grid gap-3' : 'grid grid-cols-2 gap-3'}>
+              {form.mode !== 'car' && !single && (
                 <Field label="Place" optional>
                   <Input value={form.seat} onChange={(e) => set({ seat: e.target.value })} placeholder="Voiture 12, place 64" className={cn('text-[15px]', hl('seat'))} />
                 </Field>
@@ -270,8 +303,11 @@ export default function TransportSheet({ open, transport, defaults, tripId, trip
             </div>
           </FormSection>
 
-          <Disclosure key={filled.has('price') ? 'open' : 'closed'} summary={summary} defaultOpen={filled.has('price') || (isEdit && !!(transport.mailUrl || transport.notes))}>
-            <PriceField price={form.price} currency={form.currency} onChange={(p) => set(p)} highlight={filled.has('price')} />
+          <Disclosure key={filled.has('price') ? 'open' : 'closed'} label="Paiement" summary={paymentSummaryText(form) || 'prix, qui paie, payé ou non'} defaultOpen={filled.has('price')}>
+            <PaymentFields form={form} payers={payerOptions(companions, form.paidBy, guests)} onAddPayer={onAddPayer} onChange={set} highlightPrice={filled.has('price')} />
+          </Disclosure>
+
+          <Disclosure summary={summary} defaultOpen={isEdit && !!(transport.mailUrl || transport.notes)}>
             <Field label="Lien vers le mail" optional>
               <Input type="url" value={form.mailUrl} onChange={(e) => set({ mailUrl: e.target.value })} placeholder="https://mail.google.com/…" />
             </Field>
@@ -280,7 +316,7 @@ export default function TransportSheet({ open, transport, defaults, tripId, trip
             </Field>
           </Disclosure>
 
-          {isEdit && form.mode !== 'car' && onReverse && (
+          {isEdit && form.mode !== 'car' && !single && onReverse && (
             <Button type="button" variant="secondary" className="w-full" onClick={() => { onClose(); onReverse(transport) }}>
               <ArrowLeftRight size={16} /> Créer le retour
             </Button>
@@ -293,7 +329,7 @@ export default function TransportSheet({ open, transport, defaults, tripId, trip
       <ThemedConfirm
         open={confirmDelete}
         title={`Supprimer « ${transport ? resaTitle('transport', transport) : ''} » ?`}
-        message="Le trajet disparaît pour tous les deux."
+        message={single ? "L’activité disparaît pour tous les deux." : "Le trajet disparaît pour tous les deux."}
         details={attachments.length ? [plural(attachments.length, 'capture')] : []}
         onConfirm={remove}
         onClose={() => setConfirmDelete(false)}

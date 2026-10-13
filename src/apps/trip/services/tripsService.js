@@ -5,6 +5,7 @@ import { db } from '@/shared/lib/firebase.js'
 import { dateKey, optText, readMeta, stamp, text } from '../utils/fields.js'
 import { tripDays } from '../utils/tripDates.js'
 import { MAX_TRIP_PLACES, tripPlaces } from '../utils/world.js'
+import { normalizeCompanions } from '../utils/payment.js'
 import { ALL_TRIP_PARTS, partCol, tripDoc, tripsCol } from './refs.js'
 import { publicRefsOf } from './sharesService.js'
 
@@ -16,6 +17,8 @@ function normalizeTrip(raw) {
     startDate,
     endDate: dateKey(raw.endDate) || startDate,
     notes: optText(raw.notes, 2000),
+    // Les autres voyageurs (Clément et Lise en sont toujours) : ils peuvent payer une réservation.
+    companions: normalizeCompanions(raw.companions),
     // Les lieux du voyage, résumés pour la carte du monde (cf. utils/world.js).
     // `null` : jamais résumé (voyage d'avant la V2·3).
     places: Array.isArray(raw.places) ? raw.places.filter(isPlace).slice(0, MAX_TRIP_PLACES) : null,
@@ -33,6 +36,7 @@ function tripFields(fields) {
     startDate: dateKey(fields.startDate),
     endDate: dateKey(fields.endDate),
     notes: optText(fields.notes, 2000),
+    companions: normalizeCompanions(fields.companions),
   }
 }
 
@@ -61,6 +65,12 @@ export function createTrip(fields, currentUid) {
 // l'enregistrement depuis une plus ancienne.
 export function updateTrip(trip, fields, currentUid) {
   return setDoc(tripDoc(trip.id), { ...tripFields(fields), ...stamp(trip, currentUid) }, { merge: true })
+}
+
+/** Ajoute un compagnon au voyage (choisi comme payeur depuis une réservation). */
+export function addCompanion(trip, name, currentUid) {
+  const companions = normalizeCompanions([...(trip.companions || []), name])
+  return setDoc(tripDoc(trip.id), { companions, ...stamp(trip, currentUid) }, { merge: true })
 }
 
 /**

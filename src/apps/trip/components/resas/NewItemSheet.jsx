@@ -2,7 +2,7 @@ import { BedDouble, MapPin } from 'lucide-react'
 import { formatDayFr } from '@/shared/lib/dates.js'
 import { ThemedSheet } from '@/shared/ui/ThemedSheet.jsx'
 import { TRANSPORT_MODES } from '../../config/reservations.js'
-import { STAY_COLORS, TRANSPORT_COLOR } from '../../config/palette.js'
+import { STAY_COLORS, transportColor } from '../../config/palette.js'
 import { getCategory } from '../../config/categories.js'
 
 const LABELS = { flight: 'Vol', other: 'Autre trajet' }
@@ -13,6 +13,7 @@ const SUBS = {
   bus: 'Car, navette',
   ferry: 'Traversée',
   car: 'Location : prise, retour',
+  activity: 'Plongée, excursion, billet',
   other: 'Navette, téléphérique…',
 }
 
@@ -28,7 +29,7 @@ export default function NewItemSheet({ open, date, onClose, onStop, onStay, onTr
     { id: 'stop', label: 'Étape', sub: 'Un lieu, son heure', icon: MapPin, color: getCategory('other').color, onPick: onStop },
     { id: 'stay', label: 'Hébergement', sub: 'Hôtel, Airbnb, camping', icon: BedDouble, color: STAY_COLORS[0].hex, onPick: onStay },
     ...TRANSPORT_MODES.map((m) => ({
-      id: m.id, label: LABELS[m.id] || m.short || m.label, sub: SUBS[m.id], icon: m.icon, color: TRANSPORT_COLOR.hex, onPick: () => onTransport(m.id),
+      id: m.id, label: LABELS[m.id] || m.short || m.label, sub: SUBS[m.id], icon: m.icon, color: transportColor(m.id).hex, onPick: () => onTransport(m.id),
     })),
   ]
   return (

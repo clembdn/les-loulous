@@ -220,7 +220,8 @@ export function tripEvents({ trip, dayKeys, days, stays, transports, tzOf, label
   }
 
   for (const t of transports) {
-    const route = [t.from.name, t.to.name].filter(Boolean).join(' → ')
+    // Une activité (sur place) : son lieu, une seule fois.
+    const route = t.from.name === t.to.name ? t.from.name : [t.from.name, t.to.name].filter(Boolean).join(' → ')
     const title = [labels.transportMode(t.mode), t.ref, route && `· ${route}`].filter(Boolean).join(' ')
     const start = moment(t.from.date, t.from.time, tz(t.from) || dayTz[t.from.date])
     let end

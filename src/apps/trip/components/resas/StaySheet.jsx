@@ -11,13 +11,17 @@ import { toast } from '@/shared/ui/sonner.jsx'
 import Field from '../Field.jsx'
 import PlaceInput from '../places/PlaceInput.jsx'
 import AttachmentField from '../attachments/AttachmentField.jsx'
-import { ChoiceChips, DateTimeField, Disclosure, FILLED, FormSection, lastCurrency, PriceField, rememberCurrency } from './formParts.jsx'
+import {
+  ChoiceChips, DateTimeField, Disclosure, FILLED, FormSection, lastCurrency, PaymentFields, paymentForm, paymentSummaryText,
+  rememberCurrency,
+} from './formParts.jsx'
 import OcrPrefill from './OcrPrefill.jsx'
 import { stayFields } from '../../utils/resaParse.js'
 import { STAY_KINDS } from '../../config/reservations.js'
 import { deleteReservation, saveReservation } from '../../services/reservationsService.js'
 import { deleteSentExpense } from '../../services/expenseService.js'
 import { daysBetween } from '../../utils/tripDates.js'
+import { payerOptions } from '../../utils/payment.js'
 import { formatPrice, plural } from '../../utils/format.js'
 
 const NO_CHANGES = { add: [], remove: [] }
@@ -36,6 +40,7 @@ function initialForm(stay, defaults) {
     phone: stay?.phone || '',
     price: stay?.price != null ? String(stay.price).replace('.', ',') : '',
     currency: stay?.currency || lastCurrency(),
+    ...paymentForm(stay),
     mailUrl: stay?.mailUrl || '',
     notes: stay?.notes || '',
   }
@@ -46,7 +51,7 @@ function initialForm(stay, defaults) {
  * l'accueil), puis où et quand, puis ce qu'il faut à la porte — le code et
  * la référence. Téléphone, prix, lien du mail et notes sont repliés.
  */
-export default function StaySheet({ open, stay, defaults, tripId, tripStart = null, attachments = [], near, onClose, onDeleted }) {
+export default function StaySheet({ open, stay, defaults, tripId, tripStart = null, companions = [], guests = [], onAddPayer = null, attachments = [], near, onClose, onDeleted }) {
   const { currentUid } = useAuth()
   // Monté à chaque ouverture (cf. TripUIContext) : le formulaire naît avec l'élément.
   const [form, setForm] = useState(() => initialForm(stay, defaults))
@@ -117,6 +122,10 @@ export default function StaySheet({ open, stay, defaults, tripId, tripStart = nu
       phone: form.phone,
       price: form.price,
       currency: form.currency,
+      paidBy: form.paidBy,
+      paymentStatus: form.paymentStatus,
+      deposit: form.deposit,
+      dueDate: form.dueDate,
       mailUrl: form.mailUrl,
       notes: form.notes,
     }
@@ -144,13 +153,11 @@ export default function StaySheet({ open, stay, defaults, tripId, tripStart = nu
   const nights = form.checkIn.date && form.checkOut.date && form.checkOut.date > form.checkIn.date
     ? daysBetween(form.checkIn.date, form.checkOut.date)
     : 0
-  const priceValue = Number(String(form.price).replace(',', '.'))
   const summary = [
     form.phone && 'téléphone',
-    form.price && Number.isFinite(priceValue) && formatPrice(priceValue, form.currency),
     form.mailUrl && 'lien du mail',
     form.notes && 'notes',
-  ].filter(Boolean).join(' · ') || 'téléphone, prix, lien du mail, notes'
+  ].filter(Boolean).join(' · ') || 'téléphone, lien du mail, notes'
 
   return (
     <>
@@ -231,13 +238,14 @@ export default function StaySheet({ open, stay, defaults, tripId, tripStart = nu
             </div>
           </FormSection>
 
-          <Disclosure key={filled.has('price') ? 'open' : 'closed'} summary={summary} defaultOpen={filled.has('price') || (isEdit && !!(stay.phone || stay.mailUrl || stay.notes))}>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <Field label="Téléphone" optional>
-                <Input type="tel" value={form.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="+351 …" />
-              </Field>
-              <PriceField price={form.price} currency={form.currency} onChange={(p) => set(p)} highlight={filled.has('price')} />
-            </div>
+          <Disclosure key={filled.has('price') ? 'open' : 'closed'} label="Paiement" summary={paymentSummaryText(form) || 'prix, qui paie, payé ou non'} defaultOpen={filled.has('price')}>
+            <PaymentFields form={form} payers={payerOptions(companions, form.paidBy, guests)} onAddPayer={onAddPayer} onChange={set} highlightPrice={filled.has('price')} />
+          </Disclosure>
+
+          <Disclosure summary={summary} defaultOpen={isEdit && !!(stay.phone || stay.mailUrl || stay.notes)}>
+            <Field label="Téléphone" optional>
+              <Input type="tel" value={form.phone} onChange={(e) => set({ phone: e.target.value })} placeholder="+351 …" />
+            </Field>
             <Field label="Lien vers le mail" optional hint="Sur téléphone, un lien Gmail ouvre parfois la boîte de réception : la capture, elle, s’affiche toujours.">
               <Input type="url" value={form.mailUrl} onChange={(e) => set({ mailUrl: e.target.value })} placeholder="https://mail.google.com/…" />
             </Field>

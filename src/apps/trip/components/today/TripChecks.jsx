@@ -1,11 +1,15 @@
 import { useMemo } from 'react'
-import { Backpack, BedDouble, ChevronRight, CircleCheck, MapPinOff, Plus, TriangleAlert } from 'lucide-react'
+import { Backpack, BedDouble, ChevronRight, CircleCheck, MapPinOff, Plus, TriangleAlert, Wallet } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { formatDayFr } from '@/shared/lib/dates.js'
 import { useTripData } from '../../context/TripDataContext.jsx'
 import { useTripUI } from '../../context/TripUIContext.jsx'
 import { tripChecks } from '../../utils/today.js'
-import { plural } from '../../utils/format.js'
+import { formatPrice, plural } from '../../utils/format.js'
+import { paymentSummary } from '../../utils/payment.js'
+import { reservationEntries } from '../../utils/reservations.js'
+import { resaTitle } from '../resas/resaDisplay.jsx'
+import EurHint from '../EurHint.jsx'
 import { packingProgress } from '../../utils/packing.js'
 import { PACKING_ID } from '../../config/navigation.js'
 
@@ -14,14 +18,15 @@ const ROW = 'w-full flex items-start gap-3 rounded-xl px-3 py-2.5 text-left tran
 /**
  * « Avant de partir » : ce qui coûte cher à découvrir sur place — une nuit
  * sans toit, une nuit payée deux fois, une étape qu'on ne pourra plus
- * localiser sans réseau. Chaque ligne mène à la correction. Et la valise,
- * pour le couple (pas pour un invité).
+ * localiser sans réseau, un paiement à faire avant une date. Chaque ligne
+ * mène à la correction. Et la valise, pour le couple (pas pour un invité).
  */
 export default function TripChecks({ className }) {
   const ui = useTripUI()
-  const { nights, stopsByDate, dayKeys, packing, isLoading } = useTripData()
+  const { nights, stopsByDate, dayKeys, packing, stays, transports, isLoading } = useTripData()
   const checks = useMemo(() => tripChecks(nights, stopsByDate, dayKeys), [nights, stopsByDate, dayKeys])
-  const empty = !checks.gaps.length && !checks.overlaps.length && !checks.unlocated.length
+  const dues = useMemo(() => paymentSummary(reservationEntries(stays, transports)).due, [stays, transports])
+  const empty = !checks.gaps.length && !checks.overlaps.length && !checks.unlocated.length && !dues.length
 
   return (
     <section className={cn('rounded-2xl bg-surface shadow-sm', className)}>
@@ -53,6 +58,21 @@ export default function TripChecks({ className }) {
                   <span className="block text-sm text-fg first-letter:uppercase">Nuit du {formatDayFr(date)}</span>
                   <span className="block text-xs text-amber-800 truncate">
                     Réservée deux fois : {stays.map((s) => s.name).join(', ')}
+                  </span>
+                </span>
+                <ChevronRight size={16} className="mt-0.5 shrink-0 text-muted" />
+              </button>
+            </li>
+          ))}
+          {dues.map(({ kind, item, amount, currency, dueDate }) => (
+            <li key={`due-${kind}-${item.id}`}>
+              <button type="button" onClick={() => ui.openResa(kind, item.id)} className={ROW}>
+                <Wallet size={16} className="mt-0.5 shrink-0 text-amber-600" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm text-fg">{dueDate ? `À payer avant le ${formatDayFr(dueDate)}` : 'À payer'}</span>
+                  <span className="block text-xs text-amber-800 truncate">
+                    {[resaTitle(kind, item), amount != null && formatPrice(amount, currency)].filter(Boolean).join(' · ')}
+                    {amount != null && <EurHint amount={amount} currency={currency} className="ml-1" />}
                   </span>
                 </span>
                 <ChevronRight size={16} className="mt-0.5 shrink-0 text-muted" />

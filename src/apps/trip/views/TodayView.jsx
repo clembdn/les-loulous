@@ -235,8 +235,9 @@ function BeforeTrip({ progress }) {
             </div>
             <dl className="relative grid grid-cols-3 gap-3 border-t border-border px-5 py-4 lg:px-6">
               <Stat value={isLoading ? null : stays.length} singular="hébergement" />
-              <Stat value={isLoading ? null : transports.length} singular="trajet" />
-              <Stat value={isLoading ? null : stops} singular="étape" />
+              {/* Une activité réservée est au programme d'un jour, comme une étape. */}
+              <Stat value={isLoading ? null : transports.filter((t) => t.mode !== 'activity').length} singular="trajet" />
+              <Stat value={isLoading ? null : stops + transports.filter((t) => t.mode === 'activity').length} singular="étape" />
             </dl>
           </section>
           <section>

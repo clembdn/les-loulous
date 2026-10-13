@@ -8,6 +8,8 @@ import { useTripData } from '../context/TripDataContext.jsx'
 import { useTripUI } from '../context/TripUIContext.jsx'
 import ResaList from '../components/resas/ResaList.jsx'
 import ResaDetail from '../components/resas/ResaDetail.jsx'
+import PaymentsCard from '../components/resas/PaymentsCard.jsx'
+import { EurTotalHint } from '../components/EurHint.jsx'
 import OfflineBadge from '../components/OfflineBadge.jsx'
 import { reservationEntries } from '../utils/reservations.js'
 import { formatPrice, totalsByCurrency } from '../utils/format.js'
@@ -72,6 +74,7 @@ export default function ResasView({ selectedKey }) {
           {totals.length > 0 && (
             <p className="text-[15px] text-muted mt-0.5 tabular">
               Total {totals.map((t) => formatPrice(t.total, t.currency)).join(' · ')}
+              <EurTotalHint totals={totals} className="block text-fg font-medium" suffix=" en tout, au taux du jour" />
             </p>
           )}
           {/* Les captures sont ce qu'on montre à l'accueil sans réseau. */}
@@ -104,6 +107,7 @@ export default function ResasView({ selectedKey }) {
       {!isLoading && entries.length > 0 && (
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] lg:gap-6 lg:items-start">
           <div>
+            <PaymentsCard entries={entries} onOpen={(kind, id) => ui.openResa(kind, id)} className="mt-3" />
             <ResaList
               entries={entries}
               selectedKey={isDesktop ? shown?.key : null}

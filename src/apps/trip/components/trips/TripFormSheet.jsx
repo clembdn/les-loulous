@@ -15,6 +15,7 @@ import {
 } from '../../services/tripsService.js'
 import { daysBetween, validateTripDates } from '../../utils/tripDates.js'
 import { plural } from '../../utils/format.js'
+import { normalizeCompanions } from '../../utils/payment.js'
 import { tripPath } from '../../config/navigation.js'
 
 /**
@@ -34,6 +35,7 @@ export default function TripFormSheet({ open, trip = null, onClose, onDeleted })
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [notes, setNotes] = useState('')
+  const [companions, setCompanions] = useState('')
   const [error, setError] = useState(null)
   // { kind: 'shrink', values, hidden } | { kind: 'delete', details }
   const [confirm, setConfirm] = useState(null)
@@ -47,6 +49,7 @@ export default function TripFormSheet({ open, trip = null, onClose, onDeleted })
     setStartDate(trip?.startDate || '')
     setEndDate(trip?.endDate || '')
     setNotes(trip?.notes || '')
+    setCompanions((trip?.companions || []).join(', '))
     setError(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, trip?.id])
@@ -84,7 +87,7 @@ export default function TripFormSheet({ open, trip = null, onClose, onDeleted })
       setError(dateError)
       return
     }
-    const values = { title: cleanTitle, startDate, endDate, notes }
+    const values = { title: cleanTitle, startDate, endDate, notes, companions: normalizeCompanions(companions) }
 
     // Raccourcir le voyage masque les jours qui sortent de la plage. Leurs
     // étapes sont gardées (elles reviennent si on rallonge), mais personne
@@ -169,6 +172,10 @@ export default function TripFormSheet({ open, trip = null, onClose, onDeleted })
               {plural(length, 'jour')}{length > 1 && ` · ${plural(length - 1, 'nuit')}`}
             </p>
           )}
+
+          <Field label="Avec" optional hint="Les autres voyageurs, séparés par des virgules : ils pourront payer une réservation. Vous deux en êtes toujours.">
+            <Input value={companions} onChange={(e) => setCompanions(e.target.value)} placeholder="Laure, Paul" maxLength={400} />
+          </Field>
 
           <Field label="Notes" optional>
             <Textarea

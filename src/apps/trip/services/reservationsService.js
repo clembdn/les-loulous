@@ -5,6 +5,7 @@ import {
   currencyCode, enumValue, money, optText, place, readMeta, stamp, timePoint,
 } from '../utils/fields.js'
 import { normalizeExpenseLink } from '../utils/expense.js'
+import { paymentFields } from '../utils/payment.js'
 import { queueAttachmentChanges } from './attachmentsService.js'
 import { listen } from './listen.js'
 import { partCol, partDoc } from './refs.js'
@@ -20,6 +21,7 @@ function commonFields(raw) {
     confirmation: optText(raw?.confirmation, 120),
     price: money(raw?.price),
     currency: currencyCode(raw?.currency),
+    ...paymentFields(raw),
     mailUrl: optText(raw?.mailUrl, 2000),
     notes: optText(raw?.notes, 2000),
   }

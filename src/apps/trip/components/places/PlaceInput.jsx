@@ -18,7 +18,9 @@ const MAX_SUGGESTIONS = 5
  *  · on COLLE un lien Google Maps → nom et position remplis tout seuls ;
  *  · on TAPE → des suggestions arrivent pendant la frappe (OpenStreetMap),
  *    on en touche une ; sinon le texte reste le nom ;
- *  · renommer un lieu déjà localisé garde sa position ;
+ *  · renommer un lieu déjà localisé garde sa position : taper ne cherche
+ *    plus rien (sinon Entrée prenait la première suggestion et déplaçait le
+ *    lieu) ; « Déplacer » relance la recherche, exprès ;
  *  · un lieu sans position : « Localiser » le cherche par son nom.
  * Sans réseau rien ne bloque : le nom (et le lien) sont gardés, la position
  * viendra plus tard.
@@ -82,7 +84,8 @@ export default function PlaceInput({ value, onChange, onPick, placeholder = 'Lie
     }
     setDraft(text)
     setMessage(null)
-    setSearching(true)
+    // Déjà localisé : c'est un nouveau nom, pas une recherche.
+    if (!located) setSearching(true)
     onChange({ ...place, name: text })
   }
 
@@ -100,7 +103,7 @@ export default function PlaceInput({ value, onChange, onPick, placeholder = 'Lie
     setMessage(null)
   }
 
-  // « Localiser » : chercher le nom déjà saisi.
+  // « Localiser » (ou « Déplacer ») : chercher le nom déjà saisi.
   function localize() {
     setSearching(true)
     inputRef.current?.focus()
@@ -173,6 +176,16 @@ export default function PlaceInput({ value, onChange, onPick, placeholder = 'Lie
             <span className="min-w-0 flex-1 text-muted truncate">
               {place.address || `Localisé · ${place.lat.toFixed(4)}, ${place.lng.toFixed(4)}`}
             </span>
+            {online && !searching && (
+              <button
+                type="button"
+                onClick={localize}
+                className="shrink-0 inline-flex items-center gap-0.5 text-accent font-medium"
+                title="Chercher un autre lieu (le nom tapé)"
+              >
+                <Search size={13} /> Déplacer
+              </button>
+            )}
             <button
               type="button"
               onClick={clearLocation}

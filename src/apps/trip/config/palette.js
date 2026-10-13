@@ -25,6 +25,14 @@ export function stayColor(index) {
 /** Trajets réservés (train, vol, voiture…) : bleu nuit. */
 export const TRANSPORT_COLOR = { hex: '#1E3A5F', solid: 'bg-[#1E3A5F] text-white' }
 
+/** Activités réservées (plongée, excursion…) : le rouge de la catégorie « Activité ». */
+export const ACTIVITY_COLOR = { hex: '#DC2626', solid: 'bg-[#DC2626] text-white' }
+
+/** La couleur d'une réservation de la famille des trajets, selon son mode. */
+export function transportColor(mode) {
+  return mode === 'activity' ? ACTIVITY_COLOR : TRANSPORT_COLOR
+}
+
 /** Ce qui est derrière nous. */
 export const PAST_COLOR = '#9AA1AC'
 

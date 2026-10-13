@@ -100,6 +100,11 @@ export function TripSharesProvider({ children }) {
   return <TripSharesContext.Provider value={value}>{children}</TripSharesContext.Provider>
 }
 
+/** Les liens invités, ou `null` hors du fournisseur (vue invité). */
+export function useOptionalTripShares() {
+  return useContext(TripSharesContext)
+}
+
 export function useTripShares() {
   const ctx = useContext(TripSharesContext)
   if (!ctx) throw new Error('useTripShares doit être utilisé sous <TripSharesProvider>')

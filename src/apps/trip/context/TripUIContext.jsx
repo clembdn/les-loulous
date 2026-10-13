@@ -1,6 +1,10 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '@/shared/context/AuthContext.jsx'
+import { toast } from '@/shared/ui/sonner.jsx'
 import { useTripData } from './TripDataContext.jsx'
+import { useOptionalTripShares } from './TripSharesContext.jsx'
+import { addCompanion } from '../services/tripsService.js'
 import StaySheet from '../components/resas/StaySheet.jsx'
 import TransportSheet from '../components/resas/TransportSheet.jsx'
 import StopSheet from '../components/days/StopSheet.jsx'
@@ -44,6 +48,8 @@ const CLOSED = { open: false, item: null, defaults: null, nonce: 0 }
 
 export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, basePath, readOnly = false, children }) {
   const { trip, tripId, stays, days, attachmentsByParent } = useTripData()
+  const { currentUid } = useAuth()
+  const sharesCtx = useOptionalTripShares()
   const navigate = useNavigate()
   const [stayForm, setStayForm] = useState(CLOSED)
   const [transportForm, setTransportForm] = useState(CLOSED)
@@ -58,6 +64,13 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
   const [optimize, setOptimize] = useState({ open: false, date: null, nonce: 0 })
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [viewer, setViewer] = useState({ list: [], index: null })
+
+  // Qui peut payer, en plus des deux : les compagnons du voyage et le nom de
+  // chaque lien invité. « + Autre » dans une réservation ajoute un compagnon.
+  const guests = useMemo(() => (sharesCtx?.shares || []).map((s) => s.label), [sharesCtx?.shares])
+  const addPayer = useCallback((name) => {
+    addCompanion(trip, name, currentUid).catch(() => toast.error('Ajout impossible'))
+  }, [trip, currentUid])
 
   // Un point du voyage pour orienter la recherche de lieux : « Gare » doit
   // trouver celle de Lisbonne, pas celle de Lyon.
@@ -150,6 +163,9 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
             defaults={stayForm.defaults}
             tripId={tripId}
             tripStart={trip.startDate}
+            companions={trip.companions}
+            guests={guests}
+            onAddPayer={addPayer}
             attachments={stay ? attachmentsByParent[stay.id] || [] : []}
             near={near}
             onClose={() => setStayForm((f) => ({ ...f, open: false }))}
@@ -162,6 +178,9 @@ export function TripUIProvider({ goTab, goBack, currentSub, onTripDeleted, baseP
             defaults={transportForm.defaults}
             tripId={tripId}
             tripStart={trip.startDate}
+            companions={trip.companions}
+            guests={guests}
+            onAddPayer={addPayer}
             attachments={transport ? attachmentsByParent[transport.id] || [] : []}
             near={near}
             onClose={() => setTransportForm((f) => ({ ...f, open: false }))}

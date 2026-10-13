@@ -31,16 +31,18 @@ test('une journée : par la route quand c’est calculé, à vol d’oiseau sino
   assert.equal(other.byMode.car > 0, true)
 })
 
-test('le voyage : journées, trajets réservés à vol d’oiseau, location de voiture exclue', () => {
+test('le voyage : journées, trajets réservés à vol d’oiseau, location de voiture et activité exclues', () => {
   const dayKeys = ['2027-05-12', '2027-05-13', '2027-05-14']
   const hotel = { id: 'h', name: 'Hôtel', ...BELEM, checkIn: { date: '2027-05-12', time: null }, checkOut: { date: '2027-05-14', time: null } }
   const flight = { id: 'f', mode: 'flight', from: { ...GRACA, date: '2027-05-14', time: '10:00' }, to: { ...AZORES, date: '2027-05-14', time: '11:00' } }
   const rental = { id: 'r', mode: 'car', from: { ...BELEM, date: '2027-05-12', time: null }, to: { ...GRACA, date: '2027-05-14', time: null } }
+  // Une activité réservée : sur place, son arrivée reprend son lieu.
+  const dive = { id: 'd', mode: 'activity', ref: 'Baptême de plongée', from: { ...PASTEIS, date: '2027-05-13', time: '09:00' }, to: { ...PASTEIS, date: '2027-05-13', time: '12:00' } }
   const days = {
     '2027-05-12': { title: 'Belém', stops: [stop('a', BELEM), stop('b', PASTEIS), stop('x', { lat: null, lng: null })], legs: [okLeg(BELEM, PASTEIS, 'walk', 1556)] },
   }
-  const timelines = Object.fromEntries(dayKeys.map((d) => [d, buildDayTimeline(d, days[d]?.stops || [], [hotel], [flight, rental])]))
-  const recap = tripRecap({ dayKeys, days, timelines, stays: [hotel], transports: [flight, rental], nights: nightsOf(dayKeys, [hotel]) })
+  const timelines = Object.fromEntries(dayKeys.map((d) => [d, buildDayTimeline(d, days[d]?.stops || [], [hotel], [flight, rental, dive])]))
+  const recap = tripRecap({ dayKeys, days, timelines, stays: [hotel], transports: [flight, rental, dive], nights: nightsOf(dayKeys, [hotel]) })
 
   assert.equal(recap.stops, 3)
   assert.equal(recap.located, 2)
@@ -53,7 +55,8 @@ test('le voyage : journées, trajets réservés à vol d’oiseau, location de v
   // Le premier jour : Belém → Pastéis seulement. L'étape « x » sans position coupe la suite
   // (Pastéis → x → arrivée à l'hôtel) : la frise n'y montre pas de trajet, le récap non plus.
   assert.equal(recap.distance.byMode.walk, 1556)
-  assert.ok(Math.abs(recap.distance.totalM - (recap.perDay.reduce((n, d) => n + d.distanceM, 0) + flightM)) < 1, 'location exclue')
+  assert.ok(Math.abs(recap.distance.totalM - (recap.perDay.reduce((n, d) => n + d.distanceM, 0) + flightM)) < 1, 'location et activité exclues')
+  assert.equal(recap.distance.byMode.other, 0, 'l’activité n’est pas un « autre trajet »')
 })
 
 test('les pays du voyage, les plus fréquentés d’abord, villes sans doublon', () => {

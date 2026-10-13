@@ -2,16 +2,17 @@ import { BedDouble } from 'lucide-react'
 import { cn } from '@/shared/lib/utils.js'
 import { getCategory } from '../config/categories.js'
 import { getTransportMode } from '../config/reservations.js'
-import { PAST_COLOR, stayColor, TRANSPORT_COLOR } from '../config/palette.js'
+import { PAST_COLOR, stayColor, transportColor } from '../config/palette.js'
 import { hasCoords } from '../utils/geo.js'
 
 /**
  * La couleur d'un élément de la frise — la même que son repère sur la carte.
- * Étape : sa catégorie ; hébergement : sa couleur de séjour ; trajet : bleu nuit.
+ * Étape : sa catégorie ; hébergement : sa couleur de séjour ; trajet : bleu nuit,
+ * activité réservée : rouge.
  */
 export function itemColor(item, colorIndexByStay = {}) {
   if (item.type === 'stop') return getCategory(item.stop.category).color
-  if (item.type === 'transport') return TRANSPORT_COLOR.hex
+  if (item.type === 'transport') return transportColor(item.transport.mode).hex
   return stayColor(colorIndexByStay[item.stay.id]).hex
 }
 

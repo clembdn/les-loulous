@@ -610,6 +610,7 @@ service cloud.firestore {
         && data.endDate is string && isDateId(data.endDate)
         && data.endDate >= data.startDate
         && optStr(data, 'notes', 2000)
+        && (!('companions' in data) || (data.companions is list && data.companions.size() <= 8))
         && (!('places' in data) || (data.places is list && data.places.size() <= 80));
     }
 
@@ -630,7 +631,20 @@ service cloud.firestore {
         && optStr(data, 'mailUrl', 2000)
         && optStr(data, 'notes', 2000)
         && hasValidMoney(data)
+        && hasValidPayment(data)
         && hasValidExpenseLink(data);
+    }
+
+    // Qui paie une réservation (uid, « joint » ou prénom d'un compagnon) et où
+    // en est le paiement : tout facultatif.
+    function hasValidPayment(data) {
+      return optStr(data, 'paidBy', 40)
+        && (!('paymentStatus' in data) || data.paymentStatus == null
+            || data.paymentStatus in ['paid', 'deposit', 'onsite', 'due'])
+        && (!('deposit' in data) || data.deposit == null
+            || (data.deposit is number && data.deposit >= 0))
+        && (!('dueDate' in data) || data.dueDate == null
+            || (data.dueDate is string && isDateId(data.dueDate)));
     }
 
     // La dépense FinAuzi d'une réservation (« Envoyer à FinAuzi ») : un lien,
@@ -644,7 +658,7 @@ service cloud.firestore {
     }
 
     function hasValidTransportShape(data) {
-      return data.mode in ['flight', 'train', 'bus', 'ferry', 'car', 'other']
+      return data.mode in ['flight', 'train', 'bus', 'ferry', 'car', 'activity', 'other']
         && isEndpoint(data.from)
         && isEndpoint(data.to)
         && data.to.date >= data.from.date
@@ -654,6 +668,7 @@ service cloud.firestore {
         && optStr(data, 'mailUrl', 2000)
         && optStr(data, 'notes', 2000)
         && hasValidMoney(data)
+        && hasValidPayment(data)
         && hasValidExpenseLink(data);
     }
 
