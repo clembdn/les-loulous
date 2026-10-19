@@ -11,7 +11,7 @@ import { beatsPrevious, formatWeight, setScore } from '../../utils/metrics.js'
 import { beatsRecord } from '../../utils/records.js'
 import { previousSetAt } from '../../utils/previous.js'
 import { entryRange, formatPrescription } from '../../utils/repRange.js'
-import { jumpedEarly, passageXp, reachedLoad } from '../../utils/progression.js'
+import { jumpedEarly, passageXp, reachedLoad, targetLoad } from '../../utils/progression.js'
 import {
   addSet, addWarmup, buildRows, clearRow, fillRow, parseNumber, removeRow, rowLabels, setField,
   toField, toSets, toggleWarmup,
@@ -198,11 +198,18 @@ export default function ExerciseFocus({
   const improved = !skipped && beatsPrevious(done, previous?.sets, exercise)
 
   // La barre d'aujourd'hui se lit dans le BROUILLON, pas dans Firestore : elle
-  // bouge dès qu'on valide une série, sans attendre l'écho du cache.
+  // bouge dès qu'on valide une série, sans attendre l'écho du cache. Elle se
+  // juge à la charge que le coach demande : plus léger ne la remplit pas, plus
+  // lourd et réussi la remplit.
   const todayWorking = working(rows)
-  const today = skipped ? null : passageXp({ sets: todayWorking, prescribedSets, range }, { bodyweight })
-  const warning = !skipped && jumpedEarly(todayWorking, progress)
-  const leveledToday = !!levelUpLoad && reachedLoad(todayWorking, levelUpLoad)
+  const today = skipped
+    ? null
+    : passageXp({ sets: todayWorking, prescribedSets, range }, { bodyweight, refLoad: targetLoad(progress) })
+  // Monté d'emblée et réussi : ce n'était pas trop tôt, et le niveau d'avant
+  // est prouvé (même règle que `exerciseProgress`).
+  const provedByJump = !!today?.full && !!last && suggestion?.kind === 'stay' && today.lifted > last.load
+  const warning = !skipped && !today?.full && jumpedEarly(todayWorking, progress)
+  const leveledToday = (!!levelUpLoad && reachedLoad(todayWorking, levelUpLoad)) || provedByJump
   const level = (progress?.level || 0) + (leveledToday ? 1 : 0)
 
   /**

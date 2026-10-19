@@ -7,9 +7,12 @@ import { passagesByExercise } from './previous.js'
  * ── La règle ────────────────────────────────────────────────────────────────
  *
  * Double progression : on reste à la même charge tant que toutes les séries
- * n'ont pas atteint le haut de la fourchette. Barre pleine, on monte d'un cran
- * (le pas de l'exercice). La barre mesure le chemin parcouru entre le bas et le
- * haut de la fourchette, série par série.
+ * n'ont pas atteint le haut de la fourchette. Barre pleine, on monte — du plus
+ * petit cran de l'appareil (le pas de l'exercice), jamais de plus de ~5 % de la
+ * charge sauf quand un seul cran les dépasse déjà (cf. `loadJump`). La barre
+ * mesure le chemin parcouru entre le bas et le haut de la fourchette, série par
+ * série, À LA CHARGE DU NIVEAU : une série plus légère ne compte pas, une série
+ * plus lourde réussie compte pour ce qu'elle vaut à cette charge.
  *
  * ── Tout se recalcule depuis les séances ────────────────────────────────────
  *
@@ -59,10 +62,37 @@ export function workingLoad(sets) {
 }
 
 /**
- * L'XP d'un passage, entre 0 et 1.
+ * Ce que vaut une série plus lourde, en reps à la charge du niveau.
  *
- * On prend les N premières séries à la charge de travail (N = séries prévues ce
- * jour-là) ; une série manquante compte 0. Trois cas :
+ * Epley : 1RM ≈ charge × (1 + reps/30) — la mesure de `setScore`
+ * (utils/metrics.js). Dix reps à 17,5 kg valent ainsi seize reps à 15 kg. Arrondi vers le bas : le coach ne crédite pas ce qui n'est
+ * qu'à moitié fait.
+ */
+export function equivalentReps(weightKg, reps, refLoad) {
+  if (!(refLoad > 0)) return reps
+  return Math.max(0, Math.floor(30 * ((weightKg * (1 + reps / 30)) / refLoad - 1) + EPS))
+}
+
+/**
+ * L'XP d'un passage, entre 0 et 1, jugé à la charge du NIVEAU (`refLoad`).
+ *
+ * Par défaut, le niveau est la charge de travail du passage : l'historique se
+ * lit tel qu'il a été fait. Pour la séance du jour, c'est la charge que le
+ * coach a demandée (cf. `targetLoad`) — sinon 12 reps à 5 kg rempliraient une
+ * barre à 15 kg.
+ *
+ * On prend les N premières séries à `refLoad` OU AU-DESSUS (N = séries prévues
+ * ce jour-là) ; une série plus légère ne compte pas, une série manquante
+ * compte 0. Chaque série retenue est créditée :
+ *
+ * - à la charge du niveau : de ses reps ;
+ * - plus lourde ET dans la fourchette (reps ≥ bas) : de ses reps converties à
+ *   la charge du niveau (`equivalentReps`). Sous le bas, c'est une tentative,
+ *   pas une preuve : elle garde ses vraies reps ;
+ * - au poids du corps, le lest ne se convertit pas (la masse totale nous
+ *   échappe) : ses vraies reps.
+ *
+ * Puis trois cas :
  *
  * - fourchette (6–10) : chaque série vaut ce qu'elle a gagné au-dessus du bas,
  *   plafonné au haut ; la somme se rapporte à N × (haut − bas) ;
@@ -71,21 +101,32 @@ export function workingLoad(sets) {
  *   N × haut. Le lest, lui, se traite comme n'importe quelle charge.
  *
  * @param {{ sets, prescribedSets, range: { min, max } }} passage
- * @returns {null | { load, reps, done, xp, full, allBelowMin }}
- *   `reps` : les N valeurs, manquantes à 0 · `done` : les séries réellement
- *   faites à la charge de travail (la « perf à battre »).
+ * @param {{ bodyweight?, refLoad? }} options
+ * @returns {null | { load, lifted, reps, done, xp, full, allBelowMin }}
+ *   `load` : la charge du niveau · `lifted` : la charge de travail réellement
+ *   soulevée · `reps` : les N valeurs créditées, manquantes à 0 · `done` : les
+ *   séries réellement faites à la charge du niveau (la « perf à battre »).
  */
-export function passageXp(passage, { bodyweight = false } = {}) {
-  const load = workingLoad(passage?.sets)
-  if (load === null) return null
+export function passageXp(passage, { bodyweight = false, refLoad } = {}) {
+  const lifted = workingLoad(passage?.sets)
+  if (lifted === null) return null
+  const load = refLoad != null && Number.isFinite(Number(refLoad)) ? roundKg(refLoad) : lifted
 
   const n = Math.max(1, Math.round(Number(passage.prescribedSets) || 1))
   const { min, max } = passage.range
-  const done = passage.sets
-    .filter((s) => Number(s?.reps) > 0 && Math.abs(roundKg(s.weightKg) - load) < EPS)
+  const counted = passage.sets
+    .filter((s) => Number(s?.reps) > 0 && roundKg(s.weightKg) >= load - EPS)
     .slice(0, n)
+  const credited = counted.map((s) => {
+    const r = Number(s.reps)
+    const w = roundKg(s.weightKg)
+    if (bodyweight || w <= load + EPS || r < min) return r
+    return equivalentReps(w, r, load)
+  })
+  const reps = Array.from({ length: n }, (_, i) => credited[i] || 0)
+  const done = counted
+    .filter((s) => Math.abs(roundKg(s.weightKg) - load) < EPS)
     .map((s) => Number(s.reps))
-  const reps = Array.from({ length: n }, (_, i) => done[i] || 0)
 
   let xp
   if (bodyweight && load === 0) {
@@ -99,6 +140,7 @@ export function passageXp(passage, { bodyweight = false } = {}) {
 
   return {
     load,
+    lifted,
     reps,
     done,
     xp,
@@ -155,6 +197,25 @@ function needsDeload(scored) {
   return before.allBelowMin && last.allBelowMin
 }
 
+// Monter : ~5 % de la charge au plus. Redescendre : ~10 %.
+const JUMP_UP = 0.05
+const JUMP_DOWN = 0.1
+
+/**
+ * De combien changer la charge : un multiple du cran, jamais moins d'un cran,
+ * et pas plus de `ratio` de la charge quand plusieurs crans y tiennent.
+ *
+ * Un pas fixe ne convient à aucune charge : 7 kg, c'est +9 % à 80 kg mais +47 %
+ * à 15 kg — de quoi tomber sous le bas de la fourchette, vider la barre et
+ * redescendre deux séances plus tard. À 15 kg on monte d'un cran (2,5) ; à
+ * 100 kg, de deux (5).
+ */
+export function loadJump(load, step, ratio) {
+  if (!(step > 0)) return 0
+  const crans = Math.max(1, Math.floor(((Number(load) || 0) * ratio + EPS) / step))
+  return roundKg(crans * step)
+}
+
 /**
  * Où en est un mouvement, et que faire aujourd'hui.
  *
@@ -163,12 +224,13 @@ function needsDeload(scored) {
  * @returns {{ last, level, suggestion: { kind, load } }}
  *
  * `level` : le nombre de montées VALIDÉES — une charge en hausse alors que la
- * barre du passage précédent était pleine. Monter avant d'avoir rempli la
- * barre ne fait pas gagner de niveau.
+ * barre du passage précédent était pleine, ou que le nouveau passage, jugé à
+ * l'ancienne charge, la remplit (monter d'emblée et réussir prouve le niveau
+ * d'avant). Monter et rater ne fait pas gagner de niveau.
  *
  * `suggestion.kind`, par priorité :
- * - `deload`  : redescendre d'un cran (cf. `needsDeload`) ;
- * - `levelUp` : barre pleine → charge + pas ;
+ * - `deload`  : redescendre d'environ 10 % (cf. `needsDeload`, `loadJump`) ;
+ * - `levelUp` : barre pleine → charge + un saut (cf. `loadJump`) ;
  * - `full`    : barre pleine mais aucun pas réglé (poids du corps) ;
  * - `stay`    : rester à la même charge ;
  * - `first`   : aucun historique.
@@ -182,7 +244,9 @@ export function exerciseProgress(passages, { incrementKg = 0, bodyweight = false
 
   let level = 0
   for (let i = 1; i < scored.length; i += 1) {
-    if (scored[i].load > scored[i - 1].load + EPS && scored[i - 1].full) level += 1
+    const [before, now] = [scored[i - 1], scored[i]]
+    if (now.load <= before.load + EPS) continue
+    if (before.full || passageXp(now, { bodyweight, refLoad: before.load })?.full) level += 1
   }
 
   const last = scored.length > 0 ? scored[scored.length - 1] : null
@@ -191,14 +255,27 @@ export function exerciseProgress(passages, { incrementKg = 0, bodyweight = false
   let suggestion
   if (!last) suggestion = { kind: 'first', load: null }
   else if (step > 0 && needsDeload(scored)) {
-    suggestion = { kind: 'deload', load: roundKg(Math.max(0, last.load - step)) }
+    suggestion = { kind: 'deload', load: roundKg(Math.max(0, last.load - loadJump(last.load, step, JUMP_DOWN))) }
   } else if (last.full) {
     suggestion = step > 0
-      ? { kind: 'levelUp', load: roundKg(last.load + step) }
+      ? { kind: 'levelUp', load: roundKg(last.load + loadJump(last.load, step, JUMP_UP)) }
       : { kind: 'full', load: last.load }
   } else suggestion = { kind: 'stay', load: last.load }
 
   return { last, level, suggestion }
+}
+
+/**
+ * La charge du niveau pour la séance du jour : celle que le coach demande.
+ *
+ * Monter ou redescendre → la charge conseillée ; sinon celle de la dernière
+ * séance. `undefined` sans historique : la barre se juge alors à la charge du
+ * jour, faute de mieux.
+ */
+export function targetLoad(progress) {
+  const s = progress?.suggestion
+  if ((s?.kind === 'levelUp' || s?.kind === 'deload') && s.load != null) return s.load
+  return progress?.last ? progress.last.load : undefined
 }
 
 /**

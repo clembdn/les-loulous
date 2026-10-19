@@ -4,13 +4,15 @@ import { Dumbbell, Cog, PersonStanding, Layers } from 'lucide-react'
 // ambiguë — dire « charge affichée sur la machine » n'apprend rien à personne
 // et ne fait qu'ajouter du bruit sous les champs.
 //
-// `incrementKg` : le pas de charge par défaut — de combien on monte quand la
-// barre d'XP est pleine. Les machines guidées montent par 7 kg (33, 40, 47…) ;
-// une poulie classée « machine » qui monte par 1,25 se règle dans sa fiche.
+// `incrementKg` : le PLUS PETIT CRAN par défaut de l'appareil. La barre d'XP
+// pleine fait monter d'un cran, ou de plusieurs tant qu'ils tiennent dans ~5 %
+// de la charge (cf. `loadJump`, utils/progression.js). Les machines guidées ont
+// un poids intermédiaire de 2,5 kg entre deux plaques de la pile : 7 kg d'un
+// coup, c'était +47 % à 15 kg. Une poulie à 1,25 se règle dans sa fiche.
 export const EXERCISE_TYPES = [
   { id: 'barbell',    label: 'Barre',          icon: Layers,         hint: 'Charge totale, barre incluse', incrementKg: 2.5 },
   { id: 'dumbbell',   label: 'Haltères',       icon: Dumbbell,       hint: 'Poids d’un seul haltère',      incrementKg: 2 },
-  { id: 'machine',    label: 'Machine',        icon: Cog,            hint: null,                           incrementKg: 7 },
+  { id: 'machine',    label: 'Machine',        icon: Cog,            hint: null,                           incrementKg: 2.5 },
   { id: 'bodyweight', label: 'Poids du corps', icon: PersonStanding, hint: '0 si non lesté, sinon le lest', incrementKg: 0 },
 ]
 
@@ -33,7 +35,7 @@ export function defaultIncrement(type) {
  * Un pas personnalisé, ou `null` pour « le défaut du type ».
  *
  * Seul un pas qui DIFFÈRE du défaut est stocké : passer un exercice de
- * « machine » à « haltères » doit faire passer son pas de 7 à 2 kg, sauf si on
+ * « machine » à « haltères » doit faire passer son pas de 2,5 à 2 kg, sauf si on
  * l'a réglé à la main.
  */
 export function customIncrement(value, type) {

@@ -6,8 +6,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  buildPassageIndex, buildProgressIndex, exerciseProgress, jumpedEarly, passageXp,
-  reachedLoad, roundKg, workingLoad,
+  buildPassageIndex, buildProgressIndex, equivalentReps, exerciseProgress, jumpedEarly, loadJump,
+  passageXp, reachedLoad, roundKg, targetLoad, workingLoad,
 } from './progression.js'
 
 const set = (weightKg, reps, extra = {}) => ({ weightKg, reps, ...extra })
@@ -159,16 +159,21 @@ test('deux passages le même jour sont mis bout à bout', () => {
 
 // ── Niveau ──────────────────────────────────────────────────────────────────
 
-test('niveau : une montée compte seulement si la barre précédente était pleine', () => {
+test('niveau : une montée compte si la barre précédente était pleine, ou si la montée la prouve', () => {
   const full = (load) => passage('d', [set(load, 10), set(load, 10), set(load, 10), set(load, 10)])
   const half = (load) => passage('d', [set(load, 8), set(load, 8), set(load, 8), set(load, 8)])
+  const low = (load) => passage('d', [set(load, 6), set(load, 6), set(load, 6), set(load, 6)])
 
-  // 18 pleine → 20 (+1) ; 20 à moitié → 22 (montée trop tôt, +0) ; 22 pleine → 24 (+1).
-  const progress = exerciseProgress([full(18), half(20), half(22), full(22), half(24)], { incrementKg: 2 })
+  // 18 pleine → 20 (+1) ; 20 à moitié → 22 × 6 (montée trop tôt, ratée : +0) ; 22 pleine → 24 (+1).
+  const progress = exerciseProgress([full(18), half(20), low(22), full(22), half(24)], { incrementKg: 2 })
   assert.equal(progress.level, 2)
+  // 20 à moitié → 22 × 8 : huit reps à 22 kg en valent onze à 20 — le niveau d'avant est prouvé.
+  assert.equal(exerciseProgress([half(20), half(22)], { incrementKg: 2 }).level, 1)
   // 20 pleine puis 22 : +1 aussi — la montée suit une barre pleine.
   assert.equal(exerciseProgress([half(20), full(20), half(22)], { incrementKg: 2 }).level, 1)
-  assert.equal(exerciseProgress([half(18), half(20)], { incrementKg: 2 }).level, 0)
+  // 18 à moitié → 20 × 5, sous la fourchette : rien de prouvé.
+  const failed = passage('d', [set(20, 5), set(20, 5), set(20, 5), set(20, 5)])
+  assert.equal(exerciseProgress([half(18), failed], { incrementKg: 2 }).level, 0)
 })
 
 test('monter avant d\'avoir rempli la barre déclenche l\'avertissement', () => {
@@ -220,10 +225,14 @@ test('réel · Développé militaire haltères 8-12, 14 × 12/12/12 → 100 %, p
   assert.deepEqual(exerciseProgress([p], { incrementKg: 2 }).suggestion, { kind: 'levelUp', load: 16 })
 })
 
-test('réel · Rowing assis 8-12, N=4, 54 × 12/12/12 + 61 × 8 → charge 54 kg, 75 %', () => {
+test('réel · Rowing assis 8-12, N=4, 54 × 12/12/12 + 61 × 8 → charge 54 kg, 100 %', () => {
+  // La quatrième série, plus lourde et dans la fourchette, vaut 12 reps à 54 kg
+  // (Epley) : elle remplit sa part au lieu de compter 0.
   const r = passageXp(passage('d', [set(54, 12), set(54, 12), set(54, 12), set(61, 8)], { n: 4, min: 8, max: 12 }))
   assert.equal(r.load, 54)
-  assert.equal(r.xp, 0.75)
+  assert.deepEqual(r.reps, [12, 12, 12, 12])
+  assert.deepEqual(r.done, [12, 12, 12])
+  assert.equal(r.xp, 1)
 })
 
 test('réel · Développé couché haltères 8-12, 16 × 12/12 + 18 × 8/10 → égalité, 18 kg, 17 %', () => {
@@ -300,4 +309,75 @@ test('les séances d\'une semaine allégée ne comptent pas pour la barre', () =
   const index = buildProgressIndex([full, light], '2026-10-05', () => ({ incrementKg: 2 }))
   assert.equal(index.ex.last.date, '2026-09-21', 'la dernière VRAIE séance')
   assert.deepEqual(index.ex.suggestion, { kind: 'levelUp', load: 20 })
+})
+
+// ── La barre jugée à la charge du niveau ────────────────────────────────────
+
+test('séance du jour plus légère que demandé → la barre ne bouge pas', () => {
+  const today = passage('t', [set(5, 12), set(5, 12), set(5, 12)], { n: 3, min: 8, max: 12 })
+  const r = passageXp(today, { refLoad: 15 })
+  assert.equal(r.load, 15)
+  assert.equal(r.lifted, 5)
+  assert.equal(r.xp, 0)
+})
+
+test('séance du jour plus lourde et réussie → la barre se remplit', () => {
+  const today = passage('t', [set(17.5, 10), set(17.5, 10), set(17.5, 10)], { n: 3, min: 8, max: 12 })
+  const r = passageXp(today, { refLoad: 15 })
+  assert.equal(equivalentReps(17.5, 10, 15), 16)
+  assert.equal(r.xp, 1)
+  assert.deepEqual(r.done, [], 'aucune série à 15 kg : rien à « battre »')
+})
+
+test('plus lourd mais sous le bas de la fourchette → une tentative, pas une preuve', () => {
+  const today = passage('t', [set(17.5, 6), set(17.5, 6), set(17.5, 6)], { n: 3, min: 8, max: 12 })
+  assert.equal(passageXp(today, { refLoad: 15 }).xp, 0)
+})
+
+test('une série plus lourde ne compte plus 0 à côté des autres', () => {
+  const today = passage('t', [set(15, 12), set(15, 12), set(17.5, 10)], { n: 3, min: 8, max: 12 })
+  assert.equal(passageXp(today, { refLoad: 15 }).xp, 1)
+})
+
+test('lest au poids du corps : plus lourd compte ses vraies reps, sans conversion', () => {
+  const today = passage('t', [set(10, 6), set(10, 6)], { n: 2, min: 6, max: 8 })
+  assert.equal(passageXp(today, { bodyweight: true, refLoad: 5 }).xp, 0)
+})
+
+test('monter d\'emblée et réussir : niveau gagné, la barre repart à la nouvelle charge', () => {
+  const before = passage('a', [set(15, 10), set(15, 10), set(15, 10)], { n: 3, min: 8, max: 12 })
+  const jumped = passage('b', [set(17.5, 10), set(17.5, 10), set(17.5, 10)], { n: 3, min: 8, max: 12 })
+  const progress = exerciseProgress([before, jumped], { incrementKg: 2.5 })
+  assert.equal(progress.level, 1)
+  assert.equal(progress.last.xp, 0.5)
+  assert.deepEqual(progress.suggestion, { kind: 'stay', load: 17.5 })
+})
+
+test('charge du niveau : celle que le coach demande', () => {
+  const half = passage('a', [set(15, 10), set(15, 10), set(15, 10)], { n: 3, min: 8, max: 12 })
+  const full = passage('a', [set(15, 12), set(15, 12), set(15, 12)], { n: 3, min: 8, max: 12 })
+  assert.equal(targetLoad(exerciseProgress([half], { incrementKg: 2.5 })), 15)
+  assert.equal(targetLoad(exerciseProgress([full], { incrementKg: 2.5 })), 17.5)
+  assert.equal(targetLoad(exerciseProgress([], { incrementKg: 2.5 })), undefined)
+})
+
+// ── La taille du saut ───────────────────────────────────────────────────────
+
+test('réel · machine 15 kg, barre pleine → 17,5 kg, pas 22', () => {
+  const p = passage('d', [set(15, 12), set(15, 12), set(15, 12)], { n: 3, min: 8, max: 12 })
+  assert.deepEqual(exerciseProgress([p], { incrementKg: 2.5 }).suggestion, { kind: 'levelUp', load: 17.5 })
+})
+
+test('saut : au moins un cran, jusqu\'à ~5 % quand la charge est lourde', () => {
+  assert.equal(loadJump(15, 2.5, 0.05), 2.5)
+  assert.equal(loadJump(10, 2, 0.05), 2, 'un cran même s\'il dépasse 5 %')
+  assert.equal(loadJump(60, 2.5, 0.05), 2.5)
+  assert.equal(loadJump(100, 2.5, 0.05), 5)
+  assert.equal(loadJump(200, 2.5, 0.05), 10)
+  assert.equal(loadJump(50, 0, 0.05), 0, 'sans cran, pas de saut')
+})
+
+test('redescendre : environ 10 %', () => {
+  const under = (date) => passage(date, [set(100, 5), set(100, 5), set(100, 5)], { n: 3, min: 8, max: 12 })
+  assert.deepEqual(exerciseProgress([under('a'), under('b')], { incrementKg: 2.5 }).suggestion, { kind: 'deload', load: 90 })
 })

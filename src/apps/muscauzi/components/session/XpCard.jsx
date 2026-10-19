@@ -21,6 +21,10 @@ import { formatLoad, formatSets, formatWeight } from '../../utils/metrics.js'
  * train de la battre. À une charge NOUVELLE, la barre repart de zéro, sans
  * repère — c'est un nouveau niveau, pas la suite de l'ancien.
  *
+ * La barre du jour se juge à la charge DEMANDÉE (`today.load`). Quand on
+ * soulève autre chose (`today.lifted`), une ligne dit pourquoi la barre bouge
+ * — ou pas.
+ *
  * @param previous   cf. `buildPreviousIndex` — la dernière fois, toutes séries
  * @param progress   cf. `exerciseProgress` (historique d'avant aujourd'hui)
  * @param today      `passageXp` des séries du jour, ou null
@@ -48,16 +52,18 @@ export default function XpCard({
     )
   }
 
-  const { icon: Icon, tone, title, detail } = leveled
+  const base = leveled
     ? {
       // La montée est faite : on ne répète plus « passe à 47 kg » à quelqu'un
       // qui vient de le faire. La barre repart de zéro, à ce nouveau niveau.
       icon: Sparkles,
       tone: 'accent',
-      title: `Niveau atteint — ${formatLoad(suggestion.load, exercise)}`,
+      title: `Niveau atteint — ${formatLoad(Math.max(today?.lifted ?? 0, suggestion.load ?? 0), exercise)}`,
       detail: `Remplis la barre à cette charge : ${targetReps} reps sur chaque série.`,
     }
     : describe(suggestion, last, exercise, bodyweight)
+  const { icon: Icon, tone, title } = base
+  const detail = (live && offTarget(today, exercise)) || base.detail
 
   return (
     <div className="mt-3 rounded-2xl border border-border bg-surface overflow-hidden">
@@ -172,15 +178,21 @@ function XpBar({ value, marker, celebrate }) {
  */
 function describe(suggestion, last, exercise, bodyweight) {
   switch (suggestion.kind) {
-    case 'levelUp':
+    case 'levelUp': {
+      // Un seul cran peut peser lourd sur une petite charge (haltères 10 → 12,
+      // +20 %) : on prévient que perdre des reps est normal.
+      const jump = last.load > 0 ? (suggestion.load - last.load) / last.load : 0
       return {
         icon: ArrowUp,
         tone: 'accent',
         title: bodyweight && !(last.load > 0)
           ? `Niveau suivant : ajoute ${formatWeight(suggestion.load)} kg de lest`
           : `Niveau suivant : passe à ${formatLoad(suggestion.load, exercise)}`,
-        detail: null,
+        detail: jump > 0.1 + 1e-6
+          ? `Gros saut (+${Math.round(jump * 100)} %) : vise le bas de la fourchette, c’est normal.`
+          : null,
       }
+    }
     case 'full':
       return {
         icon: Sparkles,
@@ -209,4 +221,21 @@ function describe(suggestion, last, exercise, bodyweight) {
         detail: 'La barre d’XP démarre à partir de cette séance.',
       }
   }
+}
+
+/**
+ * Pourquoi la barre du jour bouge — ou pas — quand on ne soulève pas la charge
+ * demandée. `null` à la bonne charge.
+ */
+function offTarget(today, exercise) {
+  const asked = formatLoad(today.load, exercise)
+  if (today.lifted > today.load + 1e-6) {
+    if (today.full) return `Plus lourd que prévu et réussi : la prochaine fois, garde ${formatLoad(today.lifted, exercise)}.`
+    // Au poids du corps, le lest ne se convertit pas (cf. `passageXp`).
+    return isBodyweight(exercise) ? null : `Plus lourd que prévu : chaque série compte en équivalent ${asked}.`
+  }
+  if (today.lifted < today.load - 1e-6) {
+    return `Plus léger que prévu : seules les séries à ${asked} ou plus remplissent la barre.`
+  }
+  return null
 }

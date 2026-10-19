@@ -26,7 +26,7 @@ Aucune migration : un document ancien se relit comme avant.
 | Ligne de programme | `repsMin`, `repsMax` (+ `reps` = `repsMax`, toujours écrit) | min = max = `reps` |
 | Entrée de séance | `prescribedRepsMin`, `prescribedRepsMax` (+ `prescribedReps` = max) | ligne de programme actuelle du même exercice, à défaut min = max = `prescribedReps` |
 | Série | `warmup: true` (écrit seulement si vrai) | série de travail |
-| Exercice | `incrementKg`, stocké seulement s'il diffère du défaut du type | défaut : haltères 2, barre 2,5, machine 7, poids du corps 0 |
+| Exercice | `incrementKg`, stocké seulement s'il diffère du défaut du type | défaut : haltères 2, barre 2,5, machine 2,5 (poids intermédiaire), poids du corps 0 |
 | `program/even` | `alternateWeeks: false` pour couper l'alternance | absent = alternance active |
 | Séance | `lightWeek: true` (séance de semaine allégée) | séance normale |
 | **Nouveau** `meta/muscauzi` | `weightRateMin`, `weightRateMax` (kg/sem), `lightWeekStart` (clé de date) | rien de réglé |
@@ -59,19 +59,30 @@ Sur les séances **strictement avant** la date affichée, un passage par date et
 le regroupement de « la dernière fois » (`passagesByExercise`, `utils/previous.js`), réutilisé.
 
 - **Charge de travail** : celle du plus grand nombre de séries ; à égalité, la plus lourde.
-- **N** = séries prévues ce jour-là ; on prend les N premières séries à cette charge, une
-  série manquante compte 0.
+- **Charge du niveau** : pour l'historique, la charge de travail ; pour la séance du jour, la
+  charge que le coach demande (`targetLoad` : conseillée si monter/redescendre, sinon celle de
+  la dernière séance).
+- **N** = séries prévues ce jour-là ; on prend les N premières séries à la charge du niveau
+  **ou au-dessus**, une série plus légère ne compte pas, une série manquante compte 0. Une
+  série plus lourde **dans la fourchette** est créditée de ses reps converties à la charge du
+  niveau (Epley : `floor(30 × (w·(1+r/30)/ref − 1))`) ; sous le bas de la fourchette, ou en
+  lest au poids du corps, de ses vraies reps.
 - **XP** = Σ min(max(reps − min, 0), max − min) / (N × (max − min)).
   Nombre fixe : part des séries ≥ max. Poids du corps non lesté : min(Σ reps / (N × max), 1).
-- **Niveau** = nombre de montées de charge faites alors que la barre précédente était pleine.
-- **Suggestion**, par priorité : redescendre d'un pas (deux séances de suite à la même charge,
-  toutes les séries sous min) › monter d'un pas (barre pleine) › barre pleine sans pas réglé
+- **Niveau** = nombre de montées de charge faites alors que la barre précédente était pleine,
+  ou que le nouveau passage, jugé à l'ancienne charge, la remplit (monter d'emblée et réussir).
+- **Saut** (`loadJump`) : un multiple du pas (le plus petit cran de l'appareil), au moins un
+  cran, au plus ~5 % de la charge pour monter et ~10 % pour redescendre. 15 kg → 17,5 ;
+  100 kg → 105 (montée) ou 90 (redescente).
+- **Suggestion**, par priorité : redescendre d'un saut (deux séances de suite à la même charge,
+  toutes les séries sous min) › monter d'un saut (barre pleine) › barre pleine sans pas réglé
   (« ajoute du lest ») › rester.
 - **Avertissement neutre** : charge du jour au-dessus de la précédente alors que la barre
-  n'était pas pleine.
+  n'était pas pleine — sauf si la barre du jour est pleine (saut réussi).
 
 Tests : les cinq exemples synthétiques et cinq séances réelles (incliné 16 × 10/12/12 → 18 kg ;
-militaire 14 × 12/12/12 → 16 kg ; rowing 54 × 12/12/12 + 61 × 8 → 54 kg, 75 % ; couché
+militaire 14 × 12/12/12 → 16 kg ; rowing 54 × 12/12/12 + 61 × 8 → 54 kg, 100 % — la série à
+61 × 8 vaut 12 reps à 54 ; couché
 16 × 12/12 + 18 × 8/10 → 18 kg, 17 % ; curl marteau 12 × 5/7/8/3 → 0 %, et après 12 × 5/5/7 →
 redescendre).
 
@@ -88,7 +99,10 @@ redescendre).
 - **Aperçu / rail** : « 4 × 6–10 », niveau, mini-barre d'XP, « ↑ 20 kg » / « ↓ 16 kg ».
 - **Programme** : séries + deux steppers reps min / max ; interrupteur « Alterner semaines
   paires/impaires » en tête.
-- **Fiche exercice** : pas de charge (puces 1,25 · 2 · 2,5 · 5 · 7 ou saisie libre).
+- **Fiche exercice** : plus petit cran (puces 1,25 · 2 · 2,5 · 5 · 7 ou saisie libre).
+- **Messages du coach** : « Gros saut (+20 %) : vise le bas de la fourchette » quand un seul
+  cran dépasse 10 % ; en séance, « Plus léger que prévu… » / « Plus lourd que prévu et
+  réussi : la prochaine fois, garde 17,5 kg ».
 
 ## 5. Alternance par compte
 

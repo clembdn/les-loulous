@@ -5,7 +5,7 @@ import { Progress } from '@/shared/ui/Progress.jsx'
 import { doneSets, isEntryComplete } from '../../utils/sets.js'
 import { formatLoad, formatSets } from '../../utils/metrics.js'
 import { entryRange, formatPrescription } from '../../utils/repRange.js'
-import { passageXp } from '../../utils/progression.js'
+import { passageXp, targetLoad } from '../../utils/progression.js'
 import { isBodyweight } from '../../config/exercises.js'
 
 /**
@@ -101,7 +101,10 @@ function OverviewRow({ line, entry, exercise, progress, onClick }) {
   const range = entryRange(line)
 
   const today = savedDone > 0
-    ? passageXp({ sets: done, prescribedSets: line.prescribedSets, range }, { bodyweight: isBodyweight(exercise) })
+    ? passageXp(
+      { sets: done, prescribedSets: line.prescribedSets, range },
+      { bodyweight: isBodyweight(exercise), refLoad: targetLoad(progress) },
+    )
     : null
   const xp = today ? today.xp : progress?.last?.xp ?? null
   const kind = progress?.suggestion?.kind

@@ -371,7 +371,8 @@ function ExerciseForm({ initial, onCancel, onSubmit }) {
 }
 
 /**
- * Le pas de charge — de combien monter quand la barre d'XP est pleine.
+ * Le plus petit cran de l'appareil — la barre d'XP pleine fait monter d'un
+ * cran, ou de plusieurs tant qu'ils tiennent dans ~5 % de la charge.
  *
  * Les pas courants se choisissent d'un appui ; un autre (une poulie à 1,5 kg)
  * se tape. Le défaut du type est signalé : c'est ce qui s'applique tant qu'on
@@ -379,7 +380,6 @@ function ExerciseForm({ initial, onCancel, onSubmit }) {
  */
 function IncrementPicker({ type, value, isDefault, onChange }) {
   const [draft, setDraft] = useState(INCREMENT_CHOICES.includes(value) ? '' : formatWeight(value))
-  const fallback = defaultIncrement(type)
 
   const commitDraft = () => {
     const n = Number(String(draft).replace(',', '.'))
@@ -393,7 +393,7 @@ function IncrementPicker({ type, value, isDefault, onChange }) {
   return (
     <>
       <p className="text-[10px] uppercase tracking-[0.16em] text-faint mt-4 mb-1.5">
-        Pas de charge
+        Plus petit cran
         <span className="normal-case tracking-normal ml-2 text-faint/80">
           {isDefault ? `défaut ${getExerciseType(type).label.toLowerCase()}` : 'réglé à la main'}
         </span>
@@ -437,9 +437,9 @@ function IncrementPicker({ type, value, isDefault, onChange }) {
       </div>
       <p className="text-[11px] text-faint mt-1.5 leading-relaxed">
         {value > 0
-          ? `Barre pleine → +${formatWeight(value)} kg.`
+          ? `Barre pleine → +${formatWeight(value)} kg, jusqu’à ~5 % de la charge quand elle est lourde.`
           : 'Sans pas, la barre pleine te dira d’ajouter du lest.'}
-        {fallback === 7 && ' Machines guidées : 7 kg — une poulie monte souvent par 1,25 ou 2,5.'}
+        {type === 'machine' && ' Machines : 2,5 kg avec le poids intermédiaire.'}
       </p>
     </>
   )
