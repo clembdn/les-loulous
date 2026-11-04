@@ -10,6 +10,10 @@
 //      CE ftid, et seulement s'il tombe dans la zone que le ftid encode ;
 //   3. à défaut, la zone du ftid elle-même (quelques centaines de mètres) ;
 //   4. sans ftid, le nom (et l'adresse) dans OpenStreetMap (Photon).
+// Photon ne connaît pas tous les restaurants : il se rabat alors sur la ville
+// citée dans l'adresse, et rend son centre. Une ville n'est jamais acceptée
+// comme position d'un lieu — sinon tous les lieux d'une ville tombaient au
+// même point (place des Cocotiers pour tout Nouméa).
 //
 // Jamais de coordonnées lues dans le HTML de la page : Google y met le centre
 // de la carte par défaut, déduit de l'adresse IP… du serveur. Tous les liens
@@ -194,9 +198,9 @@ async function searchGoogle(fetchImpl, query, ftid) {
 
 async function searchPhoton(fetchImpl, query, near) {
   try {
-    const res = await timedFetch(fetchImpl, photonUrl(query, { near, limit: 1 }))
-    const [hit] = res.ok ? photonPlaces(await res.json()) : []
-    return hit || null
+    const res = await timedFetch(fetchImpl, photonUrl(query, { near, limit: 3 }))
+    const hits = res.ok ? photonPlaces(await res.json()) : []
+    return hits.find((hit) => !hit.area) || null
   } catch {
     return null
   }

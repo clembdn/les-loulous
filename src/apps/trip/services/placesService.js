@@ -17,7 +17,8 @@ const TIMEOUT_MS = 12000
 // semaine en version périmée), clé = l'URL : changer la version quand le
 // résolveur change de réponse, sinon les anciennes resservent.
 // v2 : plus de coordonnées lues dans la page (c'était le centre déduit de l'IP).
-const RESOLVER_VERSION = '2'
+// v3 : plus de centre-ville rendu par Photon comme position d'un lieu.
+const RESOLVER_VERSION = '3'
 
 // `signal` : la recherche n'a plus lieu d'être (on a continué de taper).
 async function fetchWithTimeout(url, signal = null) {

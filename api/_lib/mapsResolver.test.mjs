@@ -165,6 +165,28 @@ test('sans ftid : OpenStreetMap retrouve le lieu, signalé approximatif', async 
   assert.equal(net.calls.length, 1, 'ni page, ni recherche Google')
 })
 
+test('Photon ne connaît que la ville : jamais son centre comme position du lieu', async () => {
+  // Le bug de Nouméa : « Le Roof, Promenade Roger Laroque, Nouméa » inconnu
+  // d'OpenStreetMap → Photon rendait la ville, et tous les lieux tombaient
+  // place des Cocotiers (« 15 av. Victoire Henry Lafleur »).
+  const noumea = { geometry: { coordinates: [166.442419, -22.274526] }, properties: { name: 'Nouméa', osm_key: 'place', osm_value: 'city', type: 'city', country: 'France' } }
+  const cityOnly = fakeFetch([[/^https:\/\/photon\.komoot\.io\//, { json: { features: [noumea] } }]])
+  const r = await resolveMapsLink('https://maps.google.com/?q=Le+Roof,+Promenade+Roger+Laroque,+Noum%C3%A9a', { fetchImpl: cityOnly.impl })
+  assert.equal(r.status, 422, 'mieux vaut « à localiser » qu’un faux point')
+
+  // Avec un ftid : la zone du ftid plutôt que le centre-ville.
+  const withFtid = fakeFetch([[GOOGLE_SEARCH, { status: 503 }], [/^https:\/\/photon\.komoot\.io\//, { json: { features: [{ ...noumea, geometry: { coordinates: [2.3522, 48.8566] }, properties: { ...noumea.properties, name: 'Paris' } }] } }]])
+  const r2 = await resolveMapsLink(ANDROID_SHARE, { fetchImpl: withFtid.impl })
+  assert.equal(r2.body.approximate, true)
+  assert.notDeepEqual([r2.body.lat, r2.body.lng], [48.8566, 2.3522])
+
+  // Le vrai lieu après la ville dans les réponses : c'est lui qu'on garde.
+  const poi = { geometry: { coordinates: [166.4357, -22.2928] }, properties: { name: 'Le Roof', osm_key: 'amenity', osm_value: 'restaurant', type: 'house' } }
+  const both = fakeFetch([[/^https:\/\/photon\.komoot\.io\//, { json: { features: [noumea, poi] } }]])
+  const r3 = await resolveMapsLink('https://maps.google.com/?q=Le+Roof,+Noum%C3%A9a', { fetchImpl: both.impl })
+  assert.deepEqual([r3.body.lat, r3.body.lng], [-22.2928, 166.4357])
+})
+
 test('rien trouvé nulle part : 422, avec le nom qu’on a pu lire', async () => {
   const shared = 'https://maps.google.com/?q=Endroit+introuvable'
   const net = fakeFetch([

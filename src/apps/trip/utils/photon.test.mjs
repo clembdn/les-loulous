@@ -98,3 +98,13 @@ test('ajouter un lieu déjà visité : pays, île (préférée à la commune), v
   assert.ok(areas[0].radiusKm >= 15 && areas[0].radiusKm <= 25, `rayon ${areas[0].radiusKm}`)
   assert.deepEqual([areas[1].kind, areas[1].country, areas[1].radiusKm], ['country', 'JP', 150])
 })
+
+test('une ville, un quartier, une île : des zones, pas des lieux', async () => {
+  const { isAreaFeature } = await import('./photon.js')
+  assert.equal(isAreaFeature({ osm_key: 'place', osm_value: 'city', type: 'city' }), true)
+  assert.equal(isAreaFeature({ osm_key: 'place', osm_value: 'suburb', type: 'district' }), true)
+  assert.equal(isAreaFeature({ osm_key: 'boundary', osm_value: 'administrative' }), true)
+  assert.equal(isAreaFeature({ osm_key: 'amenity', osm_value: 'restaurant', type: 'house' }), false)
+  assert.equal(isAreaFeature({ osm_key: 'highway', osm_value: 'residential', type: 'street' }), false)
+  assert.equal(isAreaFeature(undefined), false)
+})

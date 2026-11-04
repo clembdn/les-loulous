@@ -19,9 +19,27 @@ export function photonUrl(query, { near = null, limit = 6 } = {}) {
   return `${ENDPOINT}?${params}`
 }
 
+// Une ville, un quartier, une région, une île : un point posé au centre d'une
+// zone, pas un lieu précis. Le point de « Nouméa » est place des Cocotiers.
+const AREA_TYPES = new Set(['city', 'district', 'locality', 'county', 'state', 'country', 'region'])
+const AREA_PLACES = new Set([
+  'city', 'town', 'village', 'hamlet', 'suburb', 'quarter', 'neighbourhood', 'locality',
+  'municipality', 'borough', 'county', 'state', 'region', 'province', 'country',
+  'island', 'islet', 'archipelago',
+])
+
+/** Le résultat Photon est-il une zone (ville, quartier…) plutôt qu'un lieu ? */
+export function isAreaFeature(properties = {}) {
+  const p = properties || {}
+  return p.osm_key === 'boundary'
+    || (p.osm_key === 'place' && AREA_PLACES.has(p.osm_value))
+    || AREA_TYPES.has(p.type)
+}
+
 /**
  * Une réponse Photon (GeoJSON) → `{ name, address, lat, lng }`, plus
- * `category` quand les tags OpenStreetMap ou le nom permettent de la deviner.
+ * `category` quand les tags OpenStreetMap ou le nom permettent de la deviner,
+ * et `area: true` quand c'est une ville ou un quartier (cf. `isAreaFeature`).
  * L'adresse est reconstruite à partir de ce qu'OpenStreetMap connaît : rue,
  * ville, pays — sans répéter le nom.
  */
@@ -41,6 +59,7 @@ export function photonPlace(feature) {
     lat,
     lng,
     ...(category ? { category } : {}),
+    ...(isAreaFeature(p) ? { area: true } : {}),
   }
 }
 
