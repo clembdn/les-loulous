@@ -16,8 +16,9 @@ import { cn } from '@/shared/lib/utils.js'
 import { useMuscData } from '../context/MuscDataContext.jsx'
 import {
   DOWS, MAX_DAY_NAME, copyLines, resolveLineName, saveAlternateWeeks, saveProgramDay, saveProgramDayName,
-  saveProgramWeek, withoutOrphans,
+  saveProgramWeek, saveScheduleMode, withoutOrphans,
 } from '../services/programService.js'
+import { rotationSlots, slotForDate } from '../utils/rotation.js'
 import { saveLightWeekStart } from '../services/settingsService.js'
 import { isInLightWeek, lightWeekEnd } from '../utils/lightWeek.js'
 import { SETTINGS_SUBS } from '../config/navigation.js'
@@ -56,12 +57,26 @@ export default function ProgramView({ onNavigate }) {
   const { currentUid } = useAuth()
   const {
     exercises, exerciseById, programs, catalogueReady, isLoading, alternateWeeks, settingsReady,
-    today, lightWeekStart, prefsReady,
+    today, lightWeekStart, prefsReady, rotation, sessions,
   } = useMuscData()
 
   const [chosenParity, setParity] = useState(() => weekParity(new Date()))
-  const parity = alternateWeeks ? chosenParity : 'even'
-  const [dayOfWeek, setDayOfWeek] = useState(() => isoDayOfWeek(new Date()))
+  // En boucle, seul le programme pair sert, alternance ou pas.
+  const parity = alternateWeeks && !rotation ? chosenParity : 'even'
+
+  // En boucle, la case repérée est la PROCHAINE séance — celle que la séance du
+  // jour proposera —, pas le jour de la semaine.
+  const upNext = useMemo(
+    () => (rotation ? slotForDate({ sessions, slots: rotationSlots(programs.even), dateKey: today }).slot : null),
+    [rotation, sessions, programs.even, today],
+  )
+  // Tant qu'on n'a rien choisi, on s'ouvre sur la séance à venir : le jour de
+  // la semaine, ou la prochaine case de la boucle.
+  const [pickedDay, setDayOfWeek] = useState(null)
+  const dayOfWeek = pickedDay ?? (rotation ? upNext ?? 1 : isoDayOfWeek(new Date()))
+
+  // En boucle, les cases ne sont plus des jours : « Séance 3 », pas « mercredi ».
+  const dayText = (d) => (rotation ? `Séance ${d}` : dayLabel(d))
   const [picking, setPicking] = useState(false)
   const [copying, setCopying] = useState(false)
   const [pendingCopy, setPendingCopy] = useState(null)
@@ -139,6 +154,14 @@ export default function ProgramView({ onNavigate }) {
       : 'Un seul programme pour toutes les semaines. Ta semaine impaire est gardée de côté.')
   }
 
+  const toggleSchedule = (next) => {
+    saveScheduleMode(currentUid, next ? 'rotation' : 'weekday', currentUid)
+      .catch(() => toast.error('Enregistrement impossible'))
+    toast(next
+      ? 'Séances en boucle : la séance du jour suit la dernière faite, quel que soit le jour.'
+      : 'Retour aux jours de la semaine. Ton programme n\'a pas bougé.')
+  }
+
   const renameDay = (name) => {
     saveProgramDayName(currentUid, parity, dayOfWeek, name, currentUid)
       .catch(() => toast.error('Enregistrement impossible'))
@@ -173,7 +196,7 @@ export default function ProgramView({ onNavigate }) {
     saveProgramDay(currentUid, toParity, toDay, copyLines(lines, newInstanceId), currentUid)
       .then(() => toast.success(
         toParity === parity
-          ? `Copié vers ${dayLabel(toDay).toLowerCase()}`
+          ? `Copié vers ${dayText(toDay).toLowerCase()}`
           : `Copié vers la semaine ${PARITY_LABEL[toParity]}`,
       ))
       .catch(() => toast.error('Copie impossible'))
@@ -194,6 +217,12 @@ export default function ProgramView({ onNavigate }) {
       <div className="lg:grid lg:grid-cols-[minmax(0,20rem)_1fr] lg:gap-8 lg:items-start">
         <div className="lg:sticky lg:top-8">
           {settingsReady && (
+            <ScheduleToggle checked={rotation} onChange={toggleSchedule} />
+          )}
+
+          {/* En boucle, une seule liste de séances : l'alternance n'a plus de
+              sens et son réglage disparaît (gardé tel quel en base). */}
+          {settingsReady && !rotation && (
             <AlternateToggle checked={alternateWeeks} onChange={toggleAlternate} />
           )}
 
@@ -209,7 +238,7 @@ export default function ProgramView({ onNavigate }) {
             />
           )}
 
-          {alternateWeeks && (
+          {alternateWeeks && !rotation && (
             <SegmentedTabs
               items={PARITY_TABS}
               active={parity}
@@ -224,6 +253,8 @@ export default function ProgramView({ onNavigate }) {
             onChange={setDayOfWeek}
             counts={dayCounts}
             names={program.names}
+            rotation={rotation}
+            today={rotation ? upNext : undefined}
             className="mb-3"
           />
 
@@ -237,9 +268,11 @@ export default function ProgramView({ onNavigate }) {
             variant="secondary"
             className="w-full text-sm mb-5"
             onClick={() => setCopying(true)}
-            disabled={alternateWeeks ? lines.length === 0 && weekCount === 0 : lines.length === 0}
+            disabled={alternateWeeks && !rotation ? lines.length === 0 && weekCount === 0 : lines.length === 0}
           >
-            <Copy size={15} /> {alternateWeeks ? 'Copier ce jour ou la semaine' : 'Copier ce jour'}
+            <Copy size={15} /> {alternateWeeks && !rotation
+              ? 'Copier ce jour ou la semaine'
+              : rotation ? 'Copier cette séance' : 'Copier ce jour'}
           </Button>
         </div>
 
@@ -296,7 +329,9 @@ export default function ProgramView({ onNavigate }) {
                 <div className="text-center py-10 px-6 rounded-2xl border border-dashed border-border">
                   <CalendarRange size={26} className="mx-auto text-faint" />
                   <p className="text-sm text-muted mt-2">
-                    Jour de repos — ajoute un exercice pour en faire une séance.
+                    {rotation
+                      ? 'Case vide — hors de la boucle. Ajoute un exercice pour en faire une séance.'
+                      : 'Jour de repos — ajoute un exercice pour en faire une séance.'}
                   </p>
                 </div>
               )}
@@ -326,14 +361,15 @@ export default function ProgramView({ onNavigate }) {
         dayCounts={dayCounts}
         otherCounts={otherCounts}
         weekCount={weekCount}
-        alternate={alternateWeeks}
+        alternate={alternateWeeks && !rotation}
+        rotation={rotation}
         onCopy={askCopy}
       />
 
       <ConfirmDialog
         open={!!pendingCopy}
-        title={pendingCopy?.kind === 'week' ? 'Remplacer toute la semaine ?' : 'Remplacer ce jour ?'}
-        message={copyMessage(pendingCopy, parity)}
+        title={pendingCopy?.kind === 'week' ? 'Remplacer toute la semaine ?' : rotation ? 'Remplacer cette séance ?' : 'Remplacer ce jour ?'}
+        message={copyMessage(pendingCopy, parity, rotation)}
         confirmLabel="Remplacer"
         onConfirm={() => runCopy(pendingCopy)}
         onClose={() => setPendingCopy(null)}
@@ -342,7 +378,7 @@ export default function ProgramView({ onNavigate }) {
   )
 }
 
-function copyMessage(pending, parity) {
+function copyMessage(pending, parity, rotation = false) {
   if (!pending) return null
   const n = pending.wipes
   const what = `${n} exercice${n > 1 ? 's' : ''}`
@@ -352,6 +388,10 @@ function copyMessage(pending, parity) {
   // Le « y » ne renvoyait à rien : la destination était calculée puis jamais
   // écrite. On confirmait donc un écrasement sans savoir de quel jour — et
   // c'est la seule information qui compte avant de dire oui.
+  // En boucle, une seule semaine et des cases numérotées : « dans la séance 3 ».
+  if (rotation) {
+    return `${what} ${n > 1 ? 'sont' : 'est'} déjà prévu${n > 1 ? 's' : ''} dans la séance ${pending.target.dayOfWeek}. La copie les remplace.`
+  }
   const where = pending.target.parity === parity
     ? dayLabel(pending.target.dayOfWeek).toLowerCase()
     : `${dayLabel(pending.target.dayOfWeek).toLowerCase()} de la semaine ${PARITY_LABEL[pending.target.parity]}`
@@ -469,10 +509,40 @@ function LightWeekCard({ start, today, onStart, onStop }) {
 }
 
 /**
+ * Le planning — jours de la semaine ou séances en boucle. Propre à CE profil,
+ * comme l'alternance : l'autre compte garde ses jours.
+ */
+function ScheduleToggle({ checked, onChange }) {
+  return (
+    <SwitchRow
+      title="Séances en boucle"
+      detail={checked
+        ? 'Tes séances s\'enchaînent dans l\'ordre, quel que soit le jour.'
+        : 'Planning : une séance par jour de la semaine.'}
+      checked={checked}
+      onChange={onChange}
+    />
+  )
+}
+
+/**
  * Alterner semaines paires/impaires — propre à CE profil : l'autre compte
  * garde son propre réglage.
  */
 function AlternateToggle({ checked, onChange }) {
+  return (
+    <SwitchRow
+      title="Alterner semaines paires/impaires"
+      detail={checked ? 'Deux programmes, une semaine sur deux.' : 'Le même programme toutes les semaines.'}
+      checked={checked}
+      onChange={onChange}
+    />
+  )
+}
+
+// Une ligne de réglage à interrupteur — partagée par les deux réglages du
+// planning, pour qu'ils se lisent comme deux réglages de même nature.
+function SwitchRow({ title, detail, checked, onChange }) {
   return (
     <button
       type="button"
@@ -483,10 +553,8 @@ function AlternateToggle({ checked, onChange }) {
                  transition active:scale-[0.99] hover:border-border-strong"
     >
       <span className="flex-1 min-w-0">
-        <span className="block text-sm font-medium text-fg">Alterner semaines paires/impaires</span>
-        <span className="block text-xs text-muted mt-0.5">
-          {checked ? 'Deux programmes, une semaine sur deux.' : 'Le même programme toutes les semaines.'}
-        </span>
+        <span className="block text-sm font-medium text-fg">{title}</span>
+        <span className="block text-xs text-muted mt-0.5">{detail}</span>
       </span>
       <span
         aria-hidden="true"

@@ -23,8 +23,12 @@ import { useMuscData } from '../context/MuscDataContext.jsx'
  */
 export default function SessionsProgressView({ sessions, isLoading, exerciseById }) {
   const [focusedKey, setFocusedKey] = useState(null)
-  const { alternateWeeks } = useMuscData()
-  const groups = useMemo(() => groupSessions(sessions, { alternateWeeks }), [sessions, alternateWeeks])
+  // En boucle, seul le programme pair sert : pas d'alternance à distinguer.
+  const { alternateWeeks, rotation } = useMuscData()
+  const groups = useMemo(
+    () => groupSessions(sessions, { alternateWeeks: alternateWeeks && !rotation }),
+    [sessions, alternateWeeks, rotation],
+  )
   const focused = focusedKey ? groups.find((g) => g.key === focusedKey) : null
 
   if (focused) {

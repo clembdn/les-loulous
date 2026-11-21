@@ -49,6 +49,8 @@ const EMPTY = {
   sessions: [],
   recentSessions: [],
   alternateWeeks: true,
+  scheduleMode: 'weekday',
+  rotation: false,
   settingsReady: false,
   weightTarget: null,
   lightWeekStart: null,
@@ -148,6 +150,10 @@ export function MuscDataProvider({ children }) {
     // on ne sait pas quel programme vaut aujourd'hui : l'en-tête attend avant
     // d'annoncer une parité.
     alternateWeeks: programs.even.alternateWeeks !== false,
+    // Le planning, rangé au même endroit : en boucle, la séance proposée suit
+    // la dernière faite au lieu du jour de la semaine (cf. utils/rotation.js).
+    scheduleMode: programs.even.scheduleMode,
+    rotation: programs.even.scheduleMode === 'rotation',
     settingsReady: ready.even,
     // Réglages du profil (`meta/muscauzi`) : cible de poids, semaine allégée.
     weightTarget: prefs.weightTarget,

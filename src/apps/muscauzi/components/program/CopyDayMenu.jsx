@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ArrowRight, CalendarRange, Copy, Repeat } from 'lucide-react'
 import { Sheet, SheetContent, SheetBody } from '@/shared/ui/sheet.jsx'
 import { cn } from '@/shared/lib/utils.js'
-import { DAY_LABELS, dayLabel } from '@/shared/lib/dates.js'
+import { dayLabel } from '@/shared/lib/dates.js'
 import { DOWS } from '../../services/programService.js'
 
 const PARITY_LABEL = { even: 'paire', odd: 'impaire' }
@@ -30,10 +30,15 @@ const PARITY_LABEL = { even: 'paire', odd: 'impaire' }
  *
  * Sans alternance (`alternate` coupé), il n'y a qu'une semaine : seule reste la
  * copie vers un autre jour, et la liste des jours s'ouvre directement.
+ *
+ * En boucle (`rotation`), les cases ne sont plus des jours : « Séance 3 ».
+ * L'alternance est alors coupée par l'appelant.
  */
 export default function CopyDayMenu({
-  open, onOpenChange, parity, dayOfWeek, dayCounts, otherCounts, weekCount, alternate = true, onCopy,
+  open, onOpenChange, parity, dayOfWeek, dayCounts, otherCounts, weekCount, alternate = true,
+  rotation = false, onCopy,
 }) {
+  const labelFor = rotation ? (d) => `Séance ${d}` : dayLabel
   const [picking, setPickingDay] = useState(false)
   const pickingDay = picking || !alternate
   const other = parity === 'even' ? 'odd' : 'even'
@@ -54,7 +59,9 @@ export default function CopyDayMenu({
       <SheetContent
         side="bottom"
         desktopSide="right"
-        title={pickingDay ? 'Copier vers quel jour ?' : `Copier — ${dayLabel(dayOfWeek).toLowerCase()}`}
+        title={pickingDay
+          ? (rotation ? 'Copier vers quelle séance ?' : 'Copier vers quel jour ?')
+          : `Copier — ${labelFor(dayOfWeek).toLowerCase()}`}
         className="bg-surface border-border"
       >
         <SheetBody>
@@ -64,7 +71,7 @@ export default function CopyDayMenu({
                 <Choice
                   key={d}
                   icon={CalendarRange}
-                  title={DAY_LABELS[d % 7]}
+                  title={labelFor(d)}
                   detail={dayCounts[d] > 0
                     ? `${dayCounts[d]} exercice${dayCounts[d] > 1 ? 's' : ''} — sera remplacé`
                     : 'Repos'}
@@ -83,8 +90,8 @@ export default function CopyDayMenu({
                   icon={Repeat}
                   title={`Vers la semaine ${PARITY_LABEL[other]}`}
                   detail={otherCounts[dayOfWeek] > 0
-                    ? `${dayLabel(dayOfWeek).toLowerCase()} y compte ${otherCounts[dayOfWeek]} exercice${otherCounts[dayOfWeek] > 1 ? 's' : ''} — sera remplacé`
-                    : `${dayLabel(dayOfWeek).toLowerCase()} y est au repos`}
+                    ? `${labelFor(dayOfWeek).toLowerCase()} y compte ${otherCounts[dayOfWeek]} exercice${otherCounts[dayOfWeek] > 1 ? 's' : ''} — sera remplacé`
+                    : `${labelFor(dayOfWeek).toLowerCase()} y est au repos`}
                   onClick={() => run({ kind: 'day', target: { parity: other, dayOfWeek } })}
                 />
                 <Choice

@@ -74,7 +74,11 @@ export function buildSetsCsv(sessions, exerciseById) {
 
   for (const session of sessions) {
     const date = fromLocalDateKey(session.date)
-    const dow = session.dayOfWeek || isoDayOfWeek(date)
+    // Le VRAI jour, tiré de la date. En séances « en boucle », `dayOfWeek`
+    // porte la case du programme (Séance 3), pas un jour : la séance 3 faite un
+    // samedi serait sortie « mercredi ». Hors boucle, la date décidait déjà
+    // seule du jour — même valeur. Le nom de la séance a sa propre colonne.
+    const dow = isoDayOfWeek(date)
     // Combien de fois ce mouvement est déjà apparu dans CETTE séance : c'est
     // ce qui distingue deux passages du même exercice le même jour.
     const seen = {}

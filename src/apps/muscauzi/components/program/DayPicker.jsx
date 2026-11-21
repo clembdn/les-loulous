@@ -7,10 +7,13 @@ import { DOWS } from '../../services/programService.js'
 // Sept cases identiques ne disent rien : on ne sait pas lesquelles portent une
 // séance, ni où on est dans la semaine. Chaque case annonce donc sa charge
 // (nombre d'exercices, ou « repos »), et aujourd'hui est repéré par un point.
-export default function DayPicker({ value, onChange, counts = {}, names = {}, today, className }) {
+//
+// En boucle (`rotation`), les cases ne sont plus des jours : « S1, S2… », et le
+// point marque la prochaine séance (passée par `today`), pas le jour réel.
+export default function DayPicker({ value, onChange, counts = {}, names = {}, today, rotation = false, className }) {
   // `today` : le jour réel de la date consultée, pas forcément celui du jour —
   // on peut rattraper la séance d'hier.
-  const marked = today || isoDayOfWeek(new Date())
+  const marked = rotation ? today : (today || isoDayOfWeek(new Date()))
 
   return (
     <div className={cn('grid grid-cols-7 gap-1.5', className)}>
@@ -26,7 +29,7 @@ export default function DayPicker({ value, onChange, counts = {}, names = {}, to
             key={dow}
             onClick={() => onChange(dow)}
             title={name || undefined}
-            aria-label={`${dayLabel(dow)}${name ? ` — ${name}` : ''} — ${count > 0 ? `${count} exercices` : 'repos'}`}
+            aria-label={`${rotation ? `Séance ${dow}` : dayLabel(dow)}${name ? ` — ${name}` : ''} — ${count > 0 ? `${count} exercices` : 'repos'}`}
             aria-pressed={isActive}
             className={cn(
               'relative h-[52px] rounded-xl border flex flex-col items-center justify-center gap-0.5',
@@ -40,7 +43,7 @@ export default function DayPicker({ value, onChange, counts = {}, names = {}, to
                   : 'bg-transparent text-faint border-border hover:text-muted',
             )}
           >
-            <span className="text-[11px] font-semibold leading-none">{DAY_SHORT[dow % 7]}</span>
+            <span className="text-[11px] font-semibold leading-none">{rotation ? `S${dow}` : DAY_SHORT[dow % 7]}</span>
             <span className={cn(
               'text-[10px] leading-none tabular',
               isActive ? 'opacity-80' : count > 0 ? 'text-muted' : 'text-faint',

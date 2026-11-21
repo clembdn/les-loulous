@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowRight, ChevronLeft, ChevronRight, Feather, Plus, Scale, X } from 'lucide-react'
+import { ArrowRight, ChevronLeft, ChevronRight, Feather, Plus, Repeat, Scale, X } from 'lucide-react'
 import { useAuth } from '@/shared/context/AuthContext.jsx'
 import {
   formatDayFr, fromLocalDateKey, isoDayOfWeek, shiftDateKey, toLocalDateKey, weekParity,
@@ -23,6 +23,7 @@ import { buildProgressIndex } from '../utils/progression.js'
 import { entryRange, programRangeIndex } from '../utils/repRange.js'
 import { isInLightWeek, lightSets, lightWeekEnd } from '../utils/lightWeek.js'
 import { needsWeighIn } from '../utils/weightTrend.js'
+import { lastDoneBySlot, rotationSlots, slotForDate } from '../utils/rotation.js'
 import { saveLightWeekStart } from '../services/settingsService.js'
 import { isBodyweight } from '../config/exercises.js'
 import { newInstanceId } from '../utils/ids.js'
@@ -32,6 +33,7 @@ import ExerciseFocus from '../components/session/ExerciseFocus.jsx'
 import SessionDone from '../components/session/SessionDone.jsx'
 import AddExerciseSheet from '../components/session/AddExerciseSheet.jsx'
 import ExerciseHistorySheet from '../components/session/ExerciseHistorySheet.jsx'
+import RotationPickerSheet from '../components/session/RotationPickerSheet.jsx'
 
 // On peut rattraper une séance oubliée jusqu'à une semaine en arrière. Au-delà,
 // le programme a pu changer : ce qui s'est passé se lit dans Progrès.
@@ -64,7 +66,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
   const { currentUid } = useAuth()
   const {
     today, exercises, exerciseById, programs, notes, weights,
-    sessions, recentSessions, catalogueReady, isLoading, alternateWeeks, settingsReady, lightWeekStart,
+    sessions, recentSessions, catalogueReady, isLoading, alternateWeeks, rotation, settingsReady, lightWeekStart,
   } = useMuscData()
 
   const [dateKey, setDateKey] = useState(today)
@@ -85,6 +87,13 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
    */
   const [added, setAdded] = useState([])
   useEffect(() => { setAdded([]) }, [dateKey])
+
+  // En boucle : la séance choisie à la main (« Changer »). Locale et propre à
+  // la date affichée, comme les ajouts ci-dessus — la première série saisie
+  // l'inscrit dans la séance, et c'est alors la séance qui fait foi.
+  const [manualSlot, setManualSlot] = useState(null)
+  const [pickingSlot, setPickingSlot] = useState(false)
+  useEffect(() => { setManualSlot(null) }, [dateKey])
 
   // La date du jour change à minuit : si on était resté sur « aujourd'hui »,
   // on suit. Si on était en rattrapage, on y reste — c'était un choix.
@@ -110,7 +119,32 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
     const date = fromLocalDateKey(dateKey)
     return { parity: weekParity(date), dayOfWeek: isoDayOfWeek(date) }
   }, [dateKey])
-  const programParity = alternateWeeks ? parity : 'even'
+  // En boucle, seul le programme pair sert, alternance ou pas.
+  const programParity = alternateWeeks && !rotation ? parity : 'even'
+
+  /**
+   * En boucle, la CASE du programme remplace le jour de la semaine : la séance
+   * proposée suit la dernière faite (cf. utils/rotation.js), calculée
+   * relativement à la date affichée — un rattrapage d'avant-hier suit ce qui
+   * précédait avant-hier.
+   *
+   * `dayOfWeek` reste le VRAI jour, pour tout ce qui parle du calendrier (le
+   * rappel de pesée du lundi). Sans aucune case — programme vide —, on retombe
+   * sur le vrai jour : la séance doit enregistrer un jour valide (1 à 7).
+   */
+  const slots = useMemo(() => (rotation ? rotationSlots(programs.even) : []), [rotation, programs.even])
+  const turn = useMemo(
+    () => (rotation ? slotForDate({ sessions, slots, dateKey, manual: manualSlot }) : null),
+    [rotation, sessions, slots, dateKey, manualSlot],
+  )
+  const programDay = turn?.slot ?? dayOfWeek
+  const currentSlot = slots.find((s) => s.slot === programDay) || null
+  const lastDone = useMemo(
+    () => (pickingSlot ? lastDoneBySlot(sessions, slots, dateKey) : {}),
+    [pickingSlot, sessions, slots, dateKey],
+  )
+  // On ne change de séance que tant que rien n'y est saisi.
+  const canChangeSlot = rotation && slots.length > 1 && turn?.source !== 'session'
 
   // Semaine allégée : une série de moins par exercice du programme, mêmes
   // charges, et la séance marquée pour que la barre d'XP l'ignore.
@@ -127,14 +161,14 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
   const programDays = program.days
   // Le nom du jour au programme : c'est lui qu'on recopie dans la séance et
   // qu'on affiche en tête.
-  const sessionName = program.names?.[dayOfWeek] || ''
+  const sessionName = program.names?.[programDay] || ''
 
   // La fourchette de chaque exercice au programme actuel : le repli des
   // séances d'avant les fourchettes (cf. `entryRange`).
   const rangeIndex = useMemo(() => programRangeIndex(programs, programParity), [programs, programParity])
 
   const { lines, extras } = useMemo(() => {
-    const prescribed = withoutOrphans(programDays?.[dayOfWeek] || [], exerciseById, catalogueReady)
+    const prescribed = withoutOrphans(programDays?.[programDay] || [], exerciseById, catalogueReady)
       .map((l, i) => ({
         instanceId: l.instanceId,
         exerciseId: l.exerciseId,
@@ -169,7 +203,7 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
       lines: attached.lines,
       extras: [...off, ...added.filter((l) => !attached.savedIds.has(l.instanceId))],
     }
-  }, [programDays, dayOfWeek, exerciseById, session, catalogueReady, added, rangeIndex, light])
+  }, [programDays, programDay, exerciseById, session, catalogueReady, added, rangeIndex, light])
 
   // L'ordre de parcours : la prescription du jour, puis le hors-programme.
   const walk = useMemo(() => [...lines, ...extras], [lines, extras])
@@ -273,9 +307,10 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
     saveEntry(
       currentUid, dateKey,
       { ...line, sets, skipped },
-      { parity, dayOfWeek, name: sessionName, lightWeek: light }, currentUid,
+      // En boucle, `dayOfWeek` enregistre la case ; `parity` reste la vraie.
+      { parity, dayOfWeek: programDay, name: sessionName, lightWeek: light }, currentUid,
     )
-  }, [currentUid, dateKey, parity, dayOfWeek, sessionName, light])
+  }, [currentUid, dateKey, parity, programDay, sessionName, light])
 
   const total = walk.length
   const doneCount = walk.filter(
@@ -318,18 +353,30 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
             {/* Le nom passe DEVANT la date : c'est lui qui dit ce qu'on vient
                 faire aujourd'hui, et il rattache la séance à toutes les autres
                 du même nom. */}
-            {sessionName || (isToday ? 'Séance du jour' : 'Rattrapage')}
+            {currentSlot
+              // En boucle : où on en est dans la boucle, puis le nom.
+              ? `Séance ${currentSlot.position}/${currentSlot.count}${sessionName ? ` · ${sessionName}` : ''}`
+              : sessionName || (isToday ? 'Séance du jour' : 'Rattrapage')}
           </p>
           <h1 className="text-2xl font-semibold tracking-[-0.02em] text-fg mt-0.5 first-letter:uppercase truncate">
             {formatDayFr(fromLocalDateKey(dateKey))}
           </h1>
           {/* En alternance, la semaine décide du programme : on le dit en
               clair, avant même la liste. Sans alternance, rien à dire. */}
-          {settingsReady && alternateWeeks && (
+          {settingsReady && alternateWeeks && !rotation && (
             <span className="inline-flex items-center mt-2 px-2.5 py-1 rounded-full bg-accent/10 text-accent
                              text-xs font-semibold tracking-wide">
               Semaine {parity === 'even' ? 'paire' : 'impaire'}
             </span>
+          )}
+          {canChangeSlot && (
+            <button
+              onClick={() => setPickingSlot(true)}
+              className="inline-flex items-center gap-1.5 mt-2 h-8 px-3 rounded-full border border-border
+                         text-xs font-medium text-muted hover:text-fg hover:border-border-strong transition active:scale-95"
+            >
+              <Repeat size={13} /> Changer
+            </button>
           )}
         </div>
 
@@ -438,6 +485,17 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
         notes={notes}
         onSaveNote={(exerciseId, text) => saveNote(currentUid, exerciseId, text, currentUid)}
       />
+
+      {rotation && (
+        <RotationPickerSheet
+          open={pickingSlot}
+          onOpenChange={setPickingSlot}
+          slots={slots}
+          current={programDay}
+          lastDone={lastDone}
+          onPick={(slot) => { setManualSlot(slot); setCursor(null) }}
+        />
+      )}
     </>
   )
 
@@ -448,8 +506,8 @@ export default function SessionView({ onOpenExercise, onOpenWeight }) {
       name={sessionName}
       // Sans alternance, « la même case » ne dépend plus de la semaine : la
       // séance de référence se cherche au même jour, quelle que soit la parité.
-      parity={alternateWeeks ? parity : null}
-      dayOfWeek={dayOfWeek}
+      parity={alternateWeeks && !rotation ? parity : null}
+      dayOfWeek={programDay}
       exerciseById={exerciseById}
       recentSessions={recentSessions}
       records={recordIndex}

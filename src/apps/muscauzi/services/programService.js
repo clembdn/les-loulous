@@ -122,9 +122,18 @@ function normalizeNames(raw) {
  * comportement d'avant ce réglage : un profil qui n'y touche pas ne voit rien
  * changer. Coupée, le programme pair sert toutes les semaines ; le programme
  * impair n'est ni lu ni effacé, il revient tel quel si on réactive.
+ *
+ * Le planning (`program/even.scheduleMode`) suit le même chemin, pour les mêmes
+ * raisons : `'rotation'` = séances en boucle (cf. utils/rotation.js), absent ou
+ * autre valeur = jours de la semaine, le comportement d'avant. En boucle, seul
+ * le programme pair sert, alternance ou pas.
  */
+function normalizeScheduleMode(value) {
+  return value === 'rotation' ? 'rotation' : 'weekday'
+}
+
 export function emptyProgram() {
-  return { days: normalizeDays(null, 'even'), names: {}, alternateWeeks: true }
+  return { days: normalizeDays(null, 'even'), names: {}, alternateWeeks: true, scheduleMode: 'weekday' }
 }
 
 export function subscribeToProgram(uid, parity, callback, onError) {
@@ -134,6 +143,7 @@ export function subscribeToProgram(uid, parity, callback, onError) {
       days: normalizeDays(data?.days, parity),
       names: normalizeNames(data?.dayNames),
       alternateWeeks: data?.alternateWeeks !== false,
+      scheduleMode: normalizeScheduleMode(data?.scheduleMode),
     })
   }, (err) => {
     console.error('[MuscAuzi] program error:', err)
@@ -146,6 +156,16 @@ export function subscribeToProgram(uid, parity, callback, onError) {
 export function saveAlternateWeeks(uid, alternateWeeks, currentUid) {
   return setDoc(programDoc(uid, 'even'), {
     alternateWeeks: alternateWeeks === true,
+    updatedAt: new Date().toISOString(),
+    updatedBy: currentUid,
+  }, { merge: true })
+}
+
+// Même forme que l'alternance : un merge qui ne touche ni les jours ni leurs
+// noms. Repasser en jours de la semaine retrouve le programme tel quel.
+export function saveScheduleMode(uid, mode, currentUid) {
+  return setDoc(programDoc(uid, 'even'), {
+    scheduleMode: normalizeScheduleMode(mode),
     updatedAt: new Date().toISOString(),
     updatedBy: currentUid,
   }, { merge: true })
